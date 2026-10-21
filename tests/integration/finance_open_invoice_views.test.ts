@@ -10,7 +10,7 @@ describe.skipIf(!owned)('outstanding invoice security-invoker views', () => {
   c=openDb(url!); await c.connect(); await c.query('BEGIN'); ids=await seedRlsFixture(c); impersonation=await canImpersonate(c);
   await c.query(`UPDATE public.roles SET permissions=permissions || '["sales.view","purchases.view","history.unlimited"]'::jsonb WHERE role='branch_manager'`);
   await c.query('UPDATE public.sales SET total=100,paid_amount=30,refunded_amount=10 WHERE id=ANY($1::uuid[])',[[ids.saleA,ids.saleB]]);
-  await c.query('UPDATE public.purchases SET total=100,paid_amount=30,returned_amount=10 WHERE id=ANY($1::uuid[])',[[ids.purchA,ids.purchB]]);
+  await c.query('UPDATE public.purchases SET total=100,paid_amount=0,returned_amount=10 WHERE id=ANY($1::uuid[])',[[ids.purchA,ids.purchB]]);
  });
  afterAll(async()=>{if(c){await c.query('ROLLBACK').catch(()=>{});await c.end();}});
  it('preserves base RLS and returns only positive net outstanding balances',async ctx=>{
@@ -20,8 +20,8 @@ describe.skipIf(!owned)('outstanding invoice security-invoker views', () => {
    const rows=await runAs(c,ids.users.branch_manager,`SELECT id,open FROM public.${view} WHERE id=ANY($1::uuid[]) ORDER BY id`,[[a,b]]);
    expect(rows.error).toBeUndefined(); expect(base.error).toBeUndefined();
    expect(rows.rows.map(r=>r.id)).toEqual(base.rows.map(r=>r.id)); expect(rows.rows.length).toBeGreaterThan(0);
-   expect(rows.rows.every(r=>Number(r.open)===60)).toBe(true);
-   await c.query(`UPDATE public.${table} SET paid_amount=100 WHERE id=$1`,[a]);
+   expect(rows.rows.every(r=>Number(r.open)===(table==='sales'?60:90))).toBe(true);
+   await c.query(`UPDATE public.${table} SET ${table==='sales'?'refunded_amount':'returned_amount'}=total-paid_amount WHERE id=$1`,[a]);
    const closed=await runAs(c,ids.users.branch_manager,`SELECT id FROM public.${view} WHERE id=$1`,[a]); expect(closed.rows).toEqual([]);
   }
  });
