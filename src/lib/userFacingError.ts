@@ -77,10 +77,6 @@ const messages: Record<string, { ar: string; en: string }> = {
     ar: 'الفاتورة المختارة غير متاحة لهذا العميل والفرع. أعد تحميل الفواتير قبل السداد.',
     en: 'The selected invoice is unavailable for this customer and branch. Reload invoices before paying.',
   },
-  NOT_ALLOWED: {
-    ar: 'لا تملك صلاحية تنفيذ هذه العملية. راجع المسؤول.',
-    en: 'You do not have permission for this operation. Contact an administrator.',
-  },
   INVALID_AMOUNT: {
     ar: 'أدخل مبلغًا صحيحًا أكبر من صفر.',
     en: 'Enter a valid amount greater than zero.',

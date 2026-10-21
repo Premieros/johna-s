@@ -7,6 +7,11 @@ export type FinanceResult = {
 };
 
 export function financeRejectionMessage(result: FinanceResult | null, currency: string, lang: ErrorLanguage) {
+  // This exact code means a missing finance permission; do not globally match
+  // unrelated status restrictions such as PURCHASE_EDIT_STATUS_NOT_ALLOWED.
+  if (result?.error === 'NOT_ALLOWED') return lang === 'ar'
+    ? 'لا تملك صلاحية تنفيذ هذه العملية. راجع المسؤول.'
+    : 'You do not have permission for this operation. Contact an administrator.';
   const message = userFacingErrorMessage(result?.error || result?.detail, lang);
   // Only server-provided business values; never expose SQL details or guess a balance.
   const value = result?.error === 'INSUFFICIENT_TREASURY_BALANCE' ? result.available : result?.open;

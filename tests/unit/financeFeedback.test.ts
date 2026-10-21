@@ -13,6 +13,8 @@ describe('financial business feedback', () => {
   it('explains invoice limits and preserves the distinction from total party debt', () => {
     expect(financeRejectionMessage({ error: 'PAYMENT_EXCEEDS_INVOICE', open: 3500 }, 'EGP', 'ar')).toContain('الفاتورة المختارة');
     expect(userFacingErrorMessage('PAYMENT_EXCEEDS_AP', 'ar')).toContain('المستحق');
+    expect(financeRejectionMessage({ error: 'NOT_ALLOWED' }, 'EGP', 'en')).toContain('permission');
+    expect(userFacingErrorMessage('PURCHASE_EDIT_STATUS_NOT_ALLOWED', 'ar')).not.toContain('لا تملك صلاحية');
     expect(exceedsMoney(5900, 3500)).toBe(true);
     expect(exceedsMoney(89666.1, 89666.10)).toBe(false);
   });
