@@ -49,7 +49,26 @@ describe('payment confirmation warehouse source',()=>{
     const {result}=renderHook(()=>usePosOrder(input));
     await act(async()=>{expect(await result.current.completeSale()).toBe(false);});
     expect(mocks.pay).not.toHaveBeenCalled();
-    expect(mocks.show).toHaveBeenCalledWith('SETTLEMENT_PREVIEW_SCOPE_MISMATCH','error');
+    expect(mocks.show).toHaveBeenCalledWith('SETTLEMENT_PREVIEW_SCOPE_MISMATCH','error',expect.objectContaining({action:'pos_settlement_preview',branchId:'branch-a',entityId:'a'}));
+  });
+});
+
+describe('explicit warehouse rejection recovery',()=>{
+  it('refreshes only the rejected preview and requires another confirmation, never another payment call',async()=>{
+    mocks.fetch.mockResolvedValueOnce(preview('a','branch-a','old')).mockResolvedValueOnce(preview('a','branch-a','new'));
+    mocks.pay.mockResolvedValue({result:{success:false,error:'KITCHEN_WAREHOUSE_MISMATCH'},error:'KITCHEN_WAREHOUSE_MISMATCH'});
+    const {result}=renderHook(()=>usePosOrder(input));
+    await act(async()=>{expect(await result.current.completeSale()).toBe(false);});
+    expect(mocks.pay).toHaveBeenCalledTimes(1);expect(mocks.fetch).toHaveBeenCalledTimes(2);
+    expect(mocks.base.setCheckoutOpen).toHaveBeenCalledWith(true);
+    expect(mocks.pay.mock.calls[0][0].p_warehouse_id).toBe('old');
+  });
+  it('does not refresh or retry an ambiguous network failure',async()=>{
+    mocks.fetch.mockResolvedValue(preview('a','branch-a','pinned'));
+    mocks.pay.mockResolvedValue({result:null,error:'Network timeout'});
+    const {result}=renderHook(()=>usePosOrder(input));
+    await act(async()=>{expect(await result.current.completeSale()).toBe(false);});
+    expect(mocks.pay).toHaveBeenCalledTimes(1);expect(mocks.fetch).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -21,18 +21,19 @@ export interface OrderSettlementPreview {
 
 export async function fetchOrderSettlementPreview(
   orderId: string,
-): Promise<{ preview: OrderSettlementPreview | null; error: string | null }> {
+): Promise<{ preview: OrderSettlementPreview | null; error: string | null; diagnostic?: unknown }> {
   try {
     const { data, error } = await supabase.rpc('get_order_settlement_preview', {
       p_order_id: orderId,
     });
-    if (error) return { preview: null, error: error.message };
+    if (error) return { preview: null, error: error.message, diagnostic: error };
 
     const raw = data as Partial<OrderSettlementPreview> | null;
     if (!raw?.success) {
       return {
         preview: null,
         error: raw?.detail || raw?.error || 'No sent items are ready for settlement.',
+        diagnostic: raw,
       };
     }
 
@@ -58,6 +59,7 @@ export async function fetchOrderSettlementPreview(
     return {
       preview: null,
       error: error instanceof Error ? error.message : 'Could not load settlement preview.',
+      diagnostic: error,
     };
   }
 }

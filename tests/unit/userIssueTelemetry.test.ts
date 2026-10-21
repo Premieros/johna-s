@@ -27,7 +27,7 @@ describe('safe structured issue diagnostics', () => {
   it('submits safe fields and context without raw error, stack, details, request or token', async () => {
     const source = { code: 'PGRST116', message: 'secret=private-value', details: 'raw query', stack: 'raw stack', request: { token: 'private-token' } };
     await reportUserIssue(source, { action: 'pos_settlement_submit', branchId: 'order-branch', entityType: 'order', entityId: 'order-id' });
-    expect(mocks.record).toHaveBeenCalledWith(expect.objectContaining({ p_error_code: 'PGRST116', p_user_message: 'Safe user-facing message', p_action: 'pos_settlement_submit', p_branch_id: 'order-branch', p_entity_id: 'order-id' }));
+    expect(mocks.record).toHaveBeenCalledWith(expect.objectContaining({ p_error_code: 'PGRST116', p_user_message: 'Safe user-facing message', p_app_version: expect.any(String), p_action: 'pos_settlement_submit', p_branch_id: 'order-branch', p_entity_id: 'order-id' }));
     const payload = JSON.stringify(mocks.record.mock.calls[0][0]);
     for (const value of ['private-value', 'private-token', 'raw stack', 'raw query', 'request']) expect(payload).not.toContain(value);
   });
