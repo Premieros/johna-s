@@ -4,13 +4,13 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `453b2de6aa3076790e02c4b6533d1bea557e2cd5` (#529 merged/deployed)
-- Current active branch: `fix/finance-low-read-20261021`
-- Mandatory active work log: `docs/FINANCE_LOW_READ_20261021.md`
+- Latest main baseline reconciled: `9bdd4f387d6ddddfed752bb7c2bd759c89007466` (#530 merged/deployed)
+- Current active branch: `fix/raw-transfer-safety-20261021`
+- Mandatory active work log: `docs/RAW_TRANSFER_SAFETY_20261021.md`
 - Owner approved monthly report restructuring, a clear latest-approved-price consumption report (purchase/pricing/count; missing price = numeric zero) and independent quick-takeaway creation permission. Preserve operational writers, installed Windows agents and all historical data. Manual aggregate reads and focused iteration tests; mandatory exact-head release gates remain. Prepare a reviewed candidate before production approval.
 
-## Active low-read finance repair — 2026-10-21
-Owner requests all three follow-ups with minimal database load. Stage read-only outstanding invoice projections, explicit manual pagination, stable finance history cursors and customer rejection reconciliation. #529 is released at 453b2de. No Merge ولا Production migration during preparation; separate final release approval remains required. Preserve all sale/stock/print/ledger writers and installed agents.
+## Active raw transfer safety repair — 2026-10-21
+Owner authorizes fixing server unit mismatch, repeated form sends, stale cost reads and hidden metadata errors. Prepare and verify on the isolated branch; no Merge ولا Production migration before final release approval. #530 is released. Preserve stock movement algorithms, all source/destination quantities and cost writers, RLS, installed printers and the Windows pilot.
 
 ## Historical production audit repairs — 2026-10-21
 Owner authorized repairing the five findings from the read-only production audit. Prepare and test on this isolated branch; preserve installed print agents, all operational security and data. No merge or production migration during preparation. Local Windows pilot remains isolated and forbidden to merge.

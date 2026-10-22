@@ -214,6 +214,25 @@ describe.skipIf(skip)('cross-branch inventory transfer', () => {
     expect(Object.fromEntries(balances.rows.map((row) => [row.raw_material_id, Number(row.quantity)]))).toEqual({ [rawA]: 16, [rawB]: 4 });
   });
 
+  it('rejects mismatched raw units before creating a header', async () => {
+    const unit=(await client.query(`SELECT id FROM public.units ORDER BY code LIMIT 1`)).rows[0].id;
+    await client.query('UPDATE public.raw_materials SET unit_id=$1 WHERE id=$2',[unit,rawB]);
+    const before=(await client.query('SELECT count(*) n FROM public.warehouse_transfers WHERE branch_id=$1',[branchA])).rows[0].n;
+    const result=await createTransfer(userMulti,whA1,whB,branchA,[{item_type:'raw_material',item_id:rawA,destination_item_id:rawB,quantity:4,unit_cost:4}]);
+    expect(result).toMatchObject({success:false,error:'TRANSFER_UNIT_MISMATCH'});
+    expect((await client.query('SELECT count(*) n FROM public.warehouse_transfers WHERE branch_id=$1',[branchA])).rows[0].n).toBe(before);
+  });
+
+  it('rechecks pending raw units before any stock movement', async () => {
+    const created=await createTransfer(userMulti,whA1,whB,branchA,[{item_type:'raw_material',item_id:rawA,destination_item_id:rawB,quantity:4,unit_cost:4}]);
+    expect(created.success).toBe(true);
+    const unit=(await client.query(`SELECT id FROM public.units ORDER BY code LIMIT 1`)).rows[0].id;
+    await client.query('UPDATE public.raw_materials SET unit_id=$1 WHERE id=$2',[unit,rawB]);
+    expect(await approve(userMulti,created.transfer_id!)).toMatchObject({success:false,error:'TRANSFER_UNIT_MISMATCH'});
+    expect(Number((await client.query('SELECT quantity FROM public.raw_material_inventory WHERE raw_material_id=$1 AND branch_id=$2',[rawA,branchA])).rows[0].quantity)).toBe(20);
+    expect((await client.query('SELECT status FROM public.warehouse_transfers WHERE id=$1',[created.transfer_id])).rows[0].status).toBe('pending');
+  });
+
   it('keeps direct table writes closed so approval cannot bypass stock movement', async () => {
     const created = await createTransfer(userMulti, whA1, whB, branchA, [
       { item_type: 'product', item_id: productA, destination_item_id: productB, quantity: 1, unit_cost: 5 },
