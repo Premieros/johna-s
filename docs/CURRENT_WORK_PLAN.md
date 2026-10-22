@@ -4,12 +4,15 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `9bdd4f387d6ddddfed752bb7c2bd759c89007466` (#530 merged/deployed)
-- Current active branch: `fix/raw-transfer-safety-20261021`
-- Mandatory active work log: `docs/RAW_TRANSFER_SAFETY_20261021.md`
+- Latest main baseline reconciled: `6b7688e2e1ac669c3fc5f5c9de4bfbdb19a279ce` (#531 merged/deployed)
+- Current active branch: `fix/owner-accounting-clarity-20261022`
+- Mandatory active work log: `docs/OWNER_ACCOUNTING_CLARITY_20261022.md`
 - Owner approved monthly report restructuring, a clear latest-approved-price consumption report (purchase/pricing/count; missing price = numeric zero) and independent quick-takeaway creation permission. Preserve operational writers, installed Windows agents and all historical data. Manual aggregate reads and focused iteration tests; mandatory exact-head release gates remain. Prepare a reviewed candidate before production approval.
 
-## Active raw transfer safety repair — 2026-10-21
+## Active owner accounting clarity — 2026-10-22
+Owner approved repairing the accounting review findings. Prepare a tested candidate, preserving sales, printing, stock writers and database permissions; no Merge ولا Production migration before separate release approval. No new report polling or queries. Month review remains a review, not a newly introduced financial lock. Recipe valuation remains latest approved price with missing prices numerically zero.
+
+## Historical raw transfer safety repair — 2026-10-21
 Owner authorizes fixing server unit mismatch, repeated form sends, stale cost reads and hidden metadata errors. Prepare and verify on the isolated branch; no Merge ولا Production migration before final release approval. #530 is released. Preserve stock movement algorithms, all source/destination quantities and cost writers, RLS, installed printers and the Windows pilot.
 
 ## Historical production audit repairs — 2026-10-21

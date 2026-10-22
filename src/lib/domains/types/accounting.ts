@@ -148,6 +148,7 @@ export interface InventoryItemStatementResult {
 }
 
 export interface IncomeStatementResult {
+  other_income?: number;
   revenue: number;
   discount: number;
   net_revenue: number;
