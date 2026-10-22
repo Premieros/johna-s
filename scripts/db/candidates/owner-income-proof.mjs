@@ -6,6 +6,7 @@ const {PGlite}=require(process.env.OWNER_INCOME_PGLITE_MODULE || '@electric-sql/
 const db=new PGlite();
 const baseline=JSON.parse(readFileSync('scripts/db/candidates/owner_income_baseline.json','utf8'));
 const balanceBaseline=JSON.parse(readFileSync('scripts/db/candidates/owner_balance_baseline.json','utf8'));
+const trialBaseline=JSON.parse(readFileSync('scripts/db/candidates/owner_trial_baseline.json','utf8'));
 const migration='supabase/migrations/'+readdirSync('supabase/migrations').find(name=>name.endsWith('_owner_income_classification.sql'));
 const uuid=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 await db.exec(`
@@ -14,7 +15,7 @@ CREATE ROLE service_role;
 CREATE FUNCTION history_clamp_from(date) RETURNS date LANGUAGE sql STABLE AS $$ SELECT greatest($1, nullif(current_setting('test.history_from',true),'')::date) $$;
 CREATE FUNCTION history_clamp_to(date) RETURNS date LANGUAGE sql STABLE AS $$ SELECT least($1, nullif(current_setting('test.history_to',true),'')::date) $$;
 CREATE TABLE account_mappings(branch_id uuid,semantic_key text,account_id uuid);
-CREATE TABLE chart_of_accounts(id uuid PRIMARY KEY,account_type text,branch_id uuid DEFAULT '00000000-0000-0000-0000-000000000100',code text,is_active boolean DEFAULT true);
+CREATE TABLE chart_of_accounts(id uuid PRIMARY KEY,account_type text,branch_id uuid DEFAULT '00000000-0000-0000-0000-000000000100',code text,name text,name_en text,is_active boolean DEFAULT true);
 CREATE FUNCTION history_clamp_as_of(date) RETURNS date LANGUAGE sql STABLE AS $$ SELECT $1 $$;
 CREATE TABLE journal_entries(id uuid PRIMARY KEY,branch_id uuid,entry_date date);
 CREATE TABLE journal_entry_lines(journal_entry_id uuid,account_id uuid,debit numeric,credit numeric);
@@ -24,11 +25,15 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO authenticated;
 `);
 await db.exec(baseline.definition);
 await db.exec(balanceBaseline.definition);
+for(const row of trialBaseline) {
+ await db.exec(row.definition);
+ await db.exec(`REVOKE ALL ON FUNCTION ${row.proname}(uuid,date) FROM PUBLIC; GRANT EXECUTE ON FUNCTION ${row.proname}(uuid,date) TO authenticated, service_role;`);
+}
 await db.exec('REVOKE ALL ON FUNCTION get_balance_sheet(uuid,date) FROM PUBLIC; GRANT EXECUTE ON FUNCTION get_balance_sheet(uuid,date) TO authenticated, service_role;');
 await db.exec('REVOKE ALL ON FUNCTION get_income_statement(uuid,date,date) FROM PUBLIC; GRANT EXECUTE ON FUNCTION get_income_statement(uuid,date,date) TO authenticated, service_role;');
-const metadata=()=>db.query("SELECT prosecdef,proacl::text,proconfig FROM pg_proc WHERE oid IN ('get_income_statement(uuid,date,date)'::regprocedure,'get_balance_sheet(uuid,date)'::regprocedure) ORDER BY oid");
+const metadata=()=>db.query("SELECT prosecdef,proacl::text,proconfig FROM pg_proc WHERE oid IN ('get_income_statement(uuid,date,date)'::regprocedure,'get_balance_sheet(uuid,date)'::regprocedure,'get_trial_balance(uuid,date)'::regprocedure,'get_trial_balance_summary(uuid,date)'::regprocedure) ORDER BY oid");
 const before=(await metadata()).rows;
-for(const [id,type] of [[1,'income'],[2,'income'],[3,'income'],[4,'expense'],[5,'expense'],[6,'income']]) await db.query('INSERT INTO chart_of_accounts(id,account_type) VALUES ($1,$2)',[uuid(id),type]);
+for(const [id,type] of [[1,'income'],[2,'income'],[3,'income'],[4,'expense'],[5,'expense'],[6,'income']]) await db.query('INSERT INTO chart_of_accounts(id,account_type,code,name,name_en) VALUES ($1,$2,$3,$3,$3)',[uuid(id),type,String(id)]);
 for(const [key,id] of [['revenue',1],['discount_given',2],['other_income',3],['cogs',4]]) await db.query('INSERT INTO account_mappings VALUES ($1,$2,$3)',[uuid(100),key,uuid(id)]);
 await db.query('INSERT INTO journal_entries VALUES ($1,$2,$3),($4,$5,$3),($6,$2,$7)',[uuid(200),uuid(100),'2026-10-10',uuid(201),uuid(101),uuid(202),'2026-09-10']);
 for(const [account,debit,credit] of [[1,100,1000],[2,50,0],[3,0,200],[4,300,0],[5,80,0],[6,0,70]]) await db.query('INSERT INTO journal_entry_lines VALUES ($1,$2,$3,$4)',[uuid(200),uuid(account),debit,credit]);
@@ -43,6 +48,11 @@ await db.exec(`UPDATE chart_of_accounts SET is_active=false WHERE id='${uuid(6)}
 const balance=async()=>(await db.query("SELECT get_balance_sheet($1,'2026-10-31') value",[uuid(100)])).rows[0].value;
 // The balance sheet is cumulative; September revenue is intentionally retained.
 assert.equal((await balance()).net_income,8740,'Inactive accounts retain their historical balances');
+const trial=(await db.query("SELECT get_trial_balance($1,'2026-10-31') value",[uuid(100)])).rows[0].value;
+assert.equal(trial.find(row=>row.code==='6').credit,70,'Trial balance retains inactive income');
+const trialSummary=(await db.query("SELECT get_trial_balance_summary($1,'2026-10-31') value",[uuid(100)])).rows[0].value;
+assert.equal(trialSummary.total_credit,9270);assert.equal(trialSummary.total_debit,530);
+assert.equal(trial.reduce((sum,row)=>sum+row.credit,0),trialSummary.total_credit);
 assert.equal((await balance()).net_income-(await db.query("SELECT get_income_statement($1,'2026-09-01','2026-09-30') value",[uuid(100)])).rows[0].value.net_income,(await report()).net_income,'Period profit matches the change in cumulative profit');
 const canonical=await db.query("SELECT sum(CASE WHEN a.account_type IN ('income','expense') THEN l.credit-l.debit ELSE 0 END) profit FROM journal_entry_lines l JOIN journal_entries j ON j.id=l.journal_entry_id JOIN chart_of_accounts a ON a.id=l.account_id WHERE j.branch_id=$1 AND j.entry_date BETWEEN '2026-10-01' AND '2026-10-31'",[uuid(100)]);
 assert.equal((await report()).net_income,Number(canonical.rows[0].profit));
@@ -58,5 +68,6 @@ await db.exec(readFileSync('scripts/rollback/owner_income_classification_2026102
 assert.equal((await report()).net_income,670,'Rollback restores exact prior behavior');
 assert.equal((await balance()).net_income,8670,'Rollback restores original inactive-account behavior');
 assert.equal((await db.query("SELECT md5(prosrc) hash FROM pg_proc WHERE oid='get_income_statement(uuid,date,date)'::regprocedure")).rows[0].hash,baseline.source_hash);
+for(const row of trialBaseline)assert.equal((await db.query('SELECT md5(prosrc) hash FROM pg_proc WHERE oid=$1::regprocedure',[row.proname+'(uuid,date)'])).rows[0].hash,row.source_hash);
 await db.close();
 console.log('PASS: omitted income, gross margin, canonical profit, branch/date/history isolation, RLS/ACL preservation, drift guard, rollback');

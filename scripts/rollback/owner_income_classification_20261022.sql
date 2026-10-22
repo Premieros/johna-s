@@ -226,4 +226,78 @@ SELECT jsonb_build_object(
 )
 FROM summary;
 $function$;
+DO $guard$ BEGIN
+ IF (SELECT md5(prosrc) FROM pg_proc WHERE oid='public.get_trial_balance(uuid,date)'::regprocedure) <> 'fe7b5785db88e0e1cb7ff7761850bb0d'
+ THEN RAISE EXCEPTION 'TRIAL_BALANCE_SOURCE_DRIFT'; END IF;
+END $guard$;
+CREATE OR REPLACE FUNCTION public.get_trial_balance(p_branch_id uuid, p_to_date date DEFAULT CURRENT_DATE)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+WITH history_bound AS MATERIALIZED (
+  SELECT public.history_clamp_as_of(p_to_date) AS to_date
+),
+rows AS MATERIALIZED (
+  SELECT
+    a.code,
+    a.name,
+    a.name_en,
+    a.account_type,
+    round(COALESCE(SUM(l.debit), 0), 2) AS debit,
+    round(COALESCE(SUM(l.credit), 0), 2) AS credit,
+    round(
+      COALESCE(SUM(l.debit), 0)
+      - COALESCE(SUM(l.credit), 0),
+      2
+    ) AS balance
+  FROM public.chart_of_accounts a
+  LEFT JOIN (
+    SELECT l.account_id, l.debit, l.credit
+    FROM public.journal_entry_lines l
+    JOIN public.journal_entries j ON j.id = l.journal_entry_id
+    CROSS JOIN history_bound hb
+    WHERE j.branch_id = p_branch_id
+      AND j.entry_date <= hb.to_date
+  ) l ON l.account_id = a.id
+  WHERE a.branch_id = p_branch_id
+    AND a.is_active
+  GROUP BY a.code, a.name, a.name_en, a.account_type
+  HAVING COALESCE(SUM(l.debit), 0) <> 0
+      OR COALESCE(SUM(l.credit), 0) <> 0
+)
+SELECT COALESCE(jsonb_agg(rows ORDER BY code), '[]'::jsonb)
+FROM rows;
+$function$;
+DO $guard$ BEGIN
+ IF (SELECT md5(prosrc) FROM pg_proc WHERE oid='public.get_trial_balance_summary(uuid,date)'::regprocedure) <> '4253cb36b3ed59f70cfc35fbfa833753'
+ THEN RAISE EXCEPTION 'TRIAL_BALANCE_SOURCE_DRIFT'; END IF;
+END $guard$;
+CREATE OR REPLACE FUNCTION public.get_trial_balance_summary(p_branch_id uuid, p_to_date date DEFAULT CURRENT_DATE)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+WITH rows AS (
+  SELECT COALESCE(SUM(l.debit), 0) AS debit, COALESCE(SUM(l.credit), 0) AS credit
+  FROM public.chart_of_accounts a
+  LEFT JOIN (
+    SELECT l.account_id, l.debit, l.credit
+    FROM public.journal_entry_lines l
+    JOIN public.journal_entries j ON j.id = l.journal_entry_id
+    WHERE j.branch_id = p_branch_id AND j.entry_date <= public.history_clamp_as_of(p_to_date)
+  ) l ON l.account_id = a.id
+  WHERE a.branch_id = p_branch_id AND a.is_active
+    AND (COALESCE(l.debit, 0) <> 0 OR COALESCE(l.credit, 0) <> 0)
+)
+SELECT jsonb_build_object(
+  'to_date', public.history_clamp_as_of(p_to_date),
+  'total_debit', round(COALESCE((SELECT SUM(debit) FROM rows), 0), 2),
+  'total_credit', round(COALESCE((SELECT SUM(credit) FROM rows), 0), 2),
+  'balanced', round(COALESCE((SELECT SUM(debit) FROM rows), 0), 2)
+              = round(COALESCE((SELECT SUM(credit) FROM rows), 0), 2)
+);
+$function$;
 COMMIT;

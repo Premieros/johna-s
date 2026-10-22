@@ -1,0 +1,18 @@
+[
+  {
+    "proname": "get_trial_balance",
+    "definition": "CREATE OR REPLACE FUNCTION public.get_trial_balance(p_branch_id uuid, p_to_date date DEFAULT CURRENT_DATE)\n RETURNS jsonb\n LANGUAGE sql\n STABLE\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nWITH history_bound AS MATERIALIZED (\n  SELECT public.history_clamp_as_of(p_to_date) AS to_date\n),\nrows AS MATERIALIZED (\n  SELECT\n    a.code,\n    a.name,\n    a.name_en,\n    a.account_type,\n    round(COALESCE(SUM(l.debit), 0), 2) AS debit,\n    round(COALESCE(SUM(l.credit), 0), 2) AS credit,\n    round(\n      COALESCE(SUM(l.debit), 0)\n      - COALESCE(SUM(l.credit), 0),\n      2\n    ) AS balance\n  FROM public.chart_of_accounts a\n  LEFT JOIN (\n    SELECT l.account_id, l.debit, l.credit\n    FROM public.journal_entry_lines l\n    JOIN public.journal_entries j ON j.id = l.journal_entry_id\n    CROSS JOIN history_bound hb\n    WHERE j.branch_id = p_branch_id\n      AND j.entry_date <= hb.to_date\n  ) l ON l.account_id = a.id\n  WHERE a.branch_id = p_branch_id\n    AND a.is_active\n  GROUP BY a.code, a.name, a.name_en, a.account_type\n  HAVING COALESCE(SUM(l.debit), 0) <> 0\n      OR COALESCE(SUM(l.credit), 0) <> 0\n)\nSELECT COALESCE(jsonb_agg(rows ORDER BY code), '[]'::jsonb)\nFROM rows;\n$function$\n",
+    "source_hash": "5ccadb0fc728fab3a28ddb13e5b3619c",
+    "prosecdef": false,
+    "proacl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+    "patched_source_hash": "fe7b5785db88e0e1cb7ff7761850bb0d"
+  },
+  {
+    "proname": "get_trial_balance_summary",
+    "definition": "CREATE OR REPLACE FUNCTION public.get_trial_balance_summary(p_branch_id uuid, p_to_date date DEFAULT CURRENT_DATE)\n RETURNS jsonb\n LANGUAGE sql\n STABLE\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nWITH rows AS (\n  SELECT COALESCE(SUM(l.debit), 0) AS debit, COALESCE(SUM(l.credit), 0) AS credit\n  FROM public.chart_of_accounts a\n  LEFT JOIN (\n    SELECT l.account_id, l.debit, l.credit\n    FROM public.journal_entry_lines l\n    JOIN public.journal_entries j ON j.id = l.journal_entry_id\n    WHERE j.branch_id = p_branch_id AND j.entry_date <= public.history_clamp_as_of(p_to_date)\n  ) l ON l.account_id = a.id\n  WHERE a.branch_id = p_branch_id AND a.is_active\n    AND (COALESCE(l.debit, 0) <> 0 OR COALESCE(l.credit, 0) <> 0)\n)\nSELECT jsonb_build_object(\n  'to_date', public.history_clamp_as_of(p_to_date),\n  'total_debit', round(COALESCE((SELECT SUM(debit) FROM rows), 0), 2),\n  'total_credit', round(COALESCE((SELECT SUM(credit) FROM rows), 0), 2),\n  'balanced', round(COALESCE((SELECT SUM(debit) FROM rows), 0), 2)\n              = round(COALESCE((SELECT SUM(credit) FROM rows), 0), 2)\n);\n$function$\n",
+    "source_hash": "8714c9c96f42dcf5af5561db349decc2",
+    "prosecdef": false,
+    "proacl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+    "patched_source_hash": "4253cb36b3ed59f70cfc35fbfa833753"
+  }
+]

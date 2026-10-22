@@ -5,6 +5,7 @@ on:
       - 'scripts/db/candidates/owner-income-proof.mjs'
       - 'scripts/db/candidates/owner_income_baseline.json'
       - 'scripts/db/candidates/owner_balance_baseline.json'
+      - 'scripts/db/candidates/owner_trial_baseline.json'
       - 'scripts/rollback/owner_income_classification_20261022.sql'
       - 'supabase/migrations/*_owner_income_classification.sql'
       - '.github/workflows/owner-income-proof.yml'

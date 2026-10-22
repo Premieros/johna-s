@@ -13,12 +13,12 @@ Owner authorized preparing repairs following the accounting review. Production r
 No production DDL or business writes during preparation. Preserve sales, printing, installed Windows agents, KDS, stock/cost writers, RLS and function ACLs/security. No new tables, triggers, indexes, polling, automatic read retry or report RPC calls. Keep the Windows experiment isolated.
 
 ## Baseline
-Main 6b7688e2e1ac669c3fc5f5c9de4bfbdb19a279ce (#531 released). Captured current income-statement and balance-sheet definitions and exact source hashes with two bounded read-only metadata queries. No customer balances were audited in this work.
+Main 6b7688e2e1ac669c3fc5f5c9de4bfbdb19a279ce (#531 released). Captured current income-statement balance-sheet and trial-balance definitions and exact source hashes with three bounded read-only metadata queries. No customer balances were audited in this work.
 
 ## Root-cause ledger
 - Month summary dropped missing-recipe/unit diagnostics from its existing consumption response.
 - Income statement included only mapped revenue/other-income accounts; balance-sheet profit included all income. Other income also inflated gross sales profit.
-- Balance sheet excluded inactive accounts, erasing their posted historical balances from that report.
+- Balance sheet and both trial-balance reports excluded inactive accounts, erasing their posted historical balances from that report.
 - Treasury running journal balances were named actual cash/bank balances.
 - Aging summary combined receivables and payables and had four headings for five cells.
 - Selector services ignored read errors and presented inaccessible data as empty.
@@ -26,7 +26,7 @@ Main 6b7688e2e1ac669c3fc5f5c9de4bfbdb19a279ce (#531 released). Captured current 
 ## Change ledger
 - Retain consumption diagnostics and show a partial-cost warning. Calculate owner estimated margin and result after posted expenses locally from existing aggregates, only with complete prices/recipes/units and unrestricted history. Missing prices still count as zero in consumption; no invented cost or change to the canonical pricing policy.
 - Explain estimated current-recipe valuation versus posted accounting profit, and review versus a locked month.
-- Guarded replacements of two read-only report functions. Income retains the same materialized history bounds and journal aggregation. Mapped sales/discount/COGS form sales margin; all other income appears separately, including custom income accounts. Net income uses all income minus all expenses. Balance sheet retains inactive-account history. No change to operational accounting entries.
+- Guarded replacements of four read-only report functions. Income retains the same materialized history bounds and journal aggregation. Mapped sales/discount/COGS form sales margin; all other income appears separately, including custom income accounts. Net income uses all income minus all expenses. Balance sheet and trial balance retain inactive-account history. No change to operational accounting entries.
 - Existing net_revenue/gross_profit semantics intentionally change to exclude other income. Optional other_income JSON field supports old/new frontend rollout. Table and Excel show the new row when supplied.
 - Income is period-based; balance sheet is cumulative as of date. Compare period income with the change in cumulative profit over matching dates, not with a different-period total.
 - Rename treasury balances to book balances. Keep AR/AP separate and repair aging headers.
@@ -37,7 +37,7 @@ Main 6b7688e2e1ac669c3fc5f5c9de4bfbdb19a279ce (#531 released). Captured current 
 
 ## Production gate
 State: **BLOCKED**
-No Merge ولا Production migration before separate owner approval after final verification. Apply guarded migration before deploying new UI for a single coherent release. SQL rollback restores only these two report definitions; no data rollback. Exact source drift aborts the transaction.
+No Merge ولا Production migration before separate owner approval after final verification. Apply guarded migration before deploying new UI for a single coherent release. SQL rollback restores only these four report definitions; no data rollback. Exact source drift aborts the transaction.
 
 ## Next action
 Finish exact-head checks and present the PR for release review. Actual month approval/locking/reopening is a distinct workflow requiring explicit period policy and enforcement across writers; this repair does not introduce it or claim a locked close. Owner summary is operational and excludes other adjustments; it is not a certified accounting net profit or bank/cash count.
