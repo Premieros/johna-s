@@ -69,6 +69,8 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
   const [inventoryItemId, setInventoryItemId] = useState('');
   const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
   const [warehouseId, setWarehouseId] = useState('');
+  const [selectorError, setSelectorError] = useState<unknown>(null);
+  const [selectorRetry, setSelectorRetry] = useState(0);
   const [loadedSelectorContextKey, setLoadedSelectorContextKey] = useState('');
   const { user } = useAuth();
   const readController = useRef<AbortController | null>(null);
@@ -97,6 +99,8 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
   useEffect(() => {
     let cancelled = false;
     setLoadedSelectorContextKey('');
+    setSelectorError(null);
+    const handleSelectorError = (error: unknown) => { if (!cancelled) setSelectorError(error); };
 
     if (!effectiveBranchFilter) {
       setAccounts([]);
@@ -119,14 +123,14 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         setAccounts(rows);
         setAccountId((prev) => rows.some((x) => x.id === prev) ? prev : (rows[0]?.id || ''));
         setLoadedSelectorContextKey(selectorContextKey);
-      });
+      }).catch(handleSelectorError);
     } else if (view === 'treasury_statement') {
       void loadTreasuryAccounts(effectiveBranchFilter).then((rows) => {
         if (cancelled) return;
         setTreasuryAccounts(rows);
         setTreasuryId((prev) => rows.some((x) => x.id === prev) ? prev : (rows[0]?.id || ''));
         setLoadedSelectorContextKey(selectorContextKey);
-      });
+      }).catch(handleSelectorError);
     } else if (view === 'inventory_movement') {
       void loadInventoryStatementOptions(effectiveBranchFilter, inventoryItemType).then(({ items, warehouses: warehouseRows }) => {
         if (cancelled) return;
@@ -135,7 +139,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         setWarehouses(warehouseRows);
         setWarehouseId((prev) => warehouseRows.some((x) => x.id === prev) ? prev : '');
         setLoadedSelectorContextKey(selectorContextKey);
-      });
+      }).catch(handleSelectorError);
     } else if (view === 'party_statement') {
       void loadPartyStatementOptions(effectiveBranchFilter, partySide).then((rows) => {
         if (cancelled) return;
@@ -149,11 +153,11 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
           setPartyId((prev) => suppliers.some((x) => x.id === prev) ? prev : '');
         }
         setLoadedSelectorContextKey(selectorContextKey);
-      });
+      }).catch(handleSelectorError);
     }
 
     return () => { cancelled = true; };
-  }, [effectiveBranchFilter, view, partySide, inventoryItemType, selectorContextKey]);
+  }, [effectiveBranchFilter, view, partySide, inventoryItemType, selectorContextKey, selectorRetry]);
 
   const load = useCallback(async () => {
     const generation = ++readGeneration.current;
@@ -383,6 +387,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         { [ar('البند', 'Item')]: t('netRevenue'), [ar('القيمة', 'Amount')]: income.net_revenue },
         { [ar('البند', 'Item')]: t('cogs'), [ar('القيمة', 'Amount')]: income.cogs },
         { [ar('البند', 'Item')]: t('grossProfit'), [ar('القيمة', 'Amount')]: income.gross_profit },
+        ...(income.other_income === undefined ? [] : [{ [ar('البند', 'Item')]: ar('إيرادات أخرى وإضافية', 'Other and additional income'), [ar('القيمة', 'Amount')]: income.other_income }]),
         { [ar('البند', 'Item')]: t('expenses'), [ar('القيمة', 'Amount')]: income.expenses },
         { [ar('البند', 'Item')]: t('netIncome'), [ar('القيمة', 'Amount')]: income.net_income },
       ];
@@ -469,6 +474,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
     { label: t('netRevenue'), value: income.net_revenue, bold: true },
     { label: t('cogs'), value: income.cogs },
     { label: t('grossProfit'), value: income.gross_profit, bold: true },
+    ...(income.other_income === undefined ? [] : [{ label: isAr ? 'إيرادات أخرى وإضافية' : 'Other and additional income', value: income.other_income }]),
     { label: t('expenses'), value: income.expenses },
     { label: t('netIncome'), value: income.net_income, bold: true },
   ] : [];
@@ -572,6 +578,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         <Button variant="outline" disabled={loading || loadedReportScope !== reportScope} onClick={() => { clearReportRequestCache(); void load(); }}>{isAr ? 'تحديث التقرير' : 'Refresh report'}</Button>
       </div>
       <p className="mb-3 text-xs text-ui-muted">{isAr ? 'تتشارك الصفحات النتائج المتطابقة لمدة دقيقة. اضغط تحديث التقرير لطلب أحدث البيانات.' : 'Identical results are shared for up to one minute. Refresh report requests the latest data.'}</p>
+      {!!selectorError && <div role="alert" className="rounded border border-ui-border p-3">{isAr ? 'تعذر تحميل خيارات التقرير؛ القائمة الفارغة لا تعني عدم وجود بيانات.' : 'Report options could not load; an empty list does not mean there are no records.'} {userFacingErrorMessage(selectorError, lang)} <Button size="sm" onClick={() => setSelectorRetry(value => value + 1)}>{isAr ? 'إعادة المحاولة' : 'Retry'}</Button></div>}
       {!!reportError && <div role="alert" className="rounded border border-ui-border p-3">{userFacingErrorMessage(reportError, lang)} <Button size="sm" onClick={() => void load()}>{isAr ? 'إعادة المحاولة' : 'Retry'}</Button></div>}
       {reportError ? null : !loading && loadedReportScope !== reportScope ? (
         <DesignPanel testId="financial-reports-idle"><p className="py-12 text-center text-ui-subtle">{isAr ? 'اختر الفترة واضغط عرض التقرير' : 'Choose filters and run the report.'}</p></DesignPanel>
@@ -741,6 +748,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         </Card>
       ) : view === 'income' ? (
         <Card className="p-4">
+          <p className="mb-3 text-sm text-ui-muted">{isAr ? 'الربح المحاسبي من القيود المرحلة. تكلفة الوصفات تقدير بالأسعار والوصفات الحالية وقد تختلف؛ التحصيل ورصيد الخزنة ليسا ربحًا.' : 'Accounting profit comes from posted journals. Recipe cost uses current prices and recipes and may differ; collections and treasury balances are not profit.'}</p>
           {income && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               {summaryCard(t('revenue'), income.revenue)}
@@ -857,7 +865,6 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 {summaryCard(t('arTotal'), agingSummary.ar_open, 'text-ui-info')}
                 {summaryCard(t('apTotal'), agingSummary.ap_open, 'text-ui-warning')}
-                {summaryCard(t('openBalance'), agingSummary.ar_open + agingSummary.ap_open)}
                 <div className="bg-ui-page-alt/60 rounded-xl p-4">
                   <p className="text-xs font-medium text-ui-subtle dark:text-ui-subtle">{t('asOf')}</p>
                   <p className="text-lg font-bold mt-1 text-ui-text dark:text-white">{formatDate(agingSummary.as_of, lang)}</p>
@@ -867,6 +874,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-ui-border">
+                      <th className="px-4 py-3 text-start font-semibold text-ui-muted">{isAr ? 'البيان' : 'Description'}</th>
                       <th className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('days30')}</th>
                       <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('days60')}</th>
                       <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('days90')}</th>

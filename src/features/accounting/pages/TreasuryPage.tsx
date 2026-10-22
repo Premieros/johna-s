@@ -319,8 +319,8 @@ export function TreasuryPage() {
     transfer_out: { key: 'transfer_out', header: isAr ? 'تحويل صادر' : 'Transfer out', render: (row) => formatCurrency(row.transfer_out, currency, lang) },
     shift_cash_net: { key: 'shift_cash_net', header: isAr ? 'صافي نقدي الشفتات' : 'Shift cash net', render: (row) => <span className="font-semibold text-ui-text">{formatCurrency(row.shift_cash_net, currency, lang)}</span> },
     cash_day_net: { key: 'cash_day_net', header: isAr ? 'صافي نقدي اليوم' : 'Daily cash net', render: (row) => <span className="font-black text-ui-primary">{formatCurrency(row.cash_day_net, currency, lang)}</span> },
-    cash_balance_after_close: { key: 'cash_balance_after_close', header: isAr ? 'رصيد نقدي فعلي' : 'Actual cash balance', render: (row) => <span className="font-semibold text-ui-text">{formatCurrency(row.cash_balance_after_close, currency, lang)}</span> },
-    bank_balance_after_close: { key: 'bank_balance_after_close', header: isAr ? 'رصيد بنك فعلي' : 'Actual bank balance', render: (row) => <span className="font-semibold text-ui-text">{formatCurrency(row.bank_balance_after_close, currency, lang)}</span> },
+    cash_balance_after_close: { key: 'cash_balance_after_close', header: isAr ? 'رصيد نقدي دفتري' : 'Cash book balance', render: (row) => <span className="font-semibold text-ui-text">{formatCurrency(row.cash_balance_after_close, currency, lang)}</span> },
+    bank_balance_after_close: { key: 'bank_balance_after_close', header: isAr ? 'رصيد بنك دفتري' : 'Bank book balance', render: (row) => <span className="font-semibold text-ui-text">{formatCurrency(row.bank_balance_after_close, currency, lang)}</span> },
     closing_balance: { key: 'closing_balance', header: isAr ? 'إجمالي آخر اليوم' : 'Day closing total', render: (row) => <span className={`font-black ${row.is_latest ? 'text-ui-primary' : 'text-ui-text'}`}>{formatCurrency(row.closing_balance, currency, lang)}</span> },
     report: { key: 'report', header: isAr ? 'اليوم' : 'Day', render: (row) => (
       <div className="flex flex-wrap gap-1">
@@ -407,7 +407,7 @@ export function TreasuryPage() {
           <div className="mb-3 rounded-lg border border-ui-border bg-ui-page-alt p-3 text-sm text-ui-muted">
             {isAr
               ? 'يومية خزينة متصلة حسب يوم العمل: رصيد نقدي أول اليوم + صافي نقدي اليوم = رصيد نقدي آخر اليوم، ورصيد آخر اليوم يصبح رصيد أول اليوم التالي. صافي الشفتات مستقل ويُستخدم لعهدة الموظف، والعد النقدي لا يدخل في الحساب.'
-              : 'Continuous treasury journal: carried cash and bank equal the prior day closing balances, with sales, expenses, purchases, and transfers explaining the actual cash and bank closing balances.'}
+              : 'Continuous treasury journal: carried cash and bank equal the prior day closing balances, with sales, expenses, purchases, and transfers explaining the cash and bank book closing balances.'}
           </div>
           <details className="mb-3 rounded-lg border border-ui-border bg-ui-surface p-3">
             <summary className="cursor-pointer font-semibold text-ui-text">{isAr ? 'تحديد الأعمدة' : 'Choose columns'}</summary>
@@ -453,8 +453,8 @@ export function TreasuryPage() {
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between gap-3"><span>{isAr ? 'نقدي مرحّل' : 'Cash carried'}</span><b>{formatCurrency(selectedDay.cash_opening_balance, currency, lang)}</b></div>
                     <div className="flex justify-between gap-3"><span>{isAr ? 'بنك مرحّل' : 'Bank carried'}</span><b>{formatCurrency(selectedDay.bank_opening_balance, currency, lang)}</b></div>
-                    <div className="flex justify-between gap-3"><span>{isAr ? 'رصيد نقدي فعلي' : 'Actual cash'}</span><b>{formatCurrency(selectedDay.cash_balance_after_close, currency, lang)}</b></div>
-                    <div className="flex justify-between gap-3"><span>{isAr ? 'رصيد بنك فعلي' : 'Actual bank'}</span><b>{formatCurrency(selectedDay.bank_balance_after_close, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'رصيد نقدي دفتري' : 'Cash book balance'}</span><b>{formatCurrency(selectedDay.cash_balance_after_close, currency, lang)}</b></div>
+                    <div className="flex justify-between gap-3"><span>{isAr ? 'رصيد بنك دفتري' : 'Bank book balance'}</span><b>{formatCurrency(selectedDay.bank_balance_after_close, currency, lang)}</b></div>
                   </div>
                 </div>
                 <div className="rounded-lg border border-ui-border bg-ui-surface p-3">
