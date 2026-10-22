@@ -91,8 +91,8 @@ describe('treasury daily single-row UI contract', () => {
       'تحويل صادر',
       'صافي نقدي الشفتات',
       'صافي نقدي اليوم',
-      'رصيد نقدي فعلي',
-      'رصيد بنك فعلي',
+      'رصيد نقدي دفتري',
+      'رصيد بنك دفتري',
       'إجمالي آخر اليوم',
       'تفاصيل',
       'تقرير',
@@ -190,14 +190,14 @@ describe('treasury transfer visibility and main bank contract', () => {
 
 
 describe('treasury daily journal configurable columns', () => {
-  it('shows carried cash/bank, actual cash/bank and lets the user choose visible columns', () => {
+  it('shows carried cash/bank, book cash/bank and lets the user choose visible columns', () => {
     expect(treasuryPage).toContain("isAr ? 'يومية الخزينة' : 'Treasury Daily Journal'");
     expect(treasuryPage).toContain("isAr ? 'نقدي مرحّل' : 'Cash carried'");
     expect(treasuryPage).toContain("isAr ? 'بنك مرحّل' : 'Bank carried'");
     expect(treasuryPage).toContain("isAr ? 'بيع نقدي' : 'Cash sales'");
     expect(treasuryPage).toContain("isAr ? 'بيع بنك/كارت' : 'Bank/Card sales'");
-    expect(treasuryPage).toContain("isAr ? 'رصيد نقدي فعلي' : 'Actual cash balance'");
-    expect(treasuryPage).toContain("isAr ? 'رصيد بنك فعلي' : 'Actual bank balance'");
+    expect(treasuryPage).toContain("isAr ? 'رصيد نقدي دفتري' : 'Cash book balance'");
+    expect(treasuryPage).toContain("isAr ? 'رصيد بنك دفتري' : 'Bank book balance'");
     expect(treasuryPage).toContain("isAr ? 'تحديد الأعمدة' : 'Choose columns'");
     expect(treasuryPage).toContain("treasury.dailyJournal.columns.v2");
     expect(treasuryPage).toContain("isAr ? 'صافي نقدي الشفتات' : 'Shift cash net'");

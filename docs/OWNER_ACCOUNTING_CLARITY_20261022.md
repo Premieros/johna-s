@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/owner-accounting-clarity-20261022`
-Current PR: `0`
+Current PR: `532`
 Last updated: 2026-10-22
 
 ## Work status
@@ -33,7 +33,7 @@ Main 6b7688e2e1ac669c3fc5f5c9de4bfbdb19a279ce (#531 released). Captured current 
 - Surface selector errors with manual retry and retain stale-context cancellation/run blocking.
 
 ## Verification ledger
-42 focused tests passed in 2.23 seconds. Application and test typechecks passed. Isolated disposable Postgres proof reproduces original omitted custom income and inflated margin, checks exact repaired totals, inactive-account history and period/cumulative agreement, branch/date/history/RLS isolation, unchanged ACL/invoker/search_path, source drift rejection, and exact guarded rollback. Database identity and API contract checks passed. Full CI, lint and build results pending final head. No test writes to production.
+42 focused tests passed in 2.23 seconds. Application and test typechecks passed. Isolated disposable Postgres proof reproduces original omitted custom income and inflated margin, checks exact repaired totals, inactive-account history and period/cumulative agreement, branch/date/history/RLS isolation, unchanged ACL/invoker/search_path, source drift rejection, and exact guarded rollback. Database identity and API contract checks passed. Build passed in 9.18 seconds; lint passed with zero errors and 12 existing warnings. Full CI pending final head. No test writes to production.
 
 ## Production gate
 State: **BLOCKED**
