@@ -78,6 +78,14 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
     pidB=(await b.query('SELECT pg_backend_pid() pid')).rows[0].pid;
     await observer.query("SET app.kitchen_rollout_ack='johnas-kitchen-20261013-review-required'");
     if((await observer.query("SELECT to_regprocedure('public._kitchen_dispatch_component_plans(uuid,jsonb)') IS NOT NULL present")).rows[0].present)await observer.query(rollback());
+    // This suite rehearses the immutable October-13 rollout and its strict
+    // source guards, rather than activating it against later transfer code.
+    // Restore that one historical fixture function ONLY in this newly created
+    // qa_kitchen_* database. Shared CI and production definitions stay intact.
+    const historicalCapture=JSON.parse(readFileSync('scripts/db/candidates/partial_transfer_baseline.json','utf8'))
+      .find((row:{proname:string})=>row.proname==='_capture_kitchen_ingredient_prices');
+    if(!historicalCapture?.definition)throw new Error('HISTORICAL_CAPTURE_FIXTURE_MISSING');
+    await observer.query(historicalCapture.definition);
     originalDefinitions=(await observer.query(catalogSQL)).rows;
     await observer.query("SET app.kitchen_rollout_ack='johnas-kitchen-20261013-review-required'");
     await observer.query(forward());

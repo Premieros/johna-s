@@ -1,3 +1,4 @@
+import type { PosItemTransferResult } from '../types';
 import { useMemo, useRef, useState, useCallback } from 'react';
 import { supabase } from '@/api';
 import * as api from '@/api';
@@ -624,6 +625,11 @@ export function usePosOrder(input: UsePosOrderInput) {
       setSettlementReceiptSaleId(null);
       setSettlementReceiptOrderCompleted(null);
       base.closeReceipt();
+    },
+    applyItemsTransfer: (result: PosItemTransferResult) => {
+      if (!base.applyItemsTransfer(result)) return;
+      clearSettlementPreview();
+      directDiscountDirtyOrderRef.current = null;
     },
     transferOrderToTable,
     completeSale,

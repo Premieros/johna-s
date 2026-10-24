@@ -285,6 +285,34 @@ const messages: Record<string, { ar: string; en: string }> = {
     ar: 'تعذر إكمال العملية بالكامل، ولم يتم اعتماد تغيير جزئي. حدّث الطلب ثم حاول مرة أخرى.',
     en: 'The transaction could not be completed and no partial change was committed. Refresh the order and retry.',
   },
+  TRANSFER_PAID_ORDER_REQUIRES_SETTLEMENT: {
+    ar: 'لا يمكن نقل الكميات من أو إلى طلب تم تحصيل جزء منه. استخدم طاولة بطلب غير محصّل للحفاظ على حساب الفاتورة.',
+    en: 'Quantity transfer requires unpaid source and destination orders. Partly paid orders retain their existing invoice allocation.',
+  },
+  TRANSFER_SOURCE_CHANGED: {
+    ar: 'تغيّر الصنف بعد فتح النقل. أغلق النافذة وراجع الكمية ثم أعد الاختيار.',
+    en: 'This line changed. Close this dialog, review its quantity and select it again.',
+  },
+  TRANSFER_QUANTITY_UNAVAILABLE: {
+    ar: 'الكمية المطلوبة غير متاحة للنقل أو تم تحصيل جزء منها. راجع الطلب.',
+    en: 'The quantity is unavailable or partly paid. Review the order.',
+  },
+  INVALID_TRANSFER_QUANTITY: {
+    ar: 'حدد كمية أكبر من صفر ولا تتجاوز الكمية المتاحة، بحد أقصى أربع خانات عشرية.',
+    en: 'Enter a positive available quantity with at most four decimal places.',
+  },
+  TRANSFER_BUSY: {
+    ar: 'تجري عملية نقل أخرى الآن. انتظر لحظة ثم أعد المحاولة.',
+    en: 'Another transfer is running. Wait a moment and retry.',
+  },
+  TRANSFER_OPERATION_CONFLICT: {
+    ar: 'رقم العملية مرتبط بنقل سابق مختلف. حدّث الطلب وراجع النتيجة قبل إعادة النقل.',
+    en: 'This operation number belongs to a different transfer. Refresh and review the result.',
+  },
+  PARTIAL_TRANSFER_DISABLED: {
+    ar: 'نقل الكميات الجزئية متوقف مؤقتًا. لم يتم نقل أي كمية.',
+    en: 'Quantity transfer is temporarily disabled. Nothing was moved.',
+  },
   SAME_TABLE: {
     ar: 'لا يمكن النقل إلى نفس الطاولة الحالية.',
     en: 'The item is already on the selected table.',

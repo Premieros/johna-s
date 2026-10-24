@@ -1,0 +1,27 @@
+name: Partial table transfer isolated SQL proof
+on:
+  pull_request:
+    paths:
+      - 'scripts/db/candidates/*partial*'
+      - 'scripts/rollback/partial_item_transfer_*.sql'
+      - 'supabase/migrations/*_partial_item_table_transfer.sql'
+      - '.github/workflows/partial-transfer-proof.yml'
+permissions:
+  contents: read
+jobs:
+  isolated-sql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install pinned disposable Postgres engine
+        run: npm install --prefix /tmp/partial-transfer-proof --no-save --ignore-scripts @electric-sql/pglite@0.3.14
+      - name: Prove quantities, original snapshots, replay, guards and rollback
+        env:
+          PARTIAL_TRANSFER_PGLITE_MODULE: /tmp/partial-transfer-proof/node_modules/@electric-sql/pglite
+        run: |
+          node scripts/db/candidates/partial-transfer-proof.mjs
+          PARTIAL_TRANSFER_SCHEMA_VARIANT=canonical node scripts/db/candidates/partial-transfer-proof.mjs
