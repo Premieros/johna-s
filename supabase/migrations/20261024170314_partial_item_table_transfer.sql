@@ -881,6 +881,13 @@ BEGIN
   END IF;
 
   IF v_request IS NOT NULL THEN
+    -- Item triggers synchronously recalculate the source header. Establish the
+    -- existing exact transfer ownership context before the first split INSERT.
+    PERFORM set_config('app.pos_item_transfer_branch_id',v_order.branch_id::text,true);
+    PERFORM set_config('app.pos_item_transfer_source_order_id',p_order_id::text,true);
+    PERFORM set_config('app.pos_item_transfer_target_order_id',v_target_order_id::text,true);
+    PERFORM set_config('app.pos_item_transfer_source_table_id',v_order.table_id::text,true);
+    PERFORM set_config('app.pos_item_transfer_target_table_id',p_target_table_id::text,true);
     FOR v_line IN SELECT * FROM public.order_items WHERE order_id=p_order_id AND id=ANY(v_requested_ids) ORDER BY id LOOP
       SELECT value INTO v_spec FROM jsonb_array_elements(v_request->'quantities') WHERE value->>'order_item_id'=v_line.id::text;
       v_take:=(v_spec->>'quantity')::numeric;

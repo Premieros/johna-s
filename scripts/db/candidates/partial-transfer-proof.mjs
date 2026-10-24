@@ -46,6 +46,9 @@ CREATE TABLE test_restores(origin uuid,quantity numeric,event_id uuid);
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO authenticated;
 `);
 for(const r of baseline)await db.exec(r.definition);
+const totalsSource=readFileSync('supabase/migrations/20260902070000_p2_authoritative_order_pricing.sql','utf8');
+await db.exec(totalsSource.match(/CREATE OR REPLACE FUNCTION public\._sync_order_totals_from_items\([\s\S]*?\$\$;/)[0]);
+await db.exec('CREATE TRIGGER sync_totals AFTER INSERT OR UPDATE OR DELETE ON order_items FOR EACH ROW EXECUTE FUNCTION _sync_order_totals_from_items();');
 await db.exec(`
 REVOKE ALL ON FUNCTION transfer_order_items_to_table(uuid,uuid[],uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION transfer_order_items_to_table(uuid,uuid[],uuid) TO authenticated,service_role;
