@@ -4,12 +4,15 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `6b7688e2e1ac669c3fc5f5c9de4bfbdb19a279ce` (#531 merged/deployed)
-- Current active branch: `fix/owner-accounting-clarity-20261022`
-- Mandatory active work log: `docs/OWNER_ACCOUNTING_CLARITY_20261022.md`
+- Latest main baseline reconciled: `8238059d43d26e479e6cd435e23d6913ad0284e0` (#532 merged/deployed)
+- Current active branch: `fix/discount-approval-20261024`
+- Mandatory active work log: `docs/DISCOUNT_APPROVAL_20261024.md`
 - Owner approved monthly report restructuring, a clear latest-approved-price consumption report (purchase/pricing/count; missing price = numeric zero) and independent quick-takeaway creation permission. Preserve operational writers, installed Windows agents and all historical data. Manual aggregate reads and focused iteration tests; mandatory exact-head release gates remain. Prepare a reviewed candidate before production approval.
 
-## Active owner accounting clarity — 2026-10-22
+## Active existing checkout approval repair — 2026-10-24
+Owner canceled changing gross/net discount semantics and adding another product path. Repair only the current approval flow. Preserve the discount/tax formula, all existing invoices and sales/printing/stock operations. Prepare and verify; no Merge ولا Production migration before final approval. #532 is released.
+
+## Historical owner accounting clarity — 2026-10-22
 Owner approved repairing the accounting review findings. Prepare a tested candidate, preserving sales, printing, stock writers and database permissions; no Merge ولا Production migration before separate release approval. No new report polling or queries. Month review remains a review, not a newly introduced financial lock. Recipe valuation remains latest approved price with missing prices numerically zero.
 
 ## Historical raw transfer safety repair — 2026-10-21
