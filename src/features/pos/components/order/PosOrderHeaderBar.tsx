@@ -198,6 +198,18 @@ export function PosOrderHeaderBar({
           </button>
         )}
 
+        {!perms.canSendKitchen && perms.canCreateQuickOrder && orderType === 'takeaway' && itemsCount > 0 && (
+          <div className="flex flex-col gap-1">
+            <button type="button" disabled className="flex items-center gap-1 rounded-xl border border-ui-border px-2.5 py-1.5 font-black text-ui-muted opacity-60">
+              <ChefHat className="h-3.5 w-3.5" />
+              <span>{isAr ? 'إرسال للمطبخ' : 'Send to kitchen'}</span>
+            </button>
+            <span role="status" className="max-w-64 text-[10px] font-bold text-ui-muted">
+              {isAr ? 'يلزم تفعيل صلاحية «إرسال للمطبخ» لهذا المستخدم.' : 'Enable the Send to Kitchen permission for this user.'}
+            </span>
+          </div>
+        )}
+
         {perms.canPay && hasSent && itemsCount > 0 && (
           <button
             data-testid="pos-action-pay"

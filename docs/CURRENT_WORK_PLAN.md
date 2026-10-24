@@ -4,12 +4,15 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `252c20b1ed61a784d84fcf752681194afeaa3b58` (#533 merged/deployed)
-- Current active branch: `fix/partial-item-transfer-20261024`
-- Mandatory active work log: `docs/PARTIAL_ITEM_TRANSFER_20261024.md`
+- Latest main baseline reconciled: `15b762a1fad42dafc5510b5bbc50fef3d1b84022` (#534 merged/deployed)
+- Current active branch: `fix/quick-order-discoverability-20261024`
+- Mandatory active work log: `docs/QUICK_ORDER_ACCESS_20261024.md`
 - Owner approved monthly report restructuring, a clear latest-approved-price consumption report (purchase/pricing/count; missing price = numeric zero) and independent quick-takeaway creation permission. Preserve operational writers, installed Windows agents and all historical data. Manual aggregate reads and focused iteration tests; mandatory exact-head release gates remain. Prepare a reviewed candidate before production approval.
 
-## Active quantity transfer repair — 2026-10-24
+## Active quick-order access — 2026-10-24
+Owner approved merging and publishing #535 after review. Add direct access to open quick orders using existing live data and explain missing kitchen-send permission. Preserve independent action permissions, all kitchen/print writers and production data. No database changes. Required checks must pass before merge.
+
+## Released quantity transfer repair — 2026-10-24
 Owner authorized moving a chosen quantity (e.g. 1 of 3 waters) with a rollback path. Review #407/#421 first; preserve exact row identities, print idempotency, sent/served baselines, frozen costs and legacy reversal provenance. Prepare one verified candidate without production mutation or merge. #533 is released; the checkout discount calculation remains unchanged.
 
 ## Released existing checkout approval repair — 2026-10-24
