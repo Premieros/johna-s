@@ -270,7 +270,7 @@ text="BEGIN;\nSET LOCAL lock_timeout='2s';\nSET LOCAL statement_timeout='15s';\n
 for r in selected:
  if r['proname'] in canonical_reversals:text+=lineage_patch(r)
  else:text+=guard(r)+patched[r['proname']].rstrip().rstrip(';')+';\n'
-migration.write_text(text+'COMMIT;\n')
+migration.write_text(text+"NOTIFY pgrst, 'reload schema';\nCOMMIT;\n")
 
 
 # Operational rollback deliberately retains lineage-aware reversals for committed transfers.
