@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/discount-approval-20261024`
-Current PR: `0`
+Current PR: `533`
 Last updated: 2026-10-24
 
 ## Work status
