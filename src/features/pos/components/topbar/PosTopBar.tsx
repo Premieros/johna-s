@@ -15,6 +15,7 @@ export type PosPanelId = 'orders' | 'tables' | 'kitchen' | null;
 interface PosTopBarProps {
   panel: PosPanelId;
   onPanel: (p: Exclude<PosPanelId, null>) => void;
+  onOpenQuickOrders?: () => void;
   counts: {
     activeOrders: number;
     occupiedTables: number;
@@ -36,6 +37,7 @@ interface PosTopBarProps {
 
 export function PosTopBar({
   onPanel,
+  onOpenQuickOrders,
   counts,
   branchId,
   branches,
@@ -161,6 +163,19 @@ export function PosTopBar({
       </div>
 
       <div className="flex-1" />
+
+      {onOpenQuickOrders && (
+        <button
+          type="button"
+          data-testid="pos-open-quick-orders"
+          onClick={onOpenQuickOrders}
+          className="flex min-h-9 shrink-0 items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2 text-[10px] font-black text-ui-text hover:bg-ui-page-alt sm:text-xs"
+          aria-label={`${isAr ? 'الطلبات السريعة المفتوحة' : 'Open quick orders'}: ${counts.takeawayOrders}`}
+        >
+          <span>{isAr ? 'السريعة المفتوحة' : 'Open quick orders'}</span>
+          <span className="rounded-full bg-ui-primary-soft px-1.5 py-0.5 tabular-nums text-ui-primary">{counts.takeawayOrders}</span>
+        </button>
+      )}
 
       <div data-testid="pos-top-counters" className="hidden items-center gap-1 lg:flex">
         {counterButton('active-orders', 'الطلبات النشطة', 'Active orders', counts.activeOrders, <ListOrdered className="h-3.5 w-3.5" />, 'orders')}

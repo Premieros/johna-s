@@ -716,6 +716,13 @@ export function PosWorkspacePage() {
     <div data-testid="pos-workspace" className="flex h-[100dvh] flex-col overflow-hidden bg-ui-page text-ui-text">
       <PosTopBar
         panel={panel}
+        onOpenQuickOrders={() => {
+          setStartStep(null);
+          setPreselectedTableId(null);
+          setOrdersCategory('quick');
+          setPanel('orders');
+          setMobileOrderOpen(false);
+        }}
         onPanel={(p) => {
           setStartStep(null);
           if (p === 'orders') setOrdersCategory('all');
