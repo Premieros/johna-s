@@ -22,4 +22,6 @@ jobs:
       - name: Prove quantities, original snapshots, replay, guards and rollback
         env:
           PARTIAL_TRANSFER_PGLITE_MODULE: /tmp/partial-transfer-proof/node_modules/@electric-sql/pglite
-        run: node scripts/db/candidates/partial-transfer-proof.mjs
+        run: |
+          node scripts/db/candidates/partial-transfer-proof.mjs
+          PARTIAL_TRANSFER_SCHEMA_VARIANT=canonical node scripts/db/candidates/partial-transfer-proof.mjs

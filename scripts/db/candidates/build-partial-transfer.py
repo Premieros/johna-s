@@ -225,6 +225,41 @@ def guard(r):
   hashes.append(hashlib.md5(canonical_body.encode()).hexdigest())
  return "DO $guard$ BEGIN IF (SELECT md5(replace(prosrc,chr(13),'')) FROM pg_proc WHERE oid='public.%s'::regprocedure) NOT IN (%s) THEN RAISE EXCEPTION 'PARTIAL_TRANSFER_SOURCE_DRIFT:%s'; END IF; END $guard$;\n"%(sig(r),','.join("'%s'"%h for h in hashes),r['proname'])
 
+# Production retains the legacy reversal implementation; clean canonical replay
+# retains the later v2 snapshot implementation. Patch only the lineage reference
+# in either exact known body, preserving its existing restoration strategy.
+canonical_reversals={}
+reversal_source=Path('supabase/migrations/20260923073000_snapshot_void_refund_reversal.sql').read_text()
+paid_source=Path('supabase/migrations/20261002194500_paid_order_reopen_guard.sql').read_text()
+for name in ['_restore_kitchen_inventory_for_void','_restore_refund_hybrid_inventory']:
+ definition=re.search(r'CREATE OR REPLACE FUNCTION public\.'+name+r'\([\s\S]*?\$function\$;',reversal_source).group(0)
+ if name=='_restore_kitchen_inventory_for_void':
+  old=re.search(r'v_old := \$old\$(.*?)\$old\$;',paid_source,re.S).group(1)
+  new=re.search(r'v_new := \$new\$(.*?)\$new\$;',paid_source,re.S).group(1)
+  definition=rep(definition,old,new)
+ original=next(r for r in rows if r['proname']==name and (name!='_restore_refund_hybrid_inventory' or r['args'].startswith('p_sale_item_id')))
+ canonical_reversals[name]=dict(original,definition=definition)
+(root/'partial_transfer_canonical_reversal_baseline.json').write_text(json.dumps(list(canonical_reversals.values()),indent=2)+'\n')
+
+def lineage_patch(r):
+ name=r['proname'];known=[r,canonical_reversals[name]]
+ hashes=[hashlib.md5(x['definition'].split('AS $function$')[1].split('$function$')[0].encode()).hexdigest() for x in known]
+ if name=='_restore_kitchen_inventory_for_void':
+  needle="'kitchen_send',\\s+v_event.id,\\s+v_effect.target_id,"
+  replacement="'kitchen_send',\n          COALESCE(v_event.transfer_origin_event_id,v_event.id),\n          v_effect.target_id,"
+ else:
+  needle='SELECT id,warehouse_id'
+  replacement='SELECT COALESCE(transfer_origin_event_id,id) AS id,warehouse_id'
+ return """DO $lineage$
+DECLARE v_def text; v_body text;
+BEGIN
+ SELECT pg_get_functiondef(oid),prosrc INTO v_def,v_body FROM pg_proc WHERE oid='public.%s'::regprocedure;
+ IF md5(replace(v_body,chr(13),'')) NOT IN (%s) THEN RAISE EXCEPTION 'PARTIAL_TRANSFER_SOURCE_DRIFT:%s'; END IF;
+ IF (SELECT count(*) FROM regexp_matches(v_def,$needle$%s$needle$,'g'))<>1 THEN RAISE EXCEPTION 'TRANSFER_LINEAGE_FRAGMENT_DRIFT'; END IF;
+ EXECUTE regexp_replace(v_def,$needle$%s$needle$,$replacement$%s$replacement$);
+END $lineage$;
+"""%(sig(r),','.join("'%s'"%h for h in hashes),name,needle,needle,replacement)
+
 selected=[]
 for r in rows:
  if r['proname'] not in patched:continue
@@ -232,7 +267,9 @@ for r in rows:
  selected.append(r)
 migration=next(Path('supabase/migrations').glob('*_partial_item_table_transfer.sql'))
 text="BEGIN;\nSET LOCAL lock_timeout='2s';\nSET LOCAL statement_timeout='15s';\n"+(root/'partial_transfer_helpers.sql').read_text()+'\n'
-for r in selected:text+=guard(r)+patched[r['proname']].rstrip().rstrip(';')+';\n'
+for r in selected:
+ if r['proname'] in canonical_reversals:text+=lineage_patch(r)
+ else:text+=guard(r)+patched[r['proname']].rstrip().rstrip(';')+';\n'
 migration.write_text(text+'COMMIT;\n')
 
 

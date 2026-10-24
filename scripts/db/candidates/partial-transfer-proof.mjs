@@ -5,6 +5,10 @@ const require=createRequire(import.meta.url);
 const {PGlite}=require(process.env.PARTIAL_TRANSFER_PGLITE_MODULE || '@electric-sql/pglite');
 const db=new PGlite();
 const baseline=[...JSON.parse(readFileSync('scripts/db/candidates/partial_transfer_baseline.json','utf8')),...JSON.parse(readFileSync('scripts/db/candidates/partial_transfer_extra_baseline.json','utf8'))];
+if(process.env.PARTIAL_TRANSFER_SCHEMA_VARIANT==='canonical'){
+ const variants=JSON.parse(readFileSync('scripts/db/candidates/partial_transfer_canonical_reversal_baseline.json','utf8'));
+ for(const row of baseline){ const variant=variants.find(v=>v.proname===row.proname && v.args===row.args); if(variant) row.definition=variant.definition; }
+}
 const uid=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 await db.exec(`
 CREATE ROLE authenticated; CREATE ROLE anon; CREATE ROLE service_role; CREATE SCHEMA auth;
@@ -58,9 +62,22 @@ INSERT INTO users VALUES('${uid(2)}',true);
 `);
 const meta=async()=>(await db.query(`SELECT proname,oid::regprocedure::text signature,prosecdef,proacl::text,proconfig FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname=ANY($1::text[]) ORDER BY signature`,[baseline.map(r=>r.proname)])).rows;
 await db.query('INSERT INTO products(id,sale_price,branch_id) VALUES($1,20,$2)',[uid(50),uid(1)]);
+if(process.env.PARTIAL_TRANSFER_SCHEMA_VARIANT==='canonical') {
+ const source=readFileSync('supabase/migrations/20260923073000_snapshot_void_refund_reversal.sql','utf8');
+ await db.exec(source.match(/CREATE OR REPLACE FUNCTION public\._restore_kitchen_snapshot_raws\([\s\S]*?\$function\$;/)[0]);
+ await db.exec(`CREATE TABLE test_raw_restores(quantity numeric,reference_id uuid); CREATE FUNCTION _raw_add(uuid,uuid,uuid,numeric,numeric,text,date,date,text,text,uuid,text,uuid) RETURNS jsonb LANGUAGE plpgsql AS $$ BEGIN INSERT INTO test_raw_restores VALUES($4,$11); RETURN '{"success":true}'::jsonb; END $$;`);
+}
 const before=await meta();
 const migration='supabase/migrations/'+readdirSync('supabase/migrations').find(n=>n.endsWith('_partial_item_table_transfer.sql'));
 await db.exec(readFileSync(migration,'utf8'));
+for(const row of baseline.filter(r=>r.proname==='_restore_kitchen_inventory_for_void'||(r.proname==='_restore_refund_hybrid_inventory'&&r.args.startsWith('p_sale_item_id')))) {
+ const body=row.definition.split('AS $function$')[1].split('$function$')[0];
+ const actual=(await db.query('SELECT prosrc FROM pg_proc WHERE oid=$1::regprocedure',[row.proname+(row.proname==='_restore_kitchen_inventory_for_void'?'(uuid,uuid,numeric)':'(uuid,uuid,uuid,numeric,uuid,uuid,text)')])).rows[0].prosrc;
+ const expected=row.proname==='_restore_kitchen_inventory_for_void'
+  ?body.replace(/'kitchen_send',\s+v_event.id,\s+v_effect.target_id,/,"'kitchen_send',\n          COALESCE(v_event.transfer_origin_event_id,v_event.id),\n          v_effect.target_id,")
+  :body.replace('SELECT id,warehouse_id','SELECT COALESCE(transfer_origin_event_id,id) AS id,warehouse_id');
+ assert.equal(actual,expected,'Reversal implementation preserved except exact lineage reference');
+}
 const after=await meta();assert.deepEqual(after.filter(r=>r.signature!=='transfer_order_items_to_table(uuid,uuid[],uuid,jsonb)'),before,'All modified function privilege metadata unchanged');
 assert.equal(after.find(r=>r.signature.endsWith('uuid,jsonb)')).prosecdef,false);
 const q=async(sql,args=[])=>(await db.query(sql,args)).rows;
@@ -86,7 +103,7 @@ const seed=async(n,{sent=3,voided=0,version=2,settled=false}={})=>{
  const run=async(p=payload)=>(await q('SELECT transfer_order_items_to_table($1,ARRAY[$2::uuid],$3,$4::jsonb) result',[source,item,targetTable,JSON.stringify(p)]))[0].result;
  return {source,target,item,event,send,sourceTable,targetTable,payload,run};
 };
-const a=await seed(100);await db.exec('RESET ROLE;');await db.query('UPDATE products SET sale_price=99 WHERE id=$1',[uid(50)]);await db.exec('SET ROLE authenticated;');const result=await a.run();assert.equal(result.success,true,JSON.stringify(result));
+const a=await seed(100,{version:1});await db.exec('RESET ROLE;');await db.query('UPDATE products SET sale_price=99 WHERE id=$1',[uid(50)]);await db.exec('SET ROLE authenticated;');const result=await a.run();assert.equal(result.success,true,JSON.stringify(result));
 assert.deepEqual((await q('SELECT id,quantity::float8 quantity FROM order_items WHERE order_id=$1',[a.source])),[{id:a.item,quantity:2}]);
 const moved=result.quantity_transfers[0].moved_item_id;assert.notEqual(moved,a.item);
 assert.equal((await q('SELECT count(*)::int n FROM order_items WHERE order_id=$1',[a.target]))[0].n,2,'Identical target line is not coalesced');
@@ -113,7 +130,7 @@ await db.exec("SET test.denied='1';");assert.equal((await invalid.run()).error,'
 assert.equal((await q('SELECT transfer_order_items_to_table($1,ARRAY[$2::uuid],$3,null::jsonb) r',[invalid.source,invalid.item,invalid.targetTable]))[0].r.error,'INVALID_TRANSFER_REQUEST');
 await db.exec('RESET ROLE;');
 // Already-served units remain served on both exact lines and never become new KDS work.
-const served=await seed(600);await db.exec("RESET ROLE; SET test.actor='';");
+const served=await seed(600,{version:1});await db.exec("RESET ROLE; SET test.actor='';");
 await db.query('INSERT INTO order_kitchen_served_quantities(order_id,order_item_id,served_quantity) VALUES($1,$2,3)',[served.source,served.item]);
 await db.query("UPDATE orders SET kitchen_status='served' WHERE id=$1",[served.source]);
 await db.exec(`SET test.actor='${uid(2)}'; SET ROLE authenticated;`);const servedResult=await served.run();assert.equal(servedResult.success,true,JSON.stringify(servedResult));
@@ -128,16 +145,25 @@ await db.query('INSERT INTO sale_items VALUES($1,$2,$3,1,$4)',[uid(691),uid(690)
 await db.query("INSERT INTO sale_item_inventory_effects VALUES($1,'inventory_unit',$2,0.333333,$3)",[uid(691),uid(52),uid(9)]);
 const refund=(await q('SELECT _restore_refund_hybrid_inventory($1,$2,$3,1,$4,$5,null::text) r',[uid(691),uid(690),uid(50),uid(1),uid(9)]))[0].r;assert.equal(refund.success,true,JSON.stringify(refund));
 assert.ok((await q('SELECT * FROM test_restores WHERE origin=$1',[served.event])).length===1);
-// A changed later line cannot leave the earlier selected row half-transferred.
+// Unsupported pre-event consumption fails atomically, without a receipt.
 const atomic=await seed(700);await db.exec('RESET ROLE;');
 await db.query('INSERT INTO order_inventory_consumptions VALUES($1,$2,1,0)',[atomic.source,atomic.item]);
 await db.exec('SET ROLE authenticated;');const failed=await atomic.run();assert.equal(failed.success,false);
 assert.equal((await q('SELECT quantity::float8 n FROM order_items WHERE id=$1',[atomic.item]))[0].n,3);
 assert.equal((await q('SELECT count(*)::int n FROM audit_log WHERE id=$1',[atomic.payload.operation_id]))[0].n,0);
 await db.exec('RESET ROLE;');
+if(process.env.PARTIAL_TRANSFER_SCHEMA_VARIANT==='canonical') {
+ const raw=await seed(800);await db.exec('RESET ROLE;');
+ await db.query("UPDATE order_kitchen_inventory_effects SET target_type='raw_material',target_id=$2 WHERE event_id=$1",[raw.event,uid(51)]);
+ await db.exec('SET ROLE authenticated;');const rawResult=await raw.run();assert.equal(rawResult.success,true,JSON.stringify(rawResult));await db.exec('RESET ROLE;');
+ const rawLine=rawResult.quantity_transfers[0].moved_item_id;
+ const rawEvent=(await q('SELECT id FROM order_kitchen_inventory_events WHERE order_item_id=$1',[rawLine]))[0].id;
+ const rawVoid=(await q('SELECT _restore_kitchen_inventory_for_void($1,$2,1) r',[raw.target,rawLine]))[0].r;assert.equal(rawVoid.success,true,JSON.stringify(rawVoid));
+ assert.deepEqual(await q('SELECT quantity::float8 quantity,reference_id FROM test_raw_restores'),[{quantity:0.333333,reference_id:rawEvent}],'V2 raw restore uses the real split event, not legacy consumption origin');
+}
 await db.exec(readFileSync('scripts/rollback/partial_item_transfer_disable_20261024.sql','utf8'));
 await db.exec('SET ROLE authenticated;');assert.equal((await invalid.run()).error,'PARTIAL_TRANSFER_DISABLED');assert.equal((await a.run()).replayed,true,'Committed receipt remains replayable after rollback');
 const legacy=(await q('SELECT transfer_order_items_to_table($1,ARRAY[$2::uuid],$3) r',[invalid.source,invalid.item,invalid.targetTable]))[0].r;assert.equal(legacy.success,true,'Old full-line transfer still works: '+JSON.stringify(legacy));
 await db.exec('RESET ROLE;');await db.exec(readFileSync('scripts/rollback/partial_item_transfer_resume_20261024.sql','utf8'));
 assert.equal((await q('SELECT count(*)::int n FROM inventory_ledger'))[0].n,0);assert.equal((await q('SELECT count(*)::int n FROM print_jobs'))[0].n,0);
-await db.close();console.log('PASS: sent 3->2+1, exact IDs, snapshot/cost conservation, tax/discount, replay/conflict, stale/paid/permission rejection, no stock/print writes, unsent/mixed, legacy origin restoration, metadata, disable/replay/legacy compatibility/resume');
+await db.close();console.log((process.env.PARTIAL_TRANSFER_SCHEMA_VARIANT||'production')+': PASS: sent 3->2+1, exact IDs, snapshot/cost conservation, tax/discount, replay/conflict, stale/paid/permission rejection, no stock/print writes, unsent/mixed, legacy origin restoration, metadata, disable/replay/legacy compatibility/resume');
