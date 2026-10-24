@@ -4,12 +4,15 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `8238059d43d26e479e6cd435e23d6913ad0284e0` (#532 merged/deployed)
-- Current active branch: `fix/discount-approval-20261024`
-- Mandatory active work log: `docs/DISCOUNT_APPROVAL_20261024.md`
+- Latest main baseline reconciled: `252c20b1ed61a784d84fcf752681194afeaa3b58` (#533 merged/deployed)
+- Current active branch: `fix/partial-item-transfer-20261024`
+- Mandatory active work log: `docs/PARTIAL_ITEM_TRANSFER_20261024.md`
 - Owner approved monthly report restructuring, a clear latest-approved-price consumption report (purchase/pricing/count; missing price = numeric zero) and independent quick-takeaway creation permission. Preserve operational writers, installed Windows agents and all historical data. Manual aggregate reads and focused iteration tests; mandatory exact-head release gates remain. Prepare a reviewed candidate before production approval.
 
-## Active existing checkout approval repair — 2026-10-24
+## Active quantity transfer repair — 2026-10-24
+Owner authorized moving a chosen quantity (e.g. 1 of 3 waters) with a rollback path. Review #407/#421 first; preserve exact row identities, print idempotency, sent/served baselines, frozen costs and legacy reversal provenance. Prepare one verified candidate without production mutation or merge. #533 is released; the checkout discount calculation remains unchanged.
+
+## Released existing checkout approval repair — 2026-10-24
 Owner canceled changing gross/net discount semantics and adding another product path. Repair only the current approval flow. Preserve the discount/tax formula, all existing invoices and sales/printing/stock operations. Prepare and verify; no Merge ولا Production migration before final approval. #532 is released.
 
 ## Historical owner accounting clarity — 2026-10-22
