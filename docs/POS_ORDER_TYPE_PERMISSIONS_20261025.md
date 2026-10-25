@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/pos-quick-permission-boundaries-20261025`
-Current PR: pending
+Current PR: #537
 Last updated: 2026-10-25
 
 ## Work status
@@ -22,7 +22,7 @@ Legacy general creation implies takeaway in both UI and backend. Generic dispatc
 Four explicit order-type capabilities: dine_in, takeaway, drive_thru, delivery. Each allows creation and dispatch only for its own authoritative type. Other actions remain independent. No generic permission may bypass type checks. Binding must reject takeaway with a table; type changes require destination capability. Plan conservative conversion: explicit legacy quick grants takeaway; legacy general create plus send grants dine_in/drive_thru/delivery. Do not infer quick from general create. Legacy send alone grants no type. Review exact role delta before rollout.
 
 ## Verification ledger
-Pending focused UI and owned-localhost database allow/deny tests, exact-head CI and production fingerprint comparison. No fixes applied to production.
+33 focused permission tests and 19 affected UI/contract cases passed. App/test typechecks passed. Initial complete unit run: 1905 passed, 8 old-contract/context failures corrected; rerun affected cases green. Owned-localhost database matrix and exact-head CI pending. Production role arrays and 8 targeted function fingerprints captured; no fixes applied to production.
 
 ## Production gate
 No apply/merge/deploy until candidate is verified and owner approves exact role mapping and database change. Preserve original function definitions and role permission arrays for guarded rollback; never restore unrelated later permission edits.
