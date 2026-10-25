@@ -106,7 +106,7 @@ BEGIN
 END $undo_20$;
 
 DO $undo_21$
-DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_new text:=$new$IF NOT (public._pos_order_type_allowed(NEW.order_type,NEW.table_id) AND NEW.status='open' AND (COALESCE(NEW.discount_amount,0)=0 OR public.can_permission('pos.discount'))) THEN$new$;
+DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_new text:=$new$IF NOT (public._pos_order_type_allowed(NEW.order_type,NEW.table_id) AND (NEW.status='open' OR (NEW.status='held' AND public.can_permission('pos.hold'))) AND (COALESCE(NEW.discount_amount,0)=0 OR public.can_permission('pos.discount'))) THEN$new$;
 BEGIN
  IF (length(v_def)-length(replace(v_def,v_new,'')))/length(v_new)<>1 THEN RAISE EXCEPTION 'POS_TYPE_ROLLBACK_DRIFT_21'; END IF;
  EXECUTE replace(v_def,v_new,$old$IF NOT public.can_permission('pos.order.create') AND NOT (public.can_permission('pos.order.quick_create') AND COALESCE(NEW.order_type='takeaway' AND NEW.table_id IS NULL AND NEW.status='open' AND (COALESCE(NEW.discount_amount,0)=0 OR public.can_permission('pos.discount')) AND NEW.cashier_id=auth.uid() AND public.user_may_access_branch(NEW.branch_id),false)) THEN$old$);

@@ -62,6 +62,8 @@ describe.skipIf(!local)('one create-and-send capability per order type — owned
     expect(direct.error).toContain('PERMISSION_DENIED');
     const completed = await runAs(db, ids.users.cashier, `INSERT INTO public.orders(order_number,branch_id,cashier_id,order_type,status) VALUES($1,$2,$3,'takeaway','completed')`, [randomUUID(), ids.branchA, ids.users.cashier]);
     expect(completed.error).toContain('PERMISSION_DENIED');
+    const held = await runAs(db, ids.users.cashier, `INSERT INTO public.orders(order_number,branch_id,cashier_id,order_type,status) VALUES($1,$2,$3,'takeaway','held')`, [randomUUID(), ids.branchA, ids.users.cashier]);
+    expect(held.error).toContain('PERMISSION_DENIED');
   });
   it('cannot use type changes, foreign branch, or forged print payload type to bypass authorization', async () => {
     await grant('takeaway');

@@ -47,7 +47,7 @@ DO $patch_2$
 DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_old text:=$old$IF NOT public.can_permission('pos.order.create') AND NOT (public.can_permission('pos.order.quick_create') AND COALESCE(NEW.order_type='takeaway' AND NEW.table_id IS NULL AND NEW.status='open' AND (COALESCE(NEW.discount_amount,0)=0 OR public.can_permission('pos.discount')) AND NEW.cashier_id=auth.uid() AND public.user_may_access_branch(NEW.branch_id),false)) THEN$old$;
 BEGIN
  IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'POS_TYPE_BASELINE_MISMATCH_2'; END IF;
- EXECUTE replace(v_def,v_old,$new$IF NOT (public._pos_order_type_allowed(NEW.order_type,NEW.table_id) AND NEW.status='open' AND (COALESCE(NEW.discount_amount,0)=0 OR public.can_permission('pos.discount'))) THEN$new$);
+ EXECUTE replace(v_def,v_old,$new$IF NOT (public._pos_order_type_allowed(NEW.order_type,NEW.table_id) AND (NEW.status='open' OR (NEW.status='held' AND public.can_permission('pos.hold'))) AND (COALESCE(NEW.discount_amount,0)=0 OR public.can_permission('pos.discount'))) THEN$new$);
 END $patch_2$;
 
 DO $patch_3$
