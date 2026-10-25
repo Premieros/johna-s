@@ -3,6 +3,12 @@
 .report-workspace [data-testid='page-title'] { font-size: 1rem; }
 .report-actions-only [data-testid='page-title'] { display: none; }
 .report-actions-only [data-testid='page-header'] { justify-content: flex-end; }
+.report-actions-only [data-testid='page-header'] > :last-child { flex-wrap: wrap; min-width: 0; }
+.report-workspace[data-expanded='true'] .report-grid { max-height: 72dvh; }
+@media (max-width: 639px) {
+  .report-workspace [data-testid='page-header'] { flex-wrap: wrap; }
+  .report-actions-only [data-testid='page-header'] > :last-child { width: 100%; justify-content: flex-start; }
+}
 .report-grid { max-height: 72dvh; overflow: auto; overscroll-behavior: contain; isolation: isolate; }
 .report-workspace:fullscreen .report-grid { max-height: 80dvh; }
 .report-grid table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .8125rem; }
@@ -20,3 +26,6 @@
   .report-grid, .report-workspace:fullscreen .report-grid { overflow: visible; max-height: none; }
   .report-grid thead, .report-grid tfoot, .report-grid [data-primary], .report-grid tr > :first-child { position: static !important; }
 }
+
+.report-actions-only [data-testid='page-actions'] { overflow: visible; }
+.report-actions-only [data-testid='page-actions'] > div { flex-wrap: wrap; }

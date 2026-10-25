@@ -80,9 +80,9 @@ describe('report read stability', () => {
     expect(mocks.loadSales).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await waitFor(() => expect(mocks.loadSales).toHaveBeenCalledOnce());
-    expect(screen.getByTestId('report-result-context').textContent).toContain('2026-10-01');
+    expect(screen.getByTestId('report-result-context').textContent).toContain('01/10/2026');
     fireEvent.change(screen.getByLabelText('From'),{target:{value:'2026-09-01'}});
-    expect(screen.getByTestId('report-result-context').textContent).toContain('2026-10-01');
+    expect(screen.getByTestId('report-result-context').textContent).toContain('01/10/2026');
     expect(screen.getByTestId('report-result-context').textContent).toContain('New filters are not applied');
     expect(mocks.loadSales).toHaveBeenCalledOnce();
     view.rerender(page({ controlledReportType: 'sales_costs' }));

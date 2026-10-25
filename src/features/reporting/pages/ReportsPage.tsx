@@ -1,3 +1,4 @@
+import { formatReportDate as formatDate, formatReportTimestamp } from '../reportDate';
 import { flattenReportSummaries, reportSummaryPresentation } from '../reportSummaryPresentation';
 import { analysisColumns } from '../reportDataContracts';
 import { additiveReportTotals, primaryReportColumn } from '../reportGrid';
@@ -23,7 +24,7 @@ import { costing, reporting } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { PageHeader, Card } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
-import { formatFinancialCurrency, formatDate, formatPercent, todayISO } from '@/lib/format';
+import { formatFinancialCurrency, formatPercent, todayISO } from '@/lib/format';
 import { reportDateRangeUtc } from '@/lib/businessTime';
 import { exportToExcelAdvanced } from '@/lib/excel';
 import { downloadCSV, openPrintWindow } from '@/lib/reportExport';
@@ -1198,7 +1199,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       filename: `report_${reportType}_${complete.from ?? from}_${complete.to ?? to}`,
       sheetName: (reportTypes.find((row) => row.key === reportType)?.label ?? reportType).slice(0, 31),
       title: reportTypes.find((row) => row.key === reportType)?.label ?? reportType,
-      subtitle: `${reportBranchLabel} — ${complete.from ?? from} — ${complete.to ?? to}${complete.receivedAt ? ` · ${lang==='ar'?'استلام النتيجة':'Result received'}: ${new Date(complete.receivedAt).toLocaleString(lang,{timeZone:'Africa/Cairo'})}` : ''}`,
+      subtitle: `${reportBranchLabel} — ${formatDate(complete.from ?? from, lang)} — ${formatDate(complete.to ?? to, lang)}${complete.receivedAt ? ` · ${lang==='ar'?'استلام النتيجة':'Result received'}: ${formatReportTimestamp(complete.receivedAt, lang)}` : ''}`,
       totalRow: {...totalRow,...flattenReportSummaries(complete.branchSummaries || [])},
       currencyColumns: moneyKeys,
       integerColumns: excelProfile.integerColumns,
@@ -1371,7 +1372,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
     }));
     const totals = additiveReportTotals(analysisColumns(reportType,complete.rows),complete.rows,true,complete.metrics);
     if (headers.some(header => header in totals)) rows.push(headers.map(header => header in totals ? totals[header]===null ? '—' : String(totals[header]) : header===primaryColumn ? (lang==='ar'?'الإجمالي':'Total') : ''));
-    openPrintWindow({ title: reportLabel, subtitle: `${reportBranchLabel} — ${complete.from ?? from} - ${complete.to ?? to}${complete.receivedAt ? ` · ${lang==='ar'?'استلام النتيجة':'Result received'}: ${new Date(complete.receivedAt).toLocaleString(lang,{timeZone:'Africa/Cairo'})}` : ''}`, headers, rows, summary:flattenReportSummaries(complete.branchSummaries || []), lang: lang as 'ar' | 'en' }, reservedWindow);
+    openPrintWindow({ title: reportLabel, subtitle: `${reportBranchLabel} — ${formatDate(complete.from ?? from, lang)} — ${formatDate(complete.to ?? to, lang)}${complete.receivedAt ? ` · ${lang==='ar'?'استلام النتيجة':'Result received'}: ${formatReportTimestamp(complete.receivedAt, lang)}` : ''}`, headers, rows, summary:flattenReportSummaries(complete.branchSummaries || []), lang: lang as 'ar' | 'en' }, reservedWindow);
   };
 
   const exportComplete = async (kind: 'excel' | 'csv' | 'print') => {
@@ -1493,7 +1494,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         pendingChanges={filtersDirty}
       />
 
-      {snapshot && <p data-testid="report-result-context" className="my-2 text-xs text-ui-muted">{lang==='ar'?'فترة النتيجة':'Result period'}: {snapshot.from} — {snapshot.to} · {reportBranchLabel}{snapshot.receivedAt && <> · {lang==='ar'?'استلام النتيجة':'Result received'}: {new Date(snapshot.receivedAt).toLocaleString(lang,{timeZone:'Africa/Cairo'})}</>}{filtersDirty && <> · {lang==='ar'?'الفلاتر الجديدة لم تطبق على هذه النتيجة':'New filters are not applied to this result'}</>}</p>}
+      {snapshot && <p data-testid="report-result-context" className="my-2 text-xs text-ui-muted">{lang==='ar'?'فترة النتيجة':'Result period'}: {formatDate(snapshot.from || from, lang)} — {formatDate(snapshot.to || to, lang)} · {reportBranchLabel}{snapshot.receivedAt && <> · {lang==='ar'?'استلام النتيجة':'Result received'}: {formatReportTimestamp(snapshot.receivedAt, lang)}</>}{filtersDirty && <> · {lang==='ar'?'الفلاتر الجديدة لم تطبق على هذه النتيجة':'New filters are not applied to this result'}</>}</p>}
       {reportType==='purchases' && <p className="my-2 text-xs text-ui-muted">{lang==='ar'?'فلتر الخامة أو نوعها في عرض الفواتير والموردين يختار الفواتير التي تحتويها ويعرض قيمتها كاملة. لعرض قيمة الخامة وحدها اختر عرض الخامات أو أنواعها.':'In invoice/supplier views, material filters select whole invoices containing that material. Use material/category views for line values alone.'}</p>}
       {presentation.basis && <p className="my-2 text-xs text-ui-muted">{presentation.basis}</p>}
       {Object.keys(summaryEntries).length>0 && <details className="my-2 rounded border border-ui-border p-2"><summary className="cursor-pointer text-sm font-semibold">{lang==='ar'?'ملخص الفترة حسب الفرع — منفصل عن التفاصيل':'Period summary by branch — separate from details'}</summary><dl className="grid gap-2 p-2 sm:grid-cols-2">{Object.entries(summaryEntries).map(([key,value])=><div key={key}><dt className="text-xs text-ui-muted">{key}</dt><dd className="font-semibold tabular-nums">{typeof value==='number'?new Intl.NumberFormat(lang,{maximumFractionDigits:2}).format(value):String(value)}</dd></div>)}</dl></details>}
