@@ -23,15 +23,12 @@ describe('performance repair contracts', () => {
     expect(migration).toContain('public.user_may_access_branch(p_branch_id)');
   });
 
-  it('uses realtime activity without the redundant five-second dashboard poll', () => {
-    const standby = read('src/features/dashboard/components/DashboardStandbyBar.tsx');
-
-    expect(standby).toContain('void loadActivity();');
-    expect(standby).toContain(".on(");
-    expect(standby).toContain("table: 'audit_log'");
-    expect(standby).toContain("if (status === 'SUBSCRIBED') void loadActivity();");
-    expect(standby).not.toContain('POLL_MS');
-    expect(standby).not.toContain('setInterval(() => void loadActivity()');
+  it('removes the dashboard activity subscription and reuses its existing sales snapshot', () => {
+    const dashboard = read('src/features/dashboard/pages/DashboardDataPage.tsx');
+    expect(dashboard).not.toContain('DashboardStandbyBar');
+    expect(dashboard).not.toContain("audit_log");
+    expect(dashboard).toContain('loadDashboardSalesSnapshot');
+    expect(dashboard.match(/<DashboardSalesChart /g)).toHaveLength(1);
   });
 
   it('keeps active-order snapshot nested so items and kitchen sends do not fan out into separate reads', () => {

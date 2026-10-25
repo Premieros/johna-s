@@ -106,10 +106,10 @@ describe('UI surface accent and typography contract', () => {
     expect(layout).toContain("fullWidthContent ? 'max-w-none' : 'mx-auto max-w-[1600px]'");
   });
 
-  it('preserves the dashboard StandBy strip as intentional true black', () => {
-    const standby = read('src/features/dashboard/components/DashboardStandbyBar.tsx');
-
-    expect(standby).toContain('bg-black');
-    expect(standby).toContain('dashboard-standby-viewport');
+  it('replaces the black dashboard strip with themed sales analysis', () => {
+    const dashboard = read('src/features/dashboard/pages/DashboardDataPage.tsx');
+    expect(dashboard).not.toContain('DashboardStandbyBar');
+    expect(dashboard).toContain('data-testid="dashboard-sales-analysis"');
+    expect(dashboard).toContain('bg-ui-surface');
   });
 });

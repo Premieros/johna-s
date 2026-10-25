@@ -22,7 +22,6 @@ import {
 import { loadDashboardPaymentAggregates } from '../services/dashboardPayments';
 import { loadDashboardSalesSnapshot, type DashboardSalesSnapshot } from '../services/dashboardSnapshot';
 import { loadDashboardFallbackSales, loadDashboardOpsRows, loadDashboardStockRows } from '../services/dashboardRawData';
-import { DashboardStandbyBar } from '../components/DashboardStandbyBar';
 
 import { addIsoDays, businessDateISO } from '@/lib/businessTime';
 import { dashboardPeriod, type DashboardRange as Range } from '../utils/dashboardPeriod';
@@ -177,7 +176,6 @@ export function DashboardDataPage() {
   const { effectiveSettings } = useSettings();
   const { branches } = useBranches();
   const ar = lang === 'ar';
-  const canCreateSale = can('pos.view') && (['pos.order.dine_in', 'pos.order.takeaway', 'pos.order.drive_thru', 'pos.order.delivery'] as const).some(permission => can(permission));
   const canViewPos = can('pos.view');
   const canViewSales = can('sales.view') || can('reports.view');
   const canViewReports = can('reports.view');
@@ -513,7 +511,20 @@ export function DashboardDataPage() {
   const recent = snapshot ? snapshot.recentSales : sales.slice(0, 5);
 
   return <div dir={ar ? 'rtl' : 'ltr'} className="min-h-[calc(100vh-64px)] w-full min-w-0 bg-ui-page py-3 sm:py-4" data-testid="dashboard-surface"><div className="w-full min-w-0 space-y-5">
-    <DashboardStandbyBar canCreateSale={canCreateSale} />
+    {canViewSales && <section data-testid="dashboard-sales-analysis" aria-busy={loading} className="ui-accent-card ui-accent-primary rounded-3xl border border-ui-border bg-ui-surface p-4 shadow-ui sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><h1 className="flex items-center gap-2 text-lg font-black text-ui-text"><BarChart3 className="h-5 w-5 text-ui-primary" />{ar ? 'تحليل المبيعات' : 'Sales analysis'}</h1><p className="mt-1 text-xs text-ui-muted">{rangeLabels[range][ar ? 0 : 1]} · {window.from} — {window.to}</p></div>
+        {canViewReports && <Link to="/reports?reportType=sales" className="rounded-xl bg-ui-primary-soft px-3 py-2 text-xs font-bold text-ui-primary">{ar ? 'تقرير المبيعات' : 'Sales report'}</Link>}
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-3 border-y border-ui-border py-3">
+        <div><p className="text-xs text-ui-muted">{ar ? 'صافي المبيعات' : 'Net sales'}</p><p data-testid="analysis-net-sales" className="mt-1 break-words text-base font-extrabold text-ui-text tabular-nums sm:text-xl">{quick(loading || salesUnavailable ? null : current.sales, money)}</p></div>
+        <div><p className="text-xs text-ui-muted">{ar ? 'عدد الفواتير' : 'Invoices'}</p><p className="mt-1 text-base font-extrabold text-ui-text tabular-nums sm:text-xl">{quick(loading || salesUnavailable ? null : current.orders, value => formatNumber(value, 0))}</p></div>
+        <div><p className="text-xs text-ui-muted">{ar ? 'متوسط الفاتورة' : 'Average invoice'}</p><p className="mt-1 break-words text-base font-extrabold text-ui-text tabular-nums sm:text-xl">{quick(loading || salesUnavailable ? null : current.orders ? current.sales / current.orders : 0, money)}</p></div>
+      </div>
+      <div className="mt-3 h-44 min-w-0 text-ui-primary sm:h-52">
+        {loading ? <div role="status" className="flex h-full items-center justify-center"><RefreshCw className="h-5 w-5 animate-spin" /><span className="sr-only">{ar ? 'جارٍ تحميل تحليل المبيعات' : 'Loading sales analysis'}</span></div> : salesUnavailable ? <Unavailable ar={ar} /> : current.orders > 0 ? <Suspense fallback={<div className="flex h-full items-center justify-center"><RefreshCw className="h-5 w-5 animate-spin" /></div>}><DashboardSalesChart data={chart} formatValue={money} /></Suspense> : <Empty ar={ar} />}
+      </div>
+    </section>}
 
     <section className="rounded-[32px] bg-gradient-to-br from-[#24114f] via-[#4b20a9] to-[#6d35df] p-6 text-white shadow-ui-lg"><div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex items-center gap-2 text-white/80"><BarChart3 className="h-4 w-4" /><span className="text-xs font-bold uppercase tracking-[0.18em]">Premier Control</span></div><h2 className="mt-2 text-3xl font-black">{ar ? 'لوحة التحكم' : 'Dashboard'}</h2><p className="mt-1 text-sm text-white/70">{history.unlimited ? (ar ? 'عرض كامل للتاريخ حسب الصلاحية' : 'Full historical access enabled') : (ar ? 'آخر 7 أيام كاملة، وما قبلها حسب سياسة العرض' : 'Last 7 days are complete; older periods follow the visibility policy')}</p></div><div className="flex flex-wrap gap-2">{(Object.keys(rangeLabels) as Range[]).map((item) => <button key={item} data-testid={`dashboard-range-${item}`} aria-pressed={range === item} onClick={() => { if (item === 'custom') { setDraftDates(customDates); setDateError(false); setCustomOpen(true); } else { setRange(item); setCustomOpen(false); } }} className={`rounded-xl px-4 py-2 text-sm font-bold ${range === item ? 'bg-white text-ui-primary' : 'bg-white/10 text-white'}`}>{rangeLabels[item][ar ? 0 : 1]}</button>)}<button disabled={refreshBusy} onClick={() => { setLoading(true); setRefreshing(true); setRefreshVersion((version) => version + 1); }} className="rounded-xl bg-white/10 p-2" aria-label={ar ? 'تحديث' : 'Refresh'}><RefreshCw className={`h-4 w-4 ${refreshBusy ? 'animate-spin' : ''}`} /></button></div></div></section>
 
@@ -554,9 +565,8 @@ export function DashboardDataPage() {
         {canViewExpenses && <Metric testId="kpi-expenses" icon={Wallet} title={ar ? 'المصروفات' : 'Expenses'} value={ops.expenses} display={quick(ops.expenses, money)} previous={0} href="/expenses" ar={ar} />}
       </section>
 
-      {canViewReports && canViewSales && <section className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.8fr)]"><Card><h2 className="text-lg font-black text-ui-text">{ar ? 'حركة صافي المبيعات' : 'Net sales performance'}</h2><div className="mt-4 h-72">{salesUnavailable ? <Unavailable ar={ar} /> : current.orders > 0 ? <Suspense fallback={<div className="flex h-full items-center justify-center"><RefreshCw className="h-5 w-5 animate-spin text-ui-primary" /></div>}><DashboardSalesChart data={chart} formatValue={money} /></Suspense> : <Empty ar={ar} />}</div></Card>
-      <div className="grid gap-5"><Card><h2 className="font-black text-ui-text">{ar ? 'أنواع الطلبات' : 'Order types'}</h2><div className="mt-3 space-y-3">{salesUnavailable ? <Unavailable ar={ar} /> : orderRows.length ? orderRows.map(([key, count]) => <div key={key} className="flex justify-between text-sm"><span className="text-ui-muted">{orderLabels[key]?.[ar ? 0 : 1] || key}</span><b className="text-ui-text">{formatNumber(count, 0)}</b></div>) : <Empty ar={ar} />}</div></Card>
-      <Card><h2 className="font-black text-ui-text">{ar ? 'طرق الدفع' : 'Payment methods'}</h2><div className="mt-3 space-y-3">{salesUnavailable || paymentsUnavailable ? <Unavailable ar={ar} /> : paymentRows.length ? paymentRows.map((row) => <div key={`${row.branchId}-${row.method}`} className="flex justify-between gap-3 text-sm"><span className="text-ui-muted">{paymentLabels[row.method]?.[ar ? 0 : 1] || row.method}</span><b className="text-ui-text">{money(row.total)}</b></div>) : <Empty ar={ar} />}</div></Card></div></section>}
+      {canViewReports && canViewSales && <section className="grid gap-5 md:grid-cols-2"><Card><h2 className="font-black text-ui-text">{ar ? 'أنواع الطلبات' : 'Order types'}</h2><div className="mt-3 space-y-3">{salesUnavailable ? <Unavailable ar={ar} /> : orderRows.length ? orderRows.map(([key, count]) => <div key={key} className="flex justify-between text-sm"><span className="text-ui-muted">{orderLabels[key]?.[ar ? 0 : 1] || key}</span><b className="text-ui-text">{formatNumber(count, 0)}</b></div>) : <Empty ar={ar} />}</div></Card>
+      <Card><h2 className="font-black text-ui-text">{ar ? 'طرق الدفع' : 'Payment methods'}</h2><div className="mt-3 space-y-3">{salesUnavailable || paymentsUnavailable ? <Unavailable ar={ar} /> : paymentRows.length ? paymentRows.map((row) => <div key={`${row.branchId}-${row.method}`} className="flex justify-between gap-3 text-sm"><span className="text-ui-muted">{paymentLabels[row.method]?.[ar ? 0 : 1] || row.method}</span><b className="text-ui-text">{money(row.total)}</b></div>) : <Empty ar={ar} />}</div></Card></section>}
 
       {canViewSales && <section className="grid gap-5 xl:grid-cols-3">{can('branches.manage') && <Card><h2 className="mb-3 font-black text-ui-text">{ar ? 'الفروع حسب صافي المبيعات' : 'Branches by net sales'}</h2>{salesUnavailable ? <Unavailable ar={ar} /> : branchRows.length ? branchRows.map(([name, row]) => <div key={name} className="mb-3 flex justify-between gap-3 text-sm"><span className="font-semibold text-ui-text">{name}</span><span className="text-ui-muted">{formatNumber(row.orders, 0)} · {money(row.sales)}</span></div>) : <Empty ar={ar} />}</Card>}
       <Card><h2 className="mb-3 font-black text-ui-text">{ar ? 'أكثر الأصناف مبيعًا' : 'Top selling items'}</h2>{salesUnavailable || itemsUnavailable ? <Unavailable ar={ar} /> : productRows.length ? productRows.map(([name, qty]) => <div key={name} className="mb-3 flex justify-between gap-3 text-sm"><span className="font-semibold text-ui-text">{name}</span><span className="text-ui-muted">{formatNumber(qty, 2)}</span></div>) : <Empty ar={ar} />}</Card>

@@ -2,10 +2,10 @@
 
 ## Active work
 - Repository: `Premieros/johna-s`; production Supabase: `azzdesuowpdcoflmyezn`.
-- Baseline: `ff7a0f1b343227f5e96b62f032fb57b93d6a6eca` (#536 released).
-- Branch: `fix/pos-quick-permission-boundaries-20261025`.
-- Mandatory active work log: `docs/POS_ORDER_TYPE_PERMISSIONS_20261025.md`.
-- Owner approved one explicit capability per order type, covering creation and kitchen send. Payment/edit/discount/receipt/void/transfer remain separate. Prepare and test before separately approved production apply and release. No production log scans or test transactions.
+- Baseline: `48b0644bc6f757f019ee8d45d6201586c7a7e74d` (#537 deployed).
+- Branch: `feat/dashboard-top-sales-analysis-20261025`.
+- Mandatory active work log: `docs/DASHBOARD_TOP_SALES_ANALYSIS_20261025.md`.
+- Owner requests permanent removal of the black welcome/calendar/activity strip and sales analysis in its place. Reuse current snapshot and chart; no new reads, permissions, database or operational changes. Prepare verified candidate before release approval.
 
 ## Active usability polish — 2026-10-25
 Owner approved implementing the browser-review findings: compact reports with useful filters and in-page expansion, visible POS branch/dispatch/bill context, readable mobile table cards, safer cancellation presentation and compact dashboard welcome. Presentation only; retain business logic, permissions, queries and installed printers. No production log scans. Prepare one reviewed candidate; publication requires separate final approval.
