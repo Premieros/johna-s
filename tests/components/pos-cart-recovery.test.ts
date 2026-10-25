@@ -2,10 +2,11 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Order, OrderItem, Product } from '@/lib/types';
 import { usePosOrder, type UsePosOrderInput } from '@/features/pos/hooks/usePosOrderBase';
-const mocks = vi.hoisted(() => ({ fetch: vi.fn(), create: vi.fn(), update: vi.fn(), send: vi.fn(), show: vi.fn() }));
+const mocks = vi.hoisted(() => ({ fetch: vi.fn(), create: vi.fn(), update: vi.fn(), send: vi.fn(), show: vi.fn(), grants: new Set<string>() }));
 vi.mock('@/api', () => ({ supabase: { from: vi.fn() }, floorPlan: { createOrder: mocks.create, updateOrder: mocks.update } }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en', t: (key: string) => key }) }));
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'cashier' } }) }));
+vi.mock('@/lib/permissions', () => ({ useCan: () => (key: string) => mocks.grants.has(key) }));
 vi.mock('@/components/Toast', () => ({ useToast: () => ({ show: mocks.show }) }));
 vi.mock('@/features/pos/services/posOrders', () => ({ fetchOrderForWorkspace: mocks.fetch }));
 vi.mock('@/features/pos/services/kitchen', () => ({ sendOrderToKitchen: mocks.send }));
@@ -16,7 +17,7 @@ const product = { id: 'product', name: 'Coffee', sale_price: 10, is_active: true
 const snapshot = () => ({ order: { id: 'order', status: 'open', order_type: 'takeaway', table_id: null, order_number: 'O1' } as Order, items: [{ id: 'line', product_id: product.id, quantity: 1, unit_name: 'piece', unit_price: 10, discount_amount: 0, bonus_quantity: 0 }] as OrderItem[], products: [product] });
 const input = (orderId: string | null): UsePosOrderInput => ({ branchId: 'branch', branchName: 'Branch', orderId, customers: [], effSettings: null, activeShift: null, products: [product], stockMap: {} });
 describe('POS saved-order and cart recovery', () => {
-  beforeEach(() => { vi.clearAllMocks(); mocks.fetch.mockResolvedValue(snapshot()); mocks.create.mockResolvedValue({ data: { success: true, order_id: 'saved', order_number: 'O2' }, error: null }); mocks.update.mockResolvedValue({ data: { success: true }, error: null }); });
+  beforeEach(() => { vi.clearAllMocks(); mocks.grants.clear(); mocks.grants.add('pos.order.takeaway'); mocks.grants.add('pos.order.edit'); mocks.fetch.mockResolvedValue(snapshot()); mocks.create.mockResolvedValue({ data: { success: true, order_id: 'saved', order_number: 'O2' }, error: null }); mocks.update.mockResolvedValue({ data: { success: true }, error: null }); });
   it('keeps a deleted line deleted when feedback callbacks change on rerender', async () => {
     const { result, rerender } = renderHook(() => usePosOrder(input('order')));
     await waitFor(() => expect(result.current.cart).toHaveLength(1));
@@ -47,4 +48,24 @@ describe('POS saved-order and cart recovery', () => {
     expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ p_order_id: 'saved' }));
     expect(result.current.cart[0].quantity).toBe(2);
   });
+  it('sends the saved order without rewriting it when the sender has no edit permission', async () => {
+    mocks.grants.delete('pos.order.edit');
+    mocks.send.mockResolvedValue({ success: true, items_sent_count: 0 });
+    const { result } = renderHook(() => usePosOrder(input('order')));
+    await waitFor(() => expect(result.current.cart).toHaveLength(1));
+    await act(async () => { expect(await result.current.sendToKitchen()).toBe(true); });
+    expect(mocks.send).toHaveBeenCalledOnce();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+  it('stops before saving or sending when the current type capability is absent', async () => {
+    mocks.grants.delete('pos.order.takeaway');
+    const { result } = renderHook(() => usePosOrder(input('order')));
+    await waitFor(() => expect(result.current.cart).toHaveLength(1));
+    await act(async () => { expect(await result.current.sendToKitchen()).toBe(false); });
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
 });

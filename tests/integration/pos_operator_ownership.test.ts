@@ -59,7 +59,7 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
          'qa_owner_captain',
          'كابتن اوردر QA Ownership',
          'cap-qa-ownership',
-         '["pos.view","pos.order.create","pos.order.edit","pos.hold","pos.send_kitchen","pos.payment.take","pos.cancel_order","shifts.open"]'::jsonb,
+         '["pos.view","pos.order.edit","pos.hold","pos.order.dine_in","pos.payment.take","pos.cancel_order","shifts.open"]'::jsonb,
          'branch',$1::uuid,true
        )`,
       [ids.branchA],
@@ -78,13 +78,13 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
     await client.query(`
       UPDATE public.roles
       SET permissions = (COALESCE(permissions, '[]'::jsonb) - 'pos.order.transfer')
-        || '["pos.view","pos.order.create","pos.order.edit","pos.hold","pos.send_kitchen","pos.payment.take","pos.cancel_order","shifts.open"]'::jsonb
+        || '["pos.view","pos.order.edit","pos.hold","pos.order.dine_in","pos.payment.take","pos.cancel_order","shifts.open"]'::jsonb
       WHERE role = 'cashier';
 
       UPDATE public.roles
       SET permissions = (((COALESCE(permissions, '[]'::jsonb)
-        - 'pos.order.transfer') - 'pos.send_kitchen') - 'pos.payment.take') - 'pos.cancel_order'
-        || '["pos.view","pos.order.create","pos.order.edit","pos.hold","shifts.open"]'::jsonb
+        - 'pos.order.transfer') - 'pos.order.dine_in') - 'pos.payment.take') - 'pos.cancel_order'
+        || '["pos.view","pos.order.edit","pos.hold","shifts.open"]'::jsonb
       WHERE role = 'branch_manager';
     `);
 
@@ -263,7 +263,7 @@ describe.skipIf(skip)('POS operator ownership + transfer release gate', () => {
     expect(Number(blockedSale.rows[0].count)).toBe(0);
 
     // A adds one unsent unit. B has not been granted the independent
-    // pos.send_kitchen action permission in this ownership-focused test.
+    // pos.order.dine_in action permission in this ownership-focused test.
     const item2 = JSON.stringify([{
       product_id: productId,
       unit_name: 'piece',

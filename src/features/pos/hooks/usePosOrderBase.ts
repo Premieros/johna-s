@@ -3,6 +3,7 @@ import { supabase } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
+import { usePosPermissions } from './usePosPermissions';
 import { useToast } from '@/components/Toast';
 import { computePosTotals, computeLineDiscount, type PosPaymentMethod } from '@/lib/posMath';
 import { logAudit } from '@/lib/audit';
@@ -53,6 +54,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
   const { user } = useAuth();
+  const perms = usePosPermissions();
   const { show } = useToast();
 
   const [cart, setCartState] = useState<CartItem[]>(EMPTY_CART);
@@ -290,6 +292,10 @@ export function usePosOrder(input: UsePosOrderInput) {
 
   const switchOrderType = useCallback(async (ot: OrderType) => {
     if (ot === orderType) return;
+    if (!perms.canOperateType(ot, ot === 'dine_in' ? tableId : null)) {
+      show(isAr ? 'لا تملك صلاحية هذا النوع من الطلبات.' : 'You do not have permission for this order type.', 'error');
+      return;
+    }
     if (activeOrderNumber) {
       show(isAr ? `لا يمكن تغيير نوع طلب نشط (${activeOrderNumber})` : `Cannot change order type of active order (${activeOrderNumber})`, 'error');
       return;
@@ -313,7 +319,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       setActiveTable(null);
     }
     setOrderType(ot);
-  }, [orderType, activeOrderNumber, tableId, activeTable, show, t, isAr]);
+  }, [perms, orderType, activeOrderNumber, tableId, activeTable, show, t, isAr]);
 
   const performDetach = useCallback(async () => {
     if (activeOrderId) {
@@ -610,6 +616,10 @@ export function usePosOrder(input: UsePosOrderInput) {
 
   const persistCart = useCallback(async (status: 'open' | 'held'): Promise<PersistResult> => {
     if (!branchId) { show(t('selectBranchFirst'), 'error'); return { ok: false, orderId: null, orderNumber: null }; }
+    if (!activeOrderId && !perms.canOperateType(orderType, tableId)) {
+      show(isAr ? 'لا تملك صلاحية هذا النوع من الطلبات.' : 'You do not have permission for this order type.', 'error');
+      return { ok: false, orderId: null, orderNumber: null };
+    }
     const itemRows = cartToItems(cart);
     const binding = resolveOrderBindingForSave({
       activeOrderId,
@@ -663,7 +673,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       setActiveOrderNumber((r as RpcResult & { order_number?: string }).order_number || null);
     }
     return { ok: true, orderId: r.order_id || null, orderNumber: (r as RpcResult & { order_number?: string }).order_number || null };
-  }, [branchId, activeOrderId, activeOrderNumber, activeTable?.id, orderType, tableId, customerId, guestCount, orderNotes, cart, subtotal, discountValue, discountType, taxAmount, total, user?.id, show, t]);
+  }, [perms, isAr, branchId, activeOrderId, activeOrderNumber, activeTable?.id, orderType, tableId, customerId, guestCount, orderNotes, cart, subtotal, discountValue, discountType, taxAmount, total, user?.id, show, t]);
 
   const holdOrder = useCallback(async (): Promise<boolean> => {
     if (cart.length === 0 || completing || orderLoading) return false;
@@ -702,6 +712,10 @@ export function usePosOrder(input: UsePosOrderInput) {
   }, [cart.length, completing, orderLoading, branchId, orderType, tableId, activeOrderId, persistCart, show, t, isAr]);
 
   const sendToKitchen = useCallback(async (): Promise<boolean> => {
+    if (!perms.canOperateType(orderType, tableId)) {
+      show(isAr ? 'لا تملك صلاحية إنشاء وإرسال هذا النوع من الطلبات.' : 'You do not have create and send permission for this order type.', 'error');
+      return false;
+    }
     if (cart.length === 0 || completing || orderLoading || kitchenSending) return false;
     if (!branchId) { show(t('selectBranchFirst'), 'error'); return false; }
     if (orderType === 'dine_in' && !tableId) {
@@ -710,7 +724,10 @@ export function usePosOrder(input: UsePosOrderInput) {
     }
     setKitchenSending(true);
     try {
-      const { ok, orderId: targetOrderId, orderNumber: targetOrderNumber } = await persistCart('open');
+      // A sender without edit capability sends the saved server order as-is.
+      const { ok, orderId: targetOrderId, orderNumber: targetOrderNumber } = activeOrderId && !perms.canEditOrder
+        ? { ok: true, orderId: activeOrderId, orderNumber: activeOrderNumber }
+        : await persistCart('open');
       if (!ok || !targetOrderId) return false;
 
       const res = await sendOrderToKitchen({ p_order_id: targetOrderId, p_sent_by: null, p_branch_id: branchId, p_is_ar: isAr });
@@ -722,8 +739,8 @@ export function usePosOrder(input: UsePosOrderInput) {
               : 'This order belongs to another operator. Transfer the order to the correct user, then send it to the kitchen again.',
             'error',
           );
-        } else if (res.error === 'PERMISSION_DENIED' && res.detail?.includes('pos.send_kitchen')) {
-          show(isAr ? 'لا توجد صلاحية إرسال للمطبخ لهذا المستخدم.' : 'This user does not have Send to Kitchen permission.', 'error');
+        } else if (res.error === 'PERMISSION_DENIED' && res.detail?.includes('pos.order.')) {
+          show(isAr ? 'لا تملك صلاحية إنشاء وإرسال هذا النوع من الطلبات.' : 'You do not have create and send permission for this order type.', 'error');
         } else {
           show(res.detail || res.error || t('error'), 'error');
         }
@@ -773,7 +790,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     } finally {
       setKitchenSending(false);
     }
-  }, [cart.length, completing, orderLoading, kitchenSending, branchId, orderType, tableId, activeOrderNumber, persistCart, effSettings, activeTable, guestCount, orderNotes, t, isAr, onInventoryChanged, show]);
+  }, [perms, activeOrderId, cart.length, completing, orderLoading, kitchenSending, branchId, orderType, tableId, activeOrderNumber, persistCart, effSettings, activeTable, guestCount, orderNotes, t, isAr, onInventoryChanged, show]);
 
   const printKitchenTicket = useCallback(() => {
     if (cart.length === 0 || !effSettings) return;

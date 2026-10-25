@@ -23,6 +23,10 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
   beforeAll(async () => {
     if (skip) throw new Error('Disposable loopback database required');
     client = openDb(dbUrl!); await client.connect(); await client.query('BEGIN');
+    // Immutable historical candidate bodies still use the old dispatch key.
+    // This localhost rollback fixture grants it alongside the current typed
+    // capabilities; production and current authorization tests never inherit it.
+    await client.query(`UPDATE public.roles SET permissions=permissions || '["pos.send_kitchen"]'::jsonb WHERE role='cashier'`);
     // A migrated CI baseline uses live bindings. Benchmark the ORIGINAL body
     // only inside this rollback fixture; all other integration tests stay bound.
     const bound=(await client.query("SELECT to_regprocedure('public._kitchen_dispatch_component_plans(uuid,jsonb)') IS NOT NULL present")).rows[0].present;

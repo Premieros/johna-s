@@ -1,13 +1,11 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Repository: `Premieros/johna-s`
-- Production Supabase: `azzdesuowpdcoflmyezn`
-- Production branch: `main`
-- Latest main baseline reconciled: `facb94776a7912ff39f807300d16548f1fd74251` (#535 merged/deployed)
-- Current active branch: `feat/usability-polish-20261025`
-- Mandatory active work log: `docs/USABILITY_POLISH_20261025.md`
-- Owner approved monthly report restructuring, a clear latest-approved-price consumption report (purchase/pricing/count; missing price = numeric zero) and independent quick-takeaway creation permission. Preserve operational writers, installed Windows agents and all historical data. Manual aggregate reads and focused iteration tests; mandatory exact-head release gates remain. Prepare a reviewed candidate before production approval.
+- Repository: `Premieros/johna-s`; production Supabase: `azzdesuowpdcoflmyezn`.
+- Baseline: `ff7a0f1b343227f5e96b62f032fb57b93d6a6eca` (#536 released).
+- Branch: `fix/pos-quick-permission-boundaries-20261025`.
+- Mandatory active work log: `docs/POS_ORDER_TYPE_PERMISSIONS_20261025.md`.
+- Owner approved one explicit capability per order type, covering creation and kitchen send. Payment/edit/discount/receipt/void/transfer remain separate. Prepare and test before separately approved production apply and release. No production log scans or test transactions.
 
 ## Active usability polish — 2026-10-25
 Owner approved implementing the browser-review findings: compact reports with useful filters and in-page expansion, visible POS branch/dispatch/bill context, readable mobile table cards, safer cancellation presentation and compact dashboard welcome. Presentation only; retain business logic, permissions, queries and installed printers. No production log scans. Prepare one reviewed candidate; publication requires separate final approval.

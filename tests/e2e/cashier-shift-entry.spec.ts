@@ -77,7 +77,7 @@ async function mockCashierBackend(page: Page) {
       body: JSON.stringify([{
         role: 'cashier',
         name: 'Cashier',
-        permissions: ['dashboard.view', 'pos.view', 'pos.order.create', 'pos.order.edit', 'shifts.view', 'shifts.open'],
+        permissions: ['dashboard.view', 'pos.view', 'pos.order.dine_in', 'pos.order.edit', 'shifts.view', 'shifts.open'],
         is_system: true,
       }]),
     });

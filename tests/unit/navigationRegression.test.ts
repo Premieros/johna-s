@@ -35,7 +35,7 @@ describe('navigation regressions', () => {
     expect(landing).toContain('data-testid="pos-tables-start-delivery"');
     expect(landing).toContain('data-testid="pos-tables-start-drive-thru"');
     expect(landing).toContain('data-testid="pos-tables-active-orders"');
-    expect(workspace).toContain('onStartDelivery={perms.canCreateOrder ? () =>');
+    expect(workspace).toContain('onStartDelivery={perms.canCreateDelivery ? () =>');
     expect(workspace).toContain("setStartStep('delivery')");
     expect(workspace).toContain("setStartStep('car')");
     expect(workspace).toContain("setPanel('orders')");

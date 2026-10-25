@@ -33,13 +33,13 @@ describe('permission operational contracts', () => {
   it('removes dependent POS actions when their prerequisite is removed', () => {
     const input: Permission[] = [
       'pos.view',
-      'pos.order.create',
+      'pos.order.dine_in',
       'pos.payment.take',
       'pos.discount',
       'pos.receipt.print',
     ];
     const next = removePermissionWithDependents(input, 'pos.view');
-    expect(next).not.toContain('pos.order.create');
+    expect(next).not.toContain('pos.order.dine_in');
     expect(next).not.toContain('pos.payment.take');
     expect(next).not.toContain('pos.discount');
     expect(next).toContain('pos.receipt.print');

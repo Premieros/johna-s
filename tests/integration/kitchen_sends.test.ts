@@ -370,7 +370,7 @@ describe.skipIf(skip)('send_to_kitchen + order_kitchen_sends (048)', () => {
               - 'pos.order.edit'
               - 'pos.order.transfer'
               - 'users.manage'
-              - 'pos.send_kitchen'
+              - 'pos.order.dine_in' - 'pos.order.takeaway' - 'pos.order.drive_thru' - 'pos.order.delivery'
               - 'approvals.review'
             ) || '["pos.view","pos.void"]'::jsonb
           WHERE role='cashier'`,

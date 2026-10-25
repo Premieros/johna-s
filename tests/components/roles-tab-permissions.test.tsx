@@ -102,7 +102,7 @@ describe('RolesTab permission controls', () => {
     state.grants = new Set([
       'roles.permissions.manage',
       'pos.view',
-      'pos.order.create',
+      'pos.order.dine_in',
       'pos.payment.take',
       // Intentionally incomplete capability: kds_update requires kds_view.
       'pos.kds_update',
@@ -125,33 +125,33 @@ describe('RolesTab permission controls', () => {
     expect(screen.queryByText('تغيير سعر البيع من نقطة البيع')).not.toBeInTheDocument();
     expect(screen.queryByText('تحديث حالة طلبات المطبخ')).not.toBeInTheDocument();
 
-    const createOrder = checkboxFor('pos.order.create');
+    const createOrder = checkboxFor('pos.order.dine_in');
     expect(createOrder).not.toBeChecked();
 
     fireEvent.click(createOrder);
     expect(createOrder).toBeChecked();
 
     fireEvent.click(screen.getByRole('button', { name: 'تراجع' }));
-    expect(checkboxFor('pos.order.create')).not.toBeChecked();
+    expect(checkboxFor('pos.order.dine_in')).not.toBeChecked();
 
     const posSection = screen.getByText('نقطة البيع').closest('section');
     if (!posSection) throw new Error('POS section not found');
     fireEvent.click(within(posSection).getByRole('button', { name: 'منح المتاح' }));
-    expect(checkboxFor('pos.order.create')).toBeChecked();
+    expect(checkboxFor('pos.order.dine_in')).toBeChecked();
     expect(checkboxFor('pos.payment.take')).toBeChecked();
 
     fireEvent.click(screen.getByRole('button', { name: 'عرض POS فقط' }));
-    expect(checkboxFor('pos.order.create')).not.toBeChecked();
+    expect(checkboxFor('pos.order.dine_in')).not.toBeChecked();
     expect(checkboxFor('pos.payment.take')).not.toBeChecked();
     expect(checkboxFor('pos.view')).toBeChecked();
 
-    fireEvent.click(checkboxFor('pos.order.create'));
+    fireEvent.click(checkboxFor('pos.order.dine_in'));
     fireEvent.click(screen.getByRole('button', { name: 'حفظ' }));
 
     await waitFor(() => {
       expect(state.saveRole).toHaveBeenCalledWith(
         'floor_supervisor',
-        expect.arrayContaining(['pos.view', 'pos.order.create']),
+        expect.arrayContaining(['pos.view', 'pos.order.dine_in']),
       );
     });
   });

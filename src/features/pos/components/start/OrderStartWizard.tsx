@@ -1,3 +1,4 @@
+import { canOperateOrderType } from '@/lib/posOrderPermissions';
 import { useCan } from '@/lib/permissions';
 import { ArrowRight, Table2, Car, Bike, Zap, ListOrdered } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
@@ -53,9 +54,10 @@ export function OrderStartWizard({
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
   const can = useCan();
-  const canQuick = can('pos.order.create') || can('pos.order.quick_create');
+  const canQuick = can('pos.order.takeaway');
 
   const startOrder = (options: StartOrderOptions) => {
+    if (!canOperateOrderType(can, options.orderType, options.tableId)) return;
     window.dispatchEvent(new Event('pos:order-flow-started'));
     onStart(options);
   };
@@ -114,7 +116,7 @@ export function OrderStartWizard({
             <button
               type="button"
               data-testid="pos-start-delivery"
-              disabled={!can('pos.order.create')}
+              disabled={!can('pos.order.delivery')}
               onClick={() => onStepChange('delivery')}
               className="flex min-h-16 items-center gap-3 rounded-2xl border border-ui-border bg-ui-surface-raised px-4 text-start shadow-ui-xs transition hover:border-ui-primary hover:bg-ui-primary-soft active:scale-[.98]"
             >
@@ -124,6 +126,7 @@ export function OrderStartWizard({
             <button
               type="button"
               data-testid="pos-start-drive-thru"
+              disabled={!can('pos.order.drive_thru')}
               onClick={() => onStepChange('car')}
               className="flex min-h-16 items-center gap-3 rounded-2xl border border-ui-border bg-ui-surface-raised px-4 text-start shadow-ui-xs transition hover:border-ui-primary hover:bg-ui-primary-soft active:scale-[.98]"
             >

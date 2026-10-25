@@ -61,7 +61,7 @@ describe.skipIf(skip)('functional core cycle: shift → order → hold/resume �
     await client.query(`
       UPDATE public.roles
          SET permissions = COALESCE(permissions, '[]'::jsonb)
-           || '["pos.view","pos.order.create","pos.order.edit","pos.hold","pos.send_kitchen","pos.payment.take","shifts.close"]'::jsonb
+           || '["pos.view","pos.order.dine_in","pos.order.edit","pos.hold","pos.order.dine_in","pos.payment.take","shifts.close"]'::jsonb
        WHERE role = 'cashier'
     `);
 
