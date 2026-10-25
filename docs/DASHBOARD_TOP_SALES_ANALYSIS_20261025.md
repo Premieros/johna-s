@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `feat/dashboard-top-sales-analysis-20261025`
-Current PR: pending
+Current PR: #538
 Last updated: 2026-10-25
 
 ## Work status
@@ -22,7 +22,7 @@ The welcome/calendar/activity strip occupies the dashboard's most prominent posi
 Delete the strip and its unused animation CSS. Replace it with a themed sales analysis card containing net sales, invoice count, average invoice and the existing chart. Reuse existing snapshot, permission, branch/date filters and loading/error/empty states; render one chart only. Remove the strip's activity subscription by removing the component. Keep audit access in its separate shortcut.
 
 ## Verification ledger
-Pending focused dashboard/period/permission tests, typechecks and exact-head CI. No new data requests.
+25 focused dashboard/period/contrast/performance cases and 9 dashboard component cases passed, including one existing snapshot read and no sales analysis for unauthorized users. App/test typechecks passed. Exact-head CI pending; no new data requests.
 
 ## Production gate
 No merge/publication until checks pass and final release approval. Rollback is a normal UI revert; no database rollback.
