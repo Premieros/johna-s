@@ -25,7 +25,7 @@ describe('latest-approved-price consumption workspace',()=>{
  it('displays missing prices and values as numeric zeros and exports summable cells',async()=>{
   state.load.mockResolvedValue({data:{...data,rows:[{...row,unit_price:0,price_source:'unpriced',consumption_value:0,price_missing:true}],summary:{...data.summary,total:0,complete:false,unpriced_count:1}},error:null});
   open();fireEvent.click(screen.getByRole('button',{name:'Run report'}));await screen.findByText(/Rows counted with zero price/);
-  expect(screen.getAllByText('0').length).toBeGreaterThanOrEqual(2);expect(screen.getByText(/Total consumption value/)).toBeTruthy();
+  expect(screen.getAllByText('0').length).toBeGreaterThanOrEqual(1);expect(screen.getAllByText('0.00 EGP').length).toBeGreaterThanOrEqual(1);expect(screen.getByText(/Total consumption value/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button',{name:'Excel'}));await waitFor(()=>expect(state.excel).toHaveBeenCalledTimes(1));
   expect(state.excel.mock.calls[0][0].data[0]).toMatchObject({'Latest approved / unit':0,'Consumption value':0,'Price source':'No price — counted as zero'});
  });

@@ -2,10 +2,10 @@
 
 ## Active work
 - Repository: `Premieros/johna-s`; production Supabase: `azzdesuowpdcoflmyezn`.
-- Baseline: `48b0644bc6f757f019ee8d45d6201586c7a7e74d` (#537 deployed).
-- Branch: `feat/dashboard-top-sales-analysis-20261025`.
-- Mandatory active work log: `docs/DASHBOARD_TOP_SALES_ANALYSIS_20261025.md`.
-- Owner requests permanent removal of the black welcome/calendar/activity strip and sales analysis in its place. Reuse current snapshot and chart; no new reads, permissions, database or operational changes. Prepare verified candidate before release approval.
+- Baseline: `81d7db262632aadb2d35b02a20b4772e89d95107` (#538 deployed).
+- Branch: `fix/report-data-clarity-20261025`.
+- Mandatory active work log: `docs/REPORT_DATA_CLARITY_20261025.md`.
+- Owner adds existing financial action permission alignment and clear permission descriptions to this same PR; no role grants or DB changes. Owner authorizes correcting software presentation faults, not user-entered data/classifications. Verify approved-price resolution for zero consumption rows. Preserve all operations and data; no database changes. Prepare a verified review candidate before release approval.
 
 ## Active usability polish — 2026-10-25
 Owner approved implementing the browser-review findings: compact reports with useful filters and in-page expansion, visible POS branch/dispatch/bill context, readable mobile table cards, safer cancellation presentation and compact dashboard welcome. Presentation only; retain business logic, permissions, queries and installed printers. No production log scans. Prepare one reviewed candidate; publication requires separate final approval.

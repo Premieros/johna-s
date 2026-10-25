@@ -3,7 +3,7 @@ import { formatReportDate } from './reportDate';
 import { useLanguage } from '@/context/LanguageContext';
 import { Card } from '@/components/PageHeader';
 import { Input } from '@/components/Input';
-import { formatCurrency } from '@/lib/format';
+import { formatFinancialCurrency } from '@/lib/format';
 import type { Language } from '@/lib/types';
 import type { ReportFilterKey, ReportFilters } from './reportFilters';
 import { useHistoryAccess } from '@/lib/useHistoryAccess';
@@ -225,7 +225,7 @@ export function ReportFilterBar({
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {showTotal && <div className="rounded-lg border border-ui-border bg-ui-page-alt px-3 py-1.5">
               <span className="text-ui-muted">{totalLabel || t('total')}: </span>
-              <span className="font-extrabold tabular-nums text-ui-accent">{loading || unavailable ? '—' : formatCurrency(total, currency, lang)}</span>
+              <span className="font-extrabold tabular-nums text-ui-accent">{loading || unavailable ? '—' : formatFinancialCurrency(total, currency, lang)}</span>
             </div>}
             <div className="rounded-lg border border-ui-border bg-ui-page-alt px-3 py-1.5">
               <span className="text-ui-muted">{countLabel || t('count')}: </span>

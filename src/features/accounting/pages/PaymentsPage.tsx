@@ -59,6 +59,8 @@ export function PaymentsPage() {
   const [outcomeUnconfirmed, setOutcomeUnconfirmed] = useState(false);
   const submitting = useRef(false);
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
+  const canCollect = can('sales.payment.receive');
+  const canPaySupplier = can('procurement.payment.create');
   const canUseMainTreasury = can('accounting.treasury.main_cash.pay') || can('accounting.treasury.transfer');
   const { rows: payments, loading: paymentsLoading, error: paymentsError, total: paymentsTotal, hasMore: paymentsHasMore, loadMore: loadMorePayments, loadingMore: loadingMorePayments, refresh: reloadPayments } = usePaginatedRows<CustomerPayment>({
     table: 'customer_payments',
@@ -155,6 +157,7 @@ export function PaymentsPage() {
   const filteredAp = (loadedScope === scopeKey ? apRows : []).filter((r) => !search || r.name.toLowerCase().includes(search.toLowerCase()) || (r.phone || '').includes(search));
 
   async function openCollect(row: ArAgingRow) {
+    if (!canCollect) return;
     if (!effectiveBranchFilter || loadedScope !== scopeKey) return;
     const isCurrent = capture('invoices');
     setDialogScope(scopeKey); setCollecting(row); setOutcomeUnconfirmed(false);
@@ -169,6 +172,7 @@ export function PaymentsPage() {
   }
 
   async function openPay(row: ApAgingRow) {
+    if (!canPaySupplier) return;
     if (!effectiveBranchFilter || loadedScope !== scopeKey || sourcesScope !== scopeKey) return;
     const isCurrent = capture('invoices');
     setDialogScope(scopeKey); setPaying(row); setOutcomeUnconfirmed(false);
@@ -204,6 +208,7 @@ export function PaymentsPage() {
   }
 
   const collect = async () => {
+    if (!canCollect) return;
     if (!collecting || !effectiveBranchFilter || dialogScope !== scopeKey || submitting.current || invoicesLoading || invoicesError || outcomeUnconfirmed) return;
     const amount = Number(form.amount);
     if (!Number.isFinite(amount) || amount <= 0) { show(t('required'), 'error'); return; }
@@ -234,6 +239,7 @@ export function PaymentsPage() {
   };
 
   const paySupplier = async () => {
+    if (!canPaySupplier) return;
     if (!paying || !effectiveBranchFilter || dialogScope !== scopeKey || sourcesScope !== scopeKey || submitting.current || invoicesLoading || invoicesError || outcomeUnconfirmed) return;
     const amount = Number(apForm.amount);
     if (!Number.isFinite(amount) || amount <= 0 || !apForm.treasury_account_id) { show(t('required'), 'error'); return; }
@@ -273,7 +279,7 @@ export function PaymentsPage() {
     { key: 'bucket_31_60', header: t('days60'), render: (r) => formatCurrency(r.bucket_31_60, currency, lang) },
     { key: 'bucket_61_90', header: t('days90'), render: (r) => formatCurrency(r.bucket_61_90, currency, lang) },
     { key: 'bucket_90_plus', header: t('days90Plus'), render: (r) => <span className={r.bucket_90_plus > 0 ? 'text-ui-danger font-semibold' : ''}>{formatCurrency(r.bucket_90_plus, currency, lang)}</span> },
-    { key: 'actions', header: t('actions'), render: (r) => <Button size="sm" onClick={() => openCollect(r)}><HandCoins className="w-4 h-4" /> {t('collect')}</Button> },
+    { key: 'actions', header: t('actions'), render: (r) => canCollect ? <Button size="sm" onClick={() => openCollect(r)}><HandCoins className="w-4 h-4" /> {t('collect')}</Button> : null },
   ];
 
   const apColumns: Column<ApAgingRow>[] = [
@@ -284,7 +290,7 @@ export function PaymentsPage() {
     { key: 'bucket_31_60', header: t('days60'), render: (r) => formatCurrency(r.bucket_31_60, currency, lang) },
     { key: 'bucket_61_90', header: t('days90'), render: (r) => formatCurrency(r.bucket_61_90, currency, lang) },
     { key: 'bucket_90_plus', header: t('days90Plus'), render: (r) => <span className={r.bucket_90_plus > 0 ? 'text-ui-danger font-semibold' : ''}>{formatCurrency(r.bucket_90_plus, currency, lang)}</span> },
-    { key: 'actions', header: t('actions'), render: (r) => <Button size="sm" onClick={() => openPay(r)} disabled={sourcesScope !== scopeKey}><HandCoins className="w-4 h-4" /> {t('paySupplier')}</Button> },
+    { key: 'actions', header: t('actions'), render: (r) => canPaySupplier ? <Button size="sm" onClick={() => openPay(r)} disabled={sourcesScope !== scopeKey}><HandCoins className="w-4 h-4" /> {t('paySupplier')}</Button> : null },
   ];
 
   const paymentColumns: Column<CustomerPayment>[] = [
@@ -373,7 +379,7 @@ export function PaymentsPage() {
         </>
       )}
 
-      <Modal open={!!collecting && dialogScope === scopeKey} onClose={() => setCollecting(null)} title={collecting ? `${t('collect')} - ${collecting.name}` : ''}>
+      <Modal open={canCollect && !!collecting && dialogScope === scopeKey} onClose={() => setCollecting(null)} title={collecting ? `${t('collect')} - ${collecting.name}` : ''}>
         {collecting && (
           <div className="space-y-4">
             {invoicesLoading && <p role="status">{t('loading')}</p>}
@@ -414,7 +420,7 @@ export function PaymentsPage() {
         )}
       </Modal>
 
-      <Modal open={!!paying && dialogScope === scopeKey} onClose={() => setPaying(null)} title={paying ? `${t('paySupplier')} - ${paying.name}` : ''}>
+      <Modal open={canPaySupplier && !!paying && dialogScope === scopeKey} onClose={() => setPaying(null)} title={paying ? `${t('paySupplier')} - ${paying.name}` : ''}>
         {paying && (
           <div className="space-y-4">
             {invoicesLoading && <p role="status">{t('loading')}</p>}

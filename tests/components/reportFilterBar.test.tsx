@@ -18,6 +18,12 @@ describe('visible useful report controls',()=>{
   expect(screen.queryByLabelText('from')).toBeNull();expect(screen.getByLabelText('Through end of day')).toBeVisible();
   view.rerender(<ReportFilterBar {...p} showDate={false}/>);expect(screen.queryByLabelText('to')).toBeNull();expect(screen.getByText(/Current data/)).toBeVisible();
  });
+ it('uses the same two-decimal total as the financial grid and shows zero explicitly',()=>{
+  const p=props();const view=render(<ReportFilterBar {...p} total={181943.73}/>);
+  expect(screen.getByText('181,943.73 EGP')).toBeVisible();
+  view.rerender(<ReportFilterBar {...p} total={0}/>);
+  expect(screen.getByText('0.00 EGP')).toBeVisible();
+ });
  it('clears filters explicitly and shows when lookup options are loading',()=>{
   const clear=vi.fn();render(<ReportFilterBar {...props()} onClearFilters={clear} optionsLoading/>);
   fireEvent.click(screen.getByText(/More filters/));expect(screen.getByLabelText('raw_material')).toBeDisabled();fireEvent.click(screen.getByRole('button',{name:'Clear filters'}));expect(clear).toHaveBeenCalledOnce();

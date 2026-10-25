@@ -16,7 +16,7 @@ describe('explicit month review summary',()=>{
   fireEvent.change(screen.getByLabelText('Review month'),{target:{value:'2026-09'}});fireEvent.click(screen.getByRole('button',{name:'Show month summary'}));
   await screen.findByText(/Materials without prices counted as zero/);expect(calls.metrics).toHaveBeenCalledTimes(3);expect(calls.cost).toHaveBeenCalledTimes(1);
   expect(calls.cost.mock.calls[0][0]).toMatchObject({p_branch_id:'A',p_from_date:'2026-09-01',p_to_date:'2026-09-30',p_group_by:'material',p_page_size:1});expect(calls.cost.mock.calls[0][0]).not.toHaveProperty('p_include_waste');
-  expect(calls.metrics.mock.calls[0][0]).toMatchObject({p_branch_id:'A',p_from_date:'2026-09-01',p_to_date:'2026-09-30'});expect(screen.getByText('100')).toBeTruthy();
+  expect(calls.metrics.mock.calls[0][0]).toMatchObject({p_branch_id:'A',p_from_date:'2026-09-01',p_to_date:'2026-09-30'});expect(screen.getByText('100.00')).toBeTruthy();
  });
  it('warns about partial recipe costs without any additional reads',async()=>{
   calls.cost.mockResolvedValue({data:{rows:[],summary:{total:20,unpriced_count:0,complete:false,missing_recipe_count:2,invalid_unit_count:1}},error:null});
@@ -33,6 +33,17 @@ describe('explicit month review summary',()=>{
   const label=await screen.findByText('Estimated margin after current recipe cost');expect(label.closest('tr')?.textContent).toContain('80');
   expect(screen.getByText('Estimated result after posted expenses, before other adjustments').closest('tr')?.textContent).toContain('75');
   expect(calls.metrics).toHaveBeenCalledTimes(3);expect(calls.cost).toHaveBeenCalledTimes(1);
+ });
+ it('attributes price-only incompleteness to prices, not missing recipes or units',async()=>{
+  calls.cost.mockResolvedValue({data:{rows:[],summary:{total:20,unpriced_count:24,complete:false,missing_recipe_count:0,invalid_unit_count:0}},error:null});
+  render(<MonthCloseReview views={[costView]} onSelect={vi.fn()} />);
+  fireEvent.click(screen.getByRole('button',{name:'Show month summary'}));
+  const warning=await screen.findByRole('alert');
+  expect(warning.textContent).toContain('Materials without prices counted as zero');
+  expect(warning.textContent).toContain('24');
+  expect(warning.textContent).not.toContain('complete recipes and units');
+  expect(screen.getByText('Estimated margin after current recipe cost').closest('tr')?.textContent).toContain('Unavailable');
+  expect(calls.cost).toHaveBeenCalledTimes(1);
  });
  it('keeps failed or null amounts unavailable and never queries costing without its permission',async()=>{
   calls.metrics.mockResolvedValue({data:{Amount:null},error:null});render(<MonthCloseReview views={[]} onSelect={vi.fn()} />);
