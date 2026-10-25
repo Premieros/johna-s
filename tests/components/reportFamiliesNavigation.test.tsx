@@ -60,6 +60,12 @@ describe('basic report navigation', () => {
     expect(screen.getByTestId('unified-reports-center')).toHaveAttribute('data-expanded', 'true');
     expect(screen.getByTestId('operational-report')).toBe(report);
     expect(document.body.style.overflow).toBe('hidden');
+    const modal = document.createElement('div');
+    modal.dataset.testid = 'modal-root';
+    document.body.append(modal);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.getByTestId('unified-reports-center')).toHaveAttribute('data-expanded', 'true');
+    modal.remove();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.getByTestId('unified-reports-center')).toHaveAttribute('data-expanded', 'false');
     expect(screen.getByTestId('operational-report')).toBe(report);

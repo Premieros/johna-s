@@ -25,7 +25,9 @@ export function ReportsCenterPage() {
     if (!expanded) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setExpanded(false); };
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !document.querySelector('[data-testid="modal-root"]')) setExpanded(false);
+    };
     document.addEventListener('keydown', close);
     return () => { document.body.style.overflow = previous; document.removeEventListener('keydown', close); };
   }, [expanded]);
@@ -64,7 +66,7 @@ export function ReportsCenterPage() {
     else if (view.type) fallback.set('type', view.type);
     return <Navigate to={`/reports?${fallback}`} replace />;
   }
-  const content = <div data-testid="unified-reports-center" data-expanded={expanded} className={`report-workspace space-y-2 bg-ui-page ${expanded ? 'fixed inset-0 z-[150] overflow-auto overscroll-contain p-3 text-ui-text sm:p-4' : ''}`}>
+  const content = <div data-testid="unified-reports-center" data-expanded={expanded} className={`report-workspace space-y-2 bg-ui-page ${expanded ? 'fixed inset-0 z-[60] overflow-auto overscroll-contain p-3 text-ui-text sm:p-4' : ''}`}>
     <div className="grid min-w-0 gap-4 grid-cols-1">
       <details className="rounded-lg border border-ui-border bg-ui-surface px-3 py-2"><summary className="cursor-pointer text-sm font-semibold">{ar ? 'اختيار التقرير' : 'Choose report'} · {ar ? report.ar : report.en}</summary><aside className="mt-2 space-y-2" aria-label={ar ? 'التقارير الأساسية' : 'Basic reports'}>
         <div className="relative max-w-sm">
