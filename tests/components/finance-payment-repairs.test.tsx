@@ -1,13 +1,13 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ branch: 'smouha', show: vi.fn(), ap: vi.fn(), ar: vi.fn(), sources: vi.fn(), pay: vi.fn(), collect: vi.fn(), transfer: vi.fn(), invoices: vi.fn(), audit: vi.fn(), refresh: vi.fn() }));
+const mocks = vi.hoisted(() => ({ branch: 'smouha', denied: new Set<string>(), show: vi.fn(), ap: vi.fn(), ar: vi.fn(), sources: vi.fn(), pay: vi.fn(), collect: vi.fn(), transfer: vi.fn(), invoices: vi.fn(), audit: vi.fn(), refresh: vi.fn() }));
 vi.mock('@/api', () => ({ accounting: { receivePayment: mocks.collect, getApAging: mocks.ap, getArAging: mocks.ar, getAccessibleTreasuryAccounts: mocks.sources, paySupplierFromTreasury: mocks.pay, processTreasuryTransferV2: mocks.transfer, getBranchTreasuryDayCloseReconciliation: async () => ({ data: { success: true, rows: [] }, error: null }) } }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en', t: (key: string) => key }) }));
 vi.mock('@/components/Toast', () => ({ useToast: () => ({ show: mocks.show }) }));
 vi.mock('@/lib/useBranchFilter', () => ({ useBranchFilter: () => mocks.branch }));
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'actor', role: 'cashier', branch_id: mocks.branch } }) }));
-vi.mock('@/lib/permissions', () => ({ useCan: () => () => true, isAdminRole: () => false }));
+vi.mock('@/lib/permissions', () => ({ useCan: () => (permission: string) => !mocks.denied.has(permission), isAdminRole: () => false }));
 vi.mock('@/context/SettingsContext', () => ({ useSettings: () => ({ effectiveSettings: () => ({ currency: 'EGP' }) }) }));
 vi.mock('@/lib/useHistoryAccess', () => ({ useHistoryAccess: () => ({ minIso: null }) }));
 vi.mock('@/hooks/useBranches', () => ({ useBranches: () => ({ branches: [] }) }));
@@ -27,7 +27,7 @@ async function openPayment() {
   return within(dialog);
 }
 beforeEach(() => {
-  vi.resetAllMocks(); mocks.branch = 'smouha';
+  vi.resetAllMocks(); mocks.branch = 'smouha'; mocks.denied.clear();
   mocks.ap.mockResolvedValue({ data: [party], error: null }); mocks.ar.mockResolvedValue({ data: [], error: null });
   mocks.sources.mockResolvedValue({ data: [source, { ...source, id: 'main', scope: 'organization', kind: 'main_cash', account_name: 'Main' }], error: null });
   mocks.invoices.mockResolvedValue({ rows: [{ id: 'invoice', invoice_number: 'INV', open: 3500 }], hasMore: false });
@@ -35,6 +35,32 @@ beforeEach(() => {
   mocks.transfer.mockResolvedValue({ data: { success: false, error: 'INSUFFICIENT_TREASURY_BALANCE', available: 50 }, error: null });
 });
 describe('finance payment root regressions', () => {
+  it('keeps supplier balances readable but hides payment actions from view-only users', async () => {
+    mocks.denied.add('procurement.payment.create');
+    render(app());
+    await screen.findAllByText('Supplier');
+    expect(within(screen.getByTestId('payments-ap-aging-panel')).queryByRole('button', {name:'paySupplier'})).toBeNull();
+    expect(mocks.invoices).not.toHaveBeenCalled();expect(mocks.pay).not.toHaveBeenCalled();
+  });
+  it('closes a supplier-payment dialog when its independent action permission is revoked', async () => {
+    const view=render(app());await openPayment();
+    mocks.denied.add('procurement.payment.create');view.rerender(app());
+    expect(screen.queryByRole('dialog')).toBeNull();expect(mocks.pay).not.toHaveBeenCalled();
+  });
+  it('does not turn account management or POS payment permission into customer collection', async () => {
+    mocks.denied.add('sales.payment.receive');
+    mocks.ar.mockResolvedValue({data:[{...party,customer_id:'customer'}],error:null});
+    render(app('ar'));await screen.findAllByText('Supplier');
+    expect(within(screen.getByTestId('payments-ar-aging-panel')).queryByRole('button',{name:'collect'})).toBeNull();
+    expect(mocks.collect).not.toHaveBeenCalled();expect(mocks.invoices).not.toHaveBeenCalled();
+  });
+  it('keeps treasury viewing separate from deposit, withdrawal and transfer actions', async () => {
+    mocks.denied.add('accounts.manage');mocks.denied.add('accounting.treasury.transfer');
+    render(app('treasury'));
+    await waitFor(()=>expect(mocks.sources).toHaveBeenCalled());
+    expect(screen.queryByRole('button',{name:'deposit'})).toBeNull();expect(screen.queryByRole('button',{name:'withdrawal'})).toBeNull();expect(screen.queryByRole('button',{name:'transfer'})).toBeNull();
+    expect(mocks.transfer).not.toHaveBeenCalled();
+  });
   it('loads further invoices only on request and keeps earlier selections available', async () => {
     mocks.invoices.mockResolvedValueOnce({rows:[{id:'invoice',invoice_number:'INV',open:3500}],hasMore:true})
       .mockResolvedValueOnce({rows:[{id:'next',invoice_number:'NEXT',open:50}],hasMore:false});

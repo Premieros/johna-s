@@ -54,6 +54,7 @@ export function JournalPage() {
   const { show } = useToast();
   const branchFilter = useBranchFilter();
   const can = useCan();
+  const canPostJournal = can('accounting.journal.post');
   const history = useHistoryAccess();
   const { effectiveSettings } = useSettings();
   const { branches } = useBranches();
@@ -139,6 +140,7 @@ export function JournalPage() {
   const addManualLine = () => setManualLines((ls) => [...ls, { account_id: '', debit: '', credit: '', note: '' }]);
 
   const submitManual = async () => {
+    if (!canPostJournal) return;
     if (!manualDesc.trim()) { show(t('required'), 'error'); return; }
     const lines = manualLines
       .map((l) => ({
@@ -176,7 +178,7 @@ export function JournalPage() {
       <DesignPageHeader
         title={t('journalEntries')}
         subtitle={t('journal')}
-        actions={can('accounts.manage') && (
+        actions={canPostJournal && (
           <Button size="sm" onClick={() => setManualOpen(true)}><Plus className="w-4 h-4" /> {t('postManualJournal')}</Button>
         )}
       />
@@ -268,7 +270,7 @@ export function JournalPage() {
         )}
       </Modal>
 
-      <Modal open={manualOpen} onClose={() => { setManualOpen(false); setManualDesc(''); setManualLines([]); }} title={t('postManualJournal')} size="lg">
+      <Modal open={manualOpen && canPostJournal} onClose={() => { setManualOpen(false); setManualDesc(''); setManualLines([]); }} title={t('postManualJournal')} size="lg">
         <div className="space-y-4">
           <Input label={t('description')} value={manualDesc} onChange={(e) => setManualDesc(e.target.value)} placeholder={t('description')} />
           <div className="space-y-3">

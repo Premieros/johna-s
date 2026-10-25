@@ -208,6 +208,7 @@ export function TreasuryPage() {
   };
 
   const openModal = (m: Exclude<ModalType, null>) => {
+    if (!can(m === 'transfer' ? 'accounting.treasury.transfer' : 'accounts.manage')) return;
     if (loadedScope !== scopeKey || overviewError || submitting.current) return;
     setDialogScope(scopeKey); setOutcomeUnconfirmed(false);
     setForm({ from_account_id: '', to_account_id: '', account_id: '', amount: '', notes: '' });
@@ -215,6 +216,7 @@ export function TreasuryPage() {
   };
 
   const submit = async () => {
+    if (!modal || !can(modal === 'transfer' ? 'accounting.treasury.transfer' : 'accounts.manage')) return;
     if (!effectiveBranchFilter || dialogScope !== scopeKey || loadedScope !== scopeKey || submitting.current || outcomeUnconfirmed) return;
     const amount = Number(form.amount);
     if (!Number.isFinite(amount) || amount <= 0) { show(t('required'), 'error'); return; }
@@ -485,7 +487,7 @@ export function TreasuryPage() {
         <DesignPagination loaded={transactions.length} total={txTotal} hasMore={txHasMore} loadingMore={loadingMoreTx} onLoadMore={loadMoreTx} />
       </DesignPanel>
 
-      <Modal open={modal === 'transfer' && dialogScope === scopeKey} onClose={() => setModal(null)} title={t('transfer')}>
+      <Modal open={can('accounting.treasury.transfer') && modal === 'transfer' && dialogScope === scopeKey} onClose={() => setModal(null)} title={t('transfer')}>
         <div className="space-y-4">
           {outcomeUnconfirmed && <p role="alert" className="text-ui-danger">{userFacingErrorMessage('FINANCE_RESULT_UNCONFIRMED', lang)}</p>}
           {overviewError && <p role="alert" className="text-ui-danger">{overviewError}</p>}
@@ -508,7 +510,7 @@ export function TreasuryPage() {
         </div>
       </Modal>
 
-      <Modal open={modal === 'deposit' && dialogScope === scopeKey} onClose={() => setModal(null)} title={t('deposit')}>
+      <Modal open={can('accounts.manage') && modal === 'deposit' && dialogScope === scopeKey} onClose={() => setModal(null)} title={t('deposit')}>
         <div className="space-y-4">
           {outcomeUnconfirmed && <p role="alert" className="text-ui-danger">{userFacingErrorMessage('FINANCE_RESULT_UNCONFIRMED', lang)}</p>}
           {overviewError && <p role="alert" className="text-ui-danger">{overviewError}</p>}
@@ -527,7 +529,7 @@ export function TreasuryPage() {
         </div>
       </Modal>
 
-      <Modal open={modal === 'withdrawal' && dialogScope === scopeKey} onClose={() => setModal(null)} title={t('withdrawal')}>
+      <Modal open={can('accounts.manage') && modal === 'withdrawal' && dialogScope === scopeKey} onClose={() => setModal(null)} title={t('withdrawal')}>
         <div className="space-y-4">
           {outcomeUnconfirmed && <p role="alert" className="text-ui-danger">{userFacingErrorMessage('FINANCE_RESULT_UNCONFIRMED', lang)}</p>}
           {overviewError && <p role="alert" className="text-ui-danger">{overviewError}</p>}

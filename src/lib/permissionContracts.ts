@@ -291,6 +291,30 @@ const EFFECTS: Partial<Record<Permission, { ar: string; en: string; notesAr?: st
     notesAr: 'يتطلب صلاحية اعتماد بدء العمل ولا يسمح بإدارة مستخدم خارج نطاق الفروع.',
     notesEn: 'Requires work authorization approval capability and cannot manage users outside accessible branches.',
   },
+  'accounts.view': {
+    ar: 'عرض شجرة الحسابات والقيود والخزائن والتسويات والذمم. العرض وحده لا يسمح بتنفيذ تحصيل أو سداد أو قيد أو تحويل.',
+    en: 'View accounts, journals, treasuries, reconciliations and balances. Viewing alone cannot collect, pay, post or transfer.',
+  },
+  'accounts.manage': {
+    ar: 'إدارة شجرة الحسابات والأرصدة الافتتاحية والإيداع والسحب وفق تحقق الخادم؛ القيد اليدوي والتسوية والتحويل والتحصيل والسداد لها صلاحيات مستقلة.',
+    en: 'Manage the chart of accounts, opening balances, deposits and withdrawals subject to server checks. Manual journals, reconciliation, transfers, collections and supplier payments require separate permissions.',
+  },
+  'accounting.journal.post': {
+    ar: 'إنشاء وترحيل قيد يدوي؛ لا تمنح إدارة الحسابات أو تحويل الأموال.',
+    en: 'Create and post a manual journal; does not grant account management or fund transfers.',
+  },
+  'accounting.reconciliation.manage': {
+    ar: 'إنشاء التسوية البنكية وإضافة بنود الكشف ومطابقتها وإكمال التسوية؛ لا تمنح سدادًا أو تحصيلًا.',
+    en: 'Create bank reconciliations, add and match statement lines, and complete reconciliation; does not grant payment or collection.',
+  },
+  'accounting.treasury.transfer': {
+    ar: 'التحويل بين الخزن المسموح بها؛ لا تمنح الإيداع أو السحب أو تحصيل العميل أو سداد المورد تلقائيًا.',
+    en: 'Transfer between accessible treasuries; does not implicitly grant deposits, withdrawals, customer collection or supplier payment.',
+  },
+  'reports.financial': {
+    ar: 'عرض التقارير والقوائم المالية فقط؛ لا تمنح تنفيذ أي حركة مالية.',
+    en: 'View financial reports and statements only; does not grant financial mutations.',
+  },
   'accounting.treasury.main_cash.pay': {
     ar: 'يسمح باختيار الخزنة الرئيسية كمصدر لسداد المورد فقط، ولا يمنح التحويل بين الخزن.',
     en: 'Allows Main Treasury as a supplier-payment source only; it does not grant treasury transfers.',

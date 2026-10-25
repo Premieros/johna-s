@@ -5,7 +5,7 @@
 - Baseline: `81d7db262632aadb2d35b02a20b4772e89d95107` (#538 deployed).
 - Branch: `fix/report-data-clarity-20261025`.
 - Mandatory active work log: `docs/REPORT_DATA_CLARITY_20261025.md`.
-- Owner authorizes correcting software presentation faults, not user-entered data/classifications. Verify approved-price resolution for zero consumption rows. Preserve all operations and data; no database changes. Prepare a verified review candidate before release approval.
+- Owner adds existing financial action permission alignment and clear permission descriptions to this same PR; no role grants or DB changes. Owner authorizes correcting software presentation faults, not user-entered data/classifications. Verify approved-price resolution for zero consumption rows. Preserve all operations and data; no database changes. Prepare a verified review candidate before release approval.
 
 ## Active usability polish — 2026-10-25
 Owner approved implementing the browser-review findings: compact reports with useful filters and in-page expansion, visible POS branch/dispatch/bill context, readable mobile table cards, safer cancellation presentation and compact dashboard welcome. Presentation only; retain business logic, permissions, queries and installed printers. No production log scans. Prepare one reviewed candidate; publication requires separate final approval.
