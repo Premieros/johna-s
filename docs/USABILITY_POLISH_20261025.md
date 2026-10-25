@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `feat/usability-polish-20261025`
-Current PR: #0 (not yet assigned during local preparation)
+Current PR: #536
 Last updated: 2026-10-25
 
 ## Work status
@@ -38,7 +38,8 @@ Browser review observed desktop and 390px mobile layouts using super-admin Smoha
 - 46 focused tests passed before final test additions; app/test TypeScript and targeted ESLint passed.
 - Existing stability tests continue proving no result requests on mount/filter changes and frozen report context before an explicit run.
 - Added in-page expand/escape identity test and Gregorian/Cairo date tests. Added 320px/1366px report layout checks for existing mocked-browser CI.
-- Final focused verification, build, exact-head full Verify and browser acceptance must be recorded in the PR ledger.
+- Build and application/test TypeScript checks passed. Local browser runner could not start due to environment networking restrictions; the existing GitHub browser suite will run the same acceptance cases.
+- Final exact-head full Verify and browser acceptance must be recorded in the PR ledger.
 
 ## Production gate
 No merge or publication before final owner approval and exact-head checks pass. No production migration is part of this candidate. Rollback is a normal revert of UI commits; no data rollback.
