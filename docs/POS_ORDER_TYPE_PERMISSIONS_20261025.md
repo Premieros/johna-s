@@ -10,7 +10,7 @@ State: **BLOCKED**
 Owner approved preparing one capability per type for creation and dispatch. Production apply/release requires a verified reviewable candidate.
 
 ## Guardrails
-Preserve installed printers, dispatch idempotency, order/item identities, transfer and costing algorithms, independent payment/edit/discount/receipt permissions, branch RLS and service-role paths. No log scans, production test transactions or role-name permission shortcuts.
+Preserve installed printers, dispatch idempotency, order/item identities, transfer and costing algorithms, independent payment/edit/discount/receipt permissions, branch boundaries and service-role paths. Four order_kitchen_sends policies replace the obsolete generic key: SELECT uses POS view (or existing KDS view); writes require the authoritative order type, retaining the original branch predicates and policy roles. No log scans, production test transactions or role-name permission shortcuts.
 
 ## Baseline
 Main `ff7a0f1b343227f5e96b62f032fb57b93d6a6eca`. New isolated worktree; unrelated work retained.

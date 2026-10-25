@@ -21,7 +21,7 @@ SET search_path=public,pg_temp AS $function$
    AND public._pos_order_type_allowed(o.order_type,o.table_id));
 $function$;
 REVOKE ALL ON FUNCTION public._pos_existing_order_type_allowed(uuid) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public._pos_existing_order_type_allowed(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public._pos_existing_order_type_allowed(uuid) TO authenticated,service_role;
 
 -- Each replacement checks an exact anchor count and retains the current full
 -- writer definition, security mode, grants, ownership, inventory and print logic.
@@ -47,7 +47,7 @@ DO $patch_2$
 DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_old text:=$old$IF NOT public.can_permission('pos.order.create') AND NOT (public.can_permission('pos.order.quick_create') AND COALESCE(NEW.order_type='takeaway' AND NEW.table_id IS NULL AND NEW.status='open' AND (COALESCE(NEW.discount_amount,0)=0 OR public.can_permission('pos.discount')) AND NEW.cashier_id=auth.uid() AND public.user_may_access_branch(NEW.branch_id),false)) THEN$old$;
 BEGIN
  IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'POS_TYPE_BASELINE_MISMATCH_2'; END IF;
- EXECUTE replace(v_def,v_old,$new$IF NOT public._pos_order_type_allowed(NEW.order_type,NEW.table_id) THEN$new$);
+ EXECUTE replace(v_def,v_old,$new$IF NOT (public._pos_order_type_allowed(NEW.order_type,NEW.table_id) AND NEW.status='open' AND (COALESCE(NEW.discount_amount,0)=0 OR public.can_permission('pos.discount'))) THEN$new$);
 END $patch_2$;
 
 DO $patch_3$
@@ -215,6 +215,29 @@ BEGIN
       RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.type';$new$);
 END $patch_22$;
 
+DO $patch_23$
+DECLARE v_def text:=pg_get_functiondef('public.send_to_kitchen(uuid,uuid)'::regprocedure); v_old text:=$old$    IF v_order.cashier_id IS DISTINCT FROM v_uid THEN
+      PERFORM set_config('app.pos_action_authorized','1',true);
+      PERFORM set_config('app.pos_action_actor_id',v_uid::text,true);
+      PERFORM set_config('app.pos_action_order_id',p_order_id::text,true);
+      PERFORM set_config('app.pos_action_permission','pos.send_kitchen',true);
+    END IF;$old$;
+BEGIN
+ IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'POS_TYPE_BASELINE_MISMATCH_23'; END IF;
+ EXECUTE replace(v_def,v_old,$new$    PERFORM set_config('app.pos_action_authorized','1',true);
+    PERFORM set_config('app.pos_action_actor_id',v_uid::text,true);
+    PERFORM set_config('app.pos_action_order_id',p_order_id::text,true);
+    PERFORM set_config('app.pos_action_permission','pos.send_kitchen',true);$new$);
+END $patch_23$;
+
+DO $policy$ BEGIN IF EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='order_kitchen_sends' AND policyname='auth_select_order_kitchen_sends' AND (COALESCE(regexp_replace(qual,'[[:space:]]','','g'),'') IS DISTINCT FROM regexp_replace($before$(is_pos_admin() OR ((branch_id = get_branch_id()) AND (can_permission('pos.send_kitchen'::text) OR can_permission('pos.kds_view'::text))))$before$,'[[:space:]]','','g'))) OR NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='order_kitchen_sends' AND policyname='auth_select_order_kitchen_sends') THEN RAISE EXCEPTION 'POS_TYPE_POLICY_DRIFT'; END IF; END $policy$;
+ALTER POLICY auth_select_order_kitchen_sends ON public.order_kitchen_sends USING ((is_pos_admin() OR ((branch_id = get_branch_id()) AND (can_permission('pos.view'::text) OR can_permission('pos.kds_view'::text)))));
+DO $policy$ BEGIN IF EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='order_kitchen_sends' AND policyname='auth_write_order_kitchen_sends' AND (COALESCE(regexp_replace(with_check,'[[:space:]]','','g'),'') IS DISTINCT FROM regexp_replace($before$(is_pos_admin() OR ((branch_id = get_branch_id()) AND can_permission('pos.send_kitchen'::text)))$before$,'[[:space:]]','','g'))) OR NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='order_kitchen_sends' AND policyname='auth_write_order_kitchen_sends') THEN RAISE EXCEPTION 'POS_TYPE_POLICY_DRIFT'; END IF; END $policy$;
+ALTER POLICY auth_write_order_kitchen_sends ON public.order_kitchen_sends WITH CHECK ((is_pos_admin() OR ((branch_id = get_branch_id()) AND _pos_existing_order_type_allowed(order_id))));
+DO $policy$ BEGIN IF EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='order_kitchen_sends' AND policyname='auth_write_order_kitchen_sends_del' AND (COALESCE(regexp_replace(qual,'[[:space:]]','','g'),'') IS DISTINCT FROM regexp_replace($before$(is_pos_admin() OR ((branch_id = get_branch_id()) AND can_permission('pos.send_kitchen'::text)))$before$,'[[:space:]]','','g'))) OR NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='order_kitchen_sends' AND policyname='auth_write_order_kitchen_sends_del') THEN RAISE EXCEPTION 'POS_TYPE_POLICY_DRIFT'; END IF; END $policy$;
+ALTER POLICY auth_write_order_kitchen_sends_del ON public.order_kitchen_sends USING ((is_pos_admin() OR ((branch_id = get_branch_id()) AND _pos_existing_order_type_allowed(order_id))));
+DO $policy$ BEGIN IF EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='order_kitchen_sends' AND policyname='auth_write_order_kitchen_sends_upd' AND (COALESCE(regexp_replace(qual,'[[:space:]]','','g'),'') IS DISTINCT FROM regexp_replace($before$(is_pos_admin() OR ((branch_id = get_branch_id()) AND can_permission('pos.send_kitchen'::text)))$before$,'[[:space:]]','','g') OR COALESCE(regexp_replace(with_check,'[[:space:]]','','g'),'') IS DISTINCT FROM regexp_replace($before$(is_pos_admin() OR ((branch_id = get_branch_id()) AND can_permission('pos.send_kitchen'::text)))$before$,'[[:space:]]','','g'))) OR NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='order_kitchen_sends' AND policyname='auth_write_order_kitchen_sends_upd') THEN RAISE EXCEPTION 'POS_TYPE_POLICY_DRIFT'; END IF; END $policy$;
+ALTER POLICY auth_write_order_kitchen_sends_upd ON public.order_kitchen_sends USING ((is_pos_admin() OR ((branch_id = get_branch_id()) AND _pos_existing_order_type_allowed(order_id)))) WITH CHECK ((is_pos_admin() OR ((branch_id = get_branch_id()) AND _pos_existing_order_type_allowed(order_id))));
 -- Conservative one-time conversion, independent of role names.
 -- Generic send-only roles gain no creation capability. Quick is always explicit.
 UPDATE public.roles r SET permissions=(

@@ -40,7 +40,7 @@ describe.skipIf(!local)('one create-and-send capability per order type — owned
       [ids.branchA, type, JSON.stringify([{product_id: ids.prodA, quantity: 1, unit_name: 'piece', unit_price: 20, total: 20}])]);
       expect(result.error).toBeUndefined();
       expect(result.rows[0].r).toMatchObject({success: true});
-      expect(result.rows[0].sent).toMatchObject({success: true, items_sent_count: 1});
+      expect(result.rows[0].sent, JSON.stringify(result.rows[0].sent)).toMatchObject({success: true, items_sent_count: 1});
       const permissions = await runAs(db, ids.users.cashier, `SELECT public.can_permission('pos.order.edit') edit,public.can_permission('pos.payment.take') pay,public.can_permission('pos.receipt.print') receipt,public.can_permission('pos.discount') discount`);
       expect(permissions.rows[0]).toEqual({edit: false, pay: false, receipt: false, discount: false});
       for (const other of types.filter(candidate => candidate !== type)) {
@@ -60,6 +60,8 @@ describe.skipIf(!local)('one create-and-send capability per order type — owned
     expect(bound.rows[0].r).toMatchObject({success: false, error: 'PERMISSION_DENIED'});
     const direct = await runAs(db, ids.users.cashier, `INSERT INTO public.orders(order_number,branch_id,cashier_id,order_type) VALUES($1,$2,$3,'dine_in')`, [randomUUID(), ids.branchA, ids.users.cashier]);
     expect(direct.error).toContain('PERMISSION_DENIED');
+    const completed = await runAs(db, ids.users.cashier, `INSERT INTO public.orders(order_number,branch_id,cashier_id,order_type,status) VALUES($1,$2,$3,'takeaway','completed')`, [randomUUID(), ids.branchA, ids.users.cashier]);
+    expect(completed.error).toContain('PERMISSION_DENIED');
   });
   it('cannot use type changes, foreign branch, or forged print payload type to bypass authorization', async () => {
     await grant('takeaway');

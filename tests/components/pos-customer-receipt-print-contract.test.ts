@@ -30,7 +30,7 @@ describe('POS customer receipt print contract', () => {
   it('exposes an explicit permission checkbox label for the sale receipt print button', () => {
     const defs = fs.readFileSync(path.join(root, 'src/lib/permissionDefs.ts'), 'utf8');
     expect(defs).toContain("'pos.receipt.print'");
-    expect(defs).toContain('إظهار زر طباعة إيصال البيع (أول مرة)');
+    expect(defs).toContain('طباعة الفاتورة لأول مرة');
     expect(PERMISSION_GROUPS.find(group => group.key === 'pos')?.permissions).toContain('pos.receipt.print');
   });
 

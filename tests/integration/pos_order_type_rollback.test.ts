@@ -10,7 +10,7 @@ const migration = read('supabase/migrations/20261025185720_pos_order_type_capabi
 const inverse = read('scripts/rollback/pos_order_type_permissions_20261025.sql');
 const baseline = JSON.parse(read('scripts/db/candidates/pos_order_type_permissions_baseline.json')) as {functions: Array<{signature: string; body_md5: string}>};
 const roles = JSON.parse(read('scripts/db/candidates/pos_order_type_role_conversion.json')) as Array<{role: string; before: string[]; after: string[]}>;
-const originals = JSON.parse(read('scripts/db/candidates/pos_order_type_original_print_target_defs.json')) as Array<{proname: string; definition: string}>;
+const originals = [...JSON.parse(read('scripts/db/candidates/pos_order_type_original_print_target_defs.json')), ...JSON.parse(read('scripts/db/candidates/pos_order_type_original_order_defs.json'))] as Array<{proname: string; definition: string}>;
 const inTransaction = (sql: string) => sql.replace(/^BEGIN;$/m, '').replace(/^COMMIT;$/m, '');
 
 describe.skipIf(!local)('production-specific order-type rollback rehearsal — owned localhost only', () => {
@@ -37,7 +37,7 @@ describe.skipIf(!local)('production-specific order-type rollback rehearsal — o
     }
     await db.query(inTransaction(inverse));
     const definitions = await db.query<{signature: string; body_md5: string}>(`SELECT p.oid::regprocedure::text signature,md5(p.prosrc) body_md5 FROM pg_proc p WHERE p.oid=ANY($1::regprocedure[]) ORDER BY 1`, [baseline.functions.map(row => `public.${row.signature}`)]);
-    expect(definitions.rows).toEqual(baseline.functions.map(({signature, body_md5}) => ({signature, body_md5})));
+    expect(Object.fromEntries(definitions.rows.map(row => [row.signature, row.body_md5]))).toEqual(Object.fromEntries(baseline.functions.map(row => [row.signature, row.body_md5])));
     for (const role of roles) {
       const restored = await db.query('SELECT permissions FROM public.roles WHERE role=$1', [role.role]);
       expect(restored.rows[0].permissions).toEqual(role.before);
