@@ -13,6 +13,7 @@ import { ReportWorkbench } from '../ReportWorkbench';
 import { orderReportColumns } from '../reportColumnLayout';
 import { loadProductSalesSummary } from '../services/productSalesReport';
 import { loadStationSalesLines } from '../services/stationSalesReport';
+import { expenseCategoryLabel } from '../utils/expenseCategoryLabel';
 import { expenseAccountLabel } from '../utils/expenseAccountLabel';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLatestRead } from '@/hooks/useLatestRead';
@@ -432,14 +433,14 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       });
       const rows = expenses.map((expense: Record<string, unknown>) => withBranch(expense.branch_id, {
         [lang === 'ar' ? 'التاريخ' : 'Date']: formatDate(expense.expense_date as string, lang),
-        [lang === 'ar' ? 'الفئة' : 'Category']: expense.category || '',
+        [lang === 'ar' ? 'الفئة' : 'Category']: expenseCategoryLabel(expense.category, lang),
         [lang === 'ar' ? 'حساب المصروف' : 'Expense account']: expenseAccountLabel(expense, lang),
         [lang === 'ar' ? 'الوصف' : 'Description']: expense.description || '',
         [lang === 'ar' ? 'المبلغ' : 'Amount']: Number(expense.amount || 0),
       }));
       setData(rows);
       const catMap = new Map<string, number>();
-      expenses.forEach((expense: Record<string, unknown>) => catMap.set(String(expense.category || ''), (catMap.get(String(expense.category || '')) || 0) + Number(expense.amount || 0)));
+      expenses.forEach((expense: Record<string, unknown>) => catMap.set(expenseCategoryLabel(expense.category, lang), (catMap.get(expenseCategoryLabel(expense.category, lang)) || 0) + Number(expense.amount || 0)));
       setChartData(Array.from(catMap.entries()).map(([name, value]) => ({ name: name || (lang === 'ar' ? 'غير محدد' : 'Other'), value })));
       setSummary({ total: expenses.reduce((sum: number, expense: Record<string, unknown>) => sum + Number(expense.amount || 0), 0), count: expenses.length });
     } else if (reportType === 'profit') {
@@ -1356,7 +1357,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       case 'supplier': return options.suppliers.map((supplier) => ({ value: supplier.id, label: name(supplier.name, supplier.name_en) }));
       case 'product': return options.products.map((product) => ({ value: product.id, label: name(product.name, product.name_en) }));
       case 'category': return reportType === 'expenses'
-        ? options.expenseCategories.map((category) => ({ value: category, label: category }))
+        ? options.expenseCategories.map((category) => ({ value: category, label: expenseCategoryLabel(category, lang) }))
         : options.categories.map((category) => ({ value: category.id, label: name(category.name, category.name_en) }));
       case 'table': return options.tables.map((table) => ({ value: table.id, label: table.name }));
     }

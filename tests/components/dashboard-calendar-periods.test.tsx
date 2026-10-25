@@ -33,6 +33,18 @@ describe('live dashboard period selection', () => {
     expect(mocks.snapshot).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/Welcome|مرحباً|عرض التقويم/)).not.toBeInTheDocument();
   });
+  it('carries the selected calendar dates into report links without an extra read', async () => {
+    mocks.permissions.push('reports.view');
+    render(<MemoryRouter><DashboardDataPage /></MemoryRouter>);
+    await waitFor(() => expect(mocks.snapshot).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId('dashboard-range-custom'));
+    fireEvent.change(screen.getByTestId('dashboard-custom-from'), { target: { value: '2026-10-01' } });
+    fireEvent.change(screen.getByTestId('dashboard-custom-to'), { target: { value: '2026-10-25' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(mocks.snapshot).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('link', { name: /^Sales report$/ })).toHaveAttribute('href', '/reports?reportType=sales&from=2026-10-01&to=2026-10-25');
+    expect(screen.getByTestId('kpi-returns').closest('a')).toHaveAttribute('href', '/reports?reportType=returns&from=2026-10-01&to=2026-10-25');
+  });
   it('does not expose sales analysis without existing sales/report visibility', async () => {
     mocks.permissions = [];
     render(<MemoryRouter><DashboardDataPage /></MemoryRouter>);
