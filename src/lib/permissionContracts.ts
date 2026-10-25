@@ -197,6 +197,30 @@ const EFFECTS: Partial<Record<Permission, { ar: string; en: string; notesAr?: st
     ar: 'يفتح مساحة نقطة البيع فقط؛ لا يمنح إنشاء أو تعديل أو دفع تلقائيًا.',
     en: 'Opens the POS workspace only; it does not implicitly grant create, edit, or payment.',
   },
+  'pos.order.dine_in': {
+    ar: 'إنشاء طلبات الطاولات وإرسالها للمطبخ والبار فقط.',
+    en: 'Create and send table orders to kitchen and bar only.',
+    notesAr: 'لا تمنح أنواع الطلبات الأخرى أو التعديل أو الدفع أو الخصم أو طباعة الفاتورة. تذكرة المطبخ والبار جزء من الإرسال.',
+    notesEn: 'No other order types, editing, payment, discount or receipt permission. Kitchen and bar tickets are part of dispatch.',
+  },
+  'pos.order.takeaway': {
+    ar: 'إنشاء الطلبات السريعة وإرسالها للمطبخ والبار فقط.',
+    en: 'Create and send quick orders to kitchen and bar only.',
+    notesAr: 'لا تمنح أنواع الطلبات الأخرى أو التعديل أو الدفع أو الخصم أو طباعة الفاتورة. تذكرة المطبخ والبار جزء من الإرسال.',
+    notesEn: 'No other order types, editing, payment, discount or receipt permission. Kitchen and bar tickets are part of dispatch.',
+  },
+  'pos.order.drive_thru': {
+    ar: 'إنشاء طلبات السيارة وإرسالها للمطبخ والبار فقط.',
+    en: 'Create and send car orders to kitchen and bar only.',
+    notesAr: 'لا تمنح أنواع الطلبات الأخرى أو التعديل أو الدفع أو الخصم أو طباعة الفاتورة. تذكرة المطبخ والبار جزء من الإرسال.',
+    notesEn: 'No other order types, editing, payment, discount or receipt permission. Kitchen and bar tickets are part of dispatch.',
+  },
+  'pos.order.delivery': {
+    ar: 'إنشاء طلبات التوصيل وإرسالها للمطبخ والبار فقط.',
+    en: 'Create and send delivery orders to kitchen and bar only.',
+    notesAr: 'لا تمنح أنواع الطلبات الأخرى أو التعديل أو الدفع أو الخصم أو طباعة الفاتورة. تذكرة المطبخ والبار جزء من الإرسال.',
+    notesEn: 'No other order types, editing, payment, discount or receipt permission. Kitchen and bar tickets are part of dispatch.',
+  },
   'pos.payment.take': {
     ar: 'يُظهر وينفذ التحصيل داخل POS. يحتاج شفت فرع مفتوح فعليًا، لكنه لا يمنح صلاحية فتح الشفت.',
     en: 'Shows and executes POS payment. An open branch shift must already exist; this does not grant shift opening.',

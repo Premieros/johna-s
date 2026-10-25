@@ -93,8 +93,9 @@ DO $patch_7$
 DECLARE v_def text:=pg_get_functiondef('public.guard_pos_operator_ownership()'::regprocedure); v_old text:=$old$    IF NEW.table_id IS DISTINCT FROM OLD.table_id AND NOT public.can_permission('pos.order.transfer') THEN$old$;
 BEGIN
  IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'POS_TYPE_BASELINE_MISMATCH_7'; END IF;
- EXECUTE replace(v_def,v_old,$new$    IF (NEW.order_type IS DISTINCT FROM OLD.order_type OR NEW.table_id IS DISTINCT FROM OLD.table_id)
-       AND NOT public._pos_order_type_allowed(NEW.order_type,NEW.table_id) THEN
+ EXECUTE replace(v_def,v_old,$new$    IF (NEW.table_id IS NOT NULL AND NEW.order_type<>'dine_in')
+       OR (NEW.order_type IS DISTINCT FROM OLD.order_type
+         AND NOT public._pos_order_type_allowed(NEW.order_type,NEW.table_id)) THEN
       RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.type';
     END IF;
     IF NEW.table_id IS DISTINCT FROM OLD.table_id AND NOT public.can_permission('pos.order.transfer') THEN$new$);
