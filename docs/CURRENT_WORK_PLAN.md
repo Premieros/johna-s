@@ -4,12 +4,15 @@
 - Repository: `Premieros/johna-s`
 - Production Supabase: `azzdesuowpdcoflmyezn`
 - Production branch: `main`
-- Latest main baseline reconciled: `15b762a1fad42dafc5510b5bbc50fef3d1b84022` (#534 merged/deployed)
-- Current active branch: `fix/quick-order-discoverability-20261024`
-- Mandatory active work log: `docs/QUICK_ORDER_ACCESS_20261024.md`
+- Latest main baseline reconciled: `facb94776a7912ff39f807300d16548f1fd74251` (#535 merged/deployed)
+- Current active branch: `feat/usability-polish-20261025`
+- Mandatory active work log: `docs/USABILITY_POLISH_20261025.md`
 - Owner approved monthly report restructuring, a clear latest-approved-price consumption report (purchase/pricing/count; missing price = numeric zero) and independent quick-takeaway creation permission. Preserve operational writers, installed Windows agents and all historical data. Manual aggregate reads and focused iteration tests; mandatory exact-head release gates remain. Prepare a reviewed candidate before production approval.
 
-## Active quick-order access — 2026-10-24
+## Active usability polish — 2026-10-25
+Owner approved implementing the browser-review findings: compact reports with useful filters and in-page expansion, visible POS branch/dispatch/bill context, readable mobile table cards, safer cancellation presentation and compact dashboard welcome. Presentation only; retain business logic, permissions, queries and installed printers. No production log scans. Prepare one reviewed candidate; publication requires separate final approval.
+
+## Released quick-order access — 2026-10-24
 Owner approved merging and publishing #535 after review. Add direct access to open quick orders using existing live data and explain missing kitchen-send permission. Preserve independent action permissions, all kitchen/print writers and production data. No database changes. Required checks must pass before merge.
 
 ## Released quantity transfer repair — 2026-10-24

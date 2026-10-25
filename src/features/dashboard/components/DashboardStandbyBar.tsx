@@ -368,65 +368,32 @@ export function DashboardStandbyBar({ canCreateSale }: { canCreateSale: boolean 
       dir={ar ? 'rtl' : 'ltr'}
       className="relative rounded-[28px] border border-white/15 bg-black text-white shadow-[0_14px_38px_rgba(0,0,0,0.30)]"
     >
-      <div className="dashboard-standby-viewport relative h-[238px] overflow-hidden rounded-[27px] bg-black sm:h-[220px] md:h-[190px]">
+      <div className="dashboard-standby-viewport relative h-[160px] overflow-hidden rounded-[27px] bg-black sm:h-[128px]">
         <div className="pointer-events-none absolute inset-0 bg-black" />
         <div className="pointer-events-none absolute -end-10 -top-16 h-40 w-40 rounded-full bg-rose-500/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-20 -start-10 h-44 w-44 rounded-full bg-cyan-400/10 blur-3xl" />
 
         <div
           aria-hidden={showEvent}
-          className={`dashboard-standby-slide-layer absolute inset-0 grid h-full grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] grid-rows-[minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-4 transition-transform duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] sm:px-6 md:grid-cols-[minmax(220px,0.92fr)_minmax(300px,1.08fr)_minmax(235px,0.9fr)] md:grid-rows-1 md:gap-x-5 md:px-7 md:py-5 ${idleTransform} ${showEvent ? 'pointer-events-none' : ''}`}
+          className={`dashboard-standby-slide-layer absolute inset-0 flex h-full items-center gap-3 px-4 py-3 transition-transform duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] sm:px-6 ${idleTransform} ${showEvent ? 'pointer-events-none' : ''}`}
         >
-          <div className="flex min-w-0 items-center justify-center gap-3 border-white/15 md:h-full md:justify-start md:border-e md:pe-6">
-            <div className="min-w-0 shrink">
-              <p className="text-base font-black leading-tight text-[#ff6b8a] sm:text-lg md:text-xl">{weekday}</p>
-              <p className="mt-1 text-xs font-black text-[#ff9bb0] sm:text-sm">{monthName}</p>
-            </div>
-            <div className="shrink-0 text-[72px] font-black leading-[0.85] tracking-[-0.055em] text-white drop-shadow-[0_0_18px_rgba(255,255,255,0.12)] sm:text-[84px] md:text-[100px]">{dayNumber}</div>
+          <div className="min-w-0 flex-1">
+            <p className="break-words text-lg font-black leading-tight text-white">{ar ? `مرحباً، ${user?.full_name || 'مدير النظام'}` : `Welcome, ${user?.full_name || 'Admin'}`}</p>
+            <p className="mt-1 text-xs font-bold text-[#ffd166]">{weekday} · {dayNumber} {monthName} {year}</p>
+            {branchName && <p className="mt-1 break-words text-xs font-bold text-[#67e8f9]">{branchName}</p>}
           </div>
-
-          <div className="min-w-0 md:px-2">
-            <MiniCalendar now={now} ar={ar} />
-          </div>
-
-          <div className="col-span-2 flex min-w-0 items-center justify-between gap-3 border-t border-white/15 pt-3 md:col-span-1 md:h-full md:border-s md:border-t-0 md:ps-6 md:pt-0">
-            <div className="min-w-0 flex-1">
-              <p className="max-w-full break-words text-[clamp(1.05rem,2vw,1.45rem)] font-black leading-[1.25] text-white">
-                {ar ? `مرحباً، ${user?.full_name || 'مدير النظام'}` : `Welcome, ${user?.full_name || 'Admin'}`}
-              </p>
-              <p className="mt-1 text-xs font-bold text-[#ffd166]">{weekday} · {dayNumber} {monthName} {year}</p>
-              {branchName && <p className="mt-1 max-w-full break-words text-xs font-bold leading-5 text-[#67e8f9]">{branchName}</p>}
-              {canCreateSale && (
-                <Link
-                  to="/pos"
-                  className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#2563eb] px-3.5 py-2 text-xs font-black text-white shadow-[0_6px_18px_rgba(37,99,235,0.30)] transition-colors hover:bg-[#3b82f6]"
-                >
-                  <ShoppingCart className="h-4 w-4" />
-                  {ar ? 'إنشاء بيع' : 'New sale'}
-                </Link>
-              )}
-            </div>
-
-            {canViewAudit && (
-              <button
-                type="button"
-                onClick={togglePanel}
-                className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#101827] text-[#67e8f9] ring-1 ring-cyan-300/25 transition-colors hover:bg-[#162033]"
-                aria-label={ar ? 'سجل العمليات' : 'Activity log'}
-              >
-                <Bell className="h-5 w-5" />
-                {unread > 0 && <span className="absolute -end-1 -top-1 min-w-5 rounded-full bg-[#ff315f] px-1.5 text-[10px] font-black leading-5 text-white shadow-[0_0_14px_rgba(255,49,95,0.55)]">{Math.min(unread, 99)}</span>}
-              </button>
-            )}
+          <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center">
+            {canCreateSale && <Link to="/pos" className="inline-flex items-center gap-2 rounded-xl bg-[#2563eb] px-3 py-2 text-xs font-black text-white"><ShoppingCart className="h-4 w-4" />{ar ? 'إنشاء بيع' : 'New sale'}</Link>}
+            {canViewAudit && <button type="button" onClick={togglePanel} className="flex h-10 items-center gap-2 rounded-xl bg-[#101827] px-3 text-xs font-bold text-[#67e8f9]" aria-label={ar ? 'سجل العمليات' : 'Activity log'}><Bell className="h-4 w-4" /><span>{ar ? 'سجل العمليات' : 'Activity log'}</span>{unread > 0 && <span>{Math.min(unread, 99)}</span>}</button>}
           </div>
         </div>
 
         <div
           aria-live="polite"
           aria-hidden={!showEvent}
-          className={`dashboard-standby-slide-layer absolute inset-0 flex h-full items-center gap-4 px-5 py-5 transition-transform duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] sm:gap-5 sm:px-7 ${eventTransform} ${showEvent ? '' : 'pointer-events-none'}`}
+          className={`dashboard-standby-slide-layer absolute inset-0 flex h-full items-center gap-3 px-4 py-3 transition-transform duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] sm:gap-5 sm:px-7 ${eventTransform} ${showEvent ? '' : 'pointer-events-none'}`}
         >
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl bg-[#ff315f] text-white shadow-[0_8px_28px_rgba(255,49,95,0.34)] sm:h-20 sm:w-20">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-3xl bg-[#ff315f] text-white shadow-[0_8px_28px_rgba(255,49,95,0.34)] sm:h-12 sm:w-12">
             <ActiveIcon className="h-8 w-8 sm:h-10 sm:w-10" />
           </div>
 
@@ -435,9 +402,9 @@ export function DashboardStandbyBar({ canCreateSale }: { canCreateSale: boolean 
               <span className="h-2 w-2 rounded-full bg-[#ff315f] shadow-[0_0_10px_rgba(255,49,95,0.75)]" />
               {ar ? 'نشاط مباشر' : 'Live activity'}
             </div>
-            <h2 className="text-2xl font-black leading-tight text-white sm:text-3xl">{activePresentation?.title || (ar ? 'حركة جديدة' : 'New activity')}</h2>
+            <h2 className="text-lg font-black leading-tight text-white sm:text-xl">{activePresentation?.title || (ar ? 'حركة جديدة' : 'New activity')}</h2>
 
-            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm font-black sm:text-base">
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-black sm:text-sm">
               {activeDocumentText && <span className="text-[#ffd166]">{ar ? 'رقم' : '#'} {activeDocumentText}</span>}
               {activeAmount !== null && <span className="text-[#67e8f9]">{money(activeAmount)}</span>}
               {activeActorText && <span className="max-w-full break-words text-[#86efac]">{activeActorText}</span>}
@@ -473,6 +440,11 @@ export function DashboardStandbyBar({ canCreateSale }: { canCreateSale: boolean 
           )}
         </div>
       </div>
+
+      <details className="border-t border-white/15 px-4 py-1.5 text-xs">
+        <summary className="cursor-pointer font-bold text-[#67e8f9]">{ar ? 'عرض التقويم' : 'Show calendar'}</summary>
+        <div className="max-w-sm py-3"><MiniCalendar now={now} ar={ar} /></div>
+      </details>
 
       {panelOpen && canViewAudit && (
         <div

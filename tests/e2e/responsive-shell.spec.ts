@@ -84,6 +84,30 @@ const viewports = [
   { name: 'large desktop', width: 1920, height: 1080 },
 ];
 
+for (const width of [320, 1366]) {
+  test(`report filters stay compact and expanded view fills ${width}px viewport`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await mockAuthenticatedApp(page);
+    await login(page);
+    await page.goto('/#/reports');
+    const workspace = page.getByTestId('unified-reports-center');
+    await expect(workspace).toBeVisible();
+    const more = workspace.locator('details').filter({ has: page.locator('summary', { hasText: /فلاتر إضافية|More filters/ }) });
+    await expect(more).not.toHaveAttribute('open');
+    await expect(page.getByTestId('run-report-button')).toBeInViewport();
+    await workspace.getByRole('button', { name: /^(ملء الشاشة|Full screen)$/ }).click();
+    await expect(workspace).toHaveAttribute('data-expanded', 'true');
+    const rect = await workspace.boundingBox();
+    expect(rect?.x).toBe(0);
+    expect(rect?.y).toBe(0);
+    expect(rect?.width).toBe(width);
+    expect(rect?.height).toBe(844);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+    await page.keyboard.press('Escape');
+    await expect(workspace).toHaveAttribute('data-expanded', 'false');
+  });
+}
+
 for (const viewport of viewports) {
   test(`app shell fits ${viewport.name} without page-level horizontal overflow`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });

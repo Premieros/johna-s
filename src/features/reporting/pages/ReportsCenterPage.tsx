@@ -1,6 +1,6 @@
 import '../reportGrid.css';
 import { MonthCloseReview } from '../MonthCloseReview';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ReportsPage } from './ReportsPage';
@@ -20,11 +20,17 @@ export function ReportsCenterPage() {
   const [params] = useSearchParams();
   const [search, setSearch] = useState('');
   const ar = lang === 'ar';
-  const root = useRef<HTMLDivElement>(null);
   const [expanded,setExpanded] = useState(false);
-  const [screenError,setScreenError] = useState(false);
-  useEffect(() => { const change=()=>setExpanded(document.fullscreenElement===root.current); document.addEventListener('fullscreenchange',change); return ()=>document.removeEventListener('fullscreenchange',change); },[]);
-  const toggleScreen=async()=>{ try { setScreenError(false); if(document.fullscreenElement) await document.exitFullscreen(); else if(root.current?.requestFullscreen) await root.current.requestFullscreen(); else setScreenError(true); } catch { setScreenError(true); } };
+  useEffect(() => {
+    if (!expanded) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !document.querySelector('[data-testid="modal-root"]')) setExpanded(false);
+    };
+    document.addEventListener('keydown', close);
+    return () => { document.body.style.overflow = previous; document.removeEventListener('keydown', close); };
+  }, [expanded]);
   const reports = useMemo(() => permittedBasicReports(permission => can(permission as Permission)), [can]);
   const financial = location.pathname.includes('financial-reports') || params.get('section') === 'financial' || !!params.get('view');
   const requested = financial ? `financial:${params.get('view') || 'trial_balance'}` : workspaceViewKey((params.get('type') || 'sales') as ReportType);
@@ -60,7 +66,7 @@ export function ReportsCenterPage() {
     else if (view.type) fallback.set('type', view.type);
     return <Navigate to={`/reports?${fallback}`} replace />;
   }
-  return <div ref={root} data-testid="unified-reports-center" className={`report-workspace space-y-2 bg-ui-page ${expanded ? 'h-screen overflow-auto p-4' : ''}`}>
+  const content = <div data-testid="unified-reports-center" data-expanded={expanded} className={`report-workspace space-y-2 bg-ui-page ${expanded ? 'fixed inset-0 z-[60] overflow-auto overscroll-contain p-3 text-ui-text sm:p-4' : ''}`}>
     <div className="grid min-w-0 gap-4 grid-cols-1">
       <details className="rounded-lg border border-ui-border bg-ui-surface px-3 py-2"><summary className="cursor-pointer text-sm font-semibold">{ar ? 'اختيار التقرير' : 'Choose report'} · {ar ? report.ar : report.en}</summary><aside className="mt-2 space-y-2" aria-label={ar ? 'التقارير الأساسية' : 'Basic reports'}>
         <div className="relative max-w-sm">
@@ -77,15 +83,15 @@ export function ReportsCenterPage() {
       </aside></details>
       <main className="min-w-0 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-lg font-bold">{ar ? view.ar : view.en}</h1>
+          <h1 className="text-lg font-bold">{ar ? report.ar : report.en}{report.views.length > 1 && <span className="ms-2 text-sm font-medium text-ui-muted">· {ar ? view.ar : view.en}</span>}</h1>
           <div className="flex flex-wrap items-center gap-2"><label className="flex items-center gap-2 text-xs font-semibold">{ar ? 'طريقة العرض' : 'Report view'}
             <select aria-label={ar ? 'طريقة العرض' : 'Report view'} value={view.key} onChange={event => { const target = report.views.find(item => item.key === event.target.value); if (target) select(target); }} className="h-9 max-w-64 rounded-lg border border-ui-border bg-ui-page-alt px-2 font-normal">
               {report.views.map(item => <option key={item.key} value={item.key}>{ar ? item.ar : item.en}</option>)}
             </select>
-          </label><button type="button" onClick={()=>void toggleScreen()} className="rounded border border-ui-border px-3 py-2 text-sm font-bold">{ar ? (expanded?'إنهاء ملء الشاشة':'ملء الشاشة') : (expanded?'Exit full screen':'Full screen')}</button></div></div>
-        {screenError && <p role="status">{ar?'يمكنك استخدام F11 لملء شاشة المتصفح.':'Use F11 to expand the browser window.'}</p>}
+          </label><button type="button" aria-pressed={expanded} onClick={()=>setExpanded(value=>!value)} className="rounded border border-ui-border px-3 py-2 text-sm font-bold">{ar ? (expanded?'إنهاء ملء الشاشة':'ملء الشاشة') : (expanded?'Exit full screen':'Full screen')}</button></div></div>
         {view.key==='month_review' ? <MonthCloseReview views={reports.flatMap(item=>item.views)} onSelect={select} /> : view.type==='component_consumption' ? <Suspense fallback={<p role="status">{ar?'جارٍ فتح التقرير…':'Opening report…'}</p>}><ConsumptionReportPage /></Suspense> : view.financial ? <FinancialReportsPage hideViewPicker /> : <ReportsPage controlledReportType={view.type} key={view.key} onReportTypeChange={selectOperational} workspaceTitle={ar ? view.ar : view.en} />}
       </main>
     </div>
   </div>;
+  return content;
 }

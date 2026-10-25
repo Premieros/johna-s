@@ -147,9 +147,10 @@ describe('Reports Center contract (6H-P4)', () => {
     expect(reportInventoryLoadersSource).toContain('fetchAllReportRows');
     expect(reportsSource).toContain('withBranch(row.branchId, {');
     expect(reportsSource).toContain('productBranches.get(row.product_id)');
-    // Keep branch/period mandatory while allowing additional context such as receipt time.
-    expect(reportsSource).toContain('subtitle: `${reportBranchLabel} — ${complete.from ?? from} — ${complete.to ?? to}');
-    expect(reportsSource).toContain('`${reportBranchLabel} — ${complete.from ?? from} - ${complete.to ?? to}');
+    // Both exports retain branch + frozen result boundaries, now formatted for display.
+    // Boolean assertions avoid dumping the entire report implementation on a mismatch.
+    expect(reportsSource.includes('subtitle: `${reportBranchLabel} — ${formatDate(complete.from ?? from, lang)} — ${formatDate(complete.to ?? to, lang)}')).toBe(true);
+    expect(reportsSource.match(/subtitle: `\$\{reportBranchLabel\} — \$\{formatDate\(complete.from \?\? from, lang\)\} — \$\{formatDate\(complete.to \?\? to, lang\)\}/g)).toHaveLength(2);
   });
 
   it('provides compact grouped navigation and column customization', () => {
