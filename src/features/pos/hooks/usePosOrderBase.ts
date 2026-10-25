@@ -739,8 +739,8 @@ export function usePosOrder(input: UsePosOrderInput) {
               : 'This order belongs to another operator. Transfer the order to the correct user, then send it to the kitchen again.',
             'error',
           );
-        } else if (res.error === 'PERMISSION_DENIED' && res.detail?.includes('pos.send_kitchen')) {
-          show(isAr ? 'لا توجد صلاحية إرسال للمطبخ لهذا المستخدم.' : 'This user does not have Send to Kitchen permission.', 'error');
+        } else if (res.error === 'PERMISSION_DENIED' && res.detail?.includes('pos.order.')) {
+          show(isAr ? 'لا تملك صلاحية إنشاء وإرسال هذا النوع من الطلبات.' : 'You do not have create and send permission for this order type.', 'error');
         } else {
           show(res.detail || res.error || t('error'), 'error');
         }

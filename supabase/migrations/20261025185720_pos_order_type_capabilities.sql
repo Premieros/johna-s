@@ -141,10 +141,10 @@ BEGIN
 END $patch_13$;
 
 DO $patch_14$
-DECLARE v_def text:=pg_get_functiondef('public.enqueue_cloud_kitchen_print(uuid,text,jsonb,text)'::regprocedure); v_old text:=$old$IF NOT public.can_permission('pos.send_kitchen') THEN RETURN jsonb_build_object('success',false,'error','PERMISSION_DENIED','permission','pos.send_kitchen'); END IF;$old$;
+DECLARE v_def text:=pg_get_functiondef('public.enqueue_cloud_kitchen_print(uuid,text,jsonb,text)'::regprocedure); v_old text:=$old$public.can_permission('pos.send_kitchen')$old$;
 BEGIN
  IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'POS_TYPE_BASELINE_MISMATCH_14'; END IF;
- EXECUTE replace(v_def,v_old,$new$$new$);
+ EXECUTE replace(v_def,v_old,$new$(public.can_permission('pos.print_kitchen') OR public.can_permission('pos.order.dine_in') OR public.can_permission('pos.order.takeaway') OR public.can_permission('pos.order.drive_thru') OR public.can_permission('pos.order.delivery'))$new$);
 END $patch_14$;
 
 DO $patch_15$
@@ -162,7 +162,7 @@ BEGIN
 END $patch_16$;
 
 DO $patch_17$
-DECLARE v_def text:=pg_get_functiondef('public.enqueue_cloud_kitchen_print(uuid,text,jsonb,text)'::regprocedure); v_old text:=$old$INSERT INTO public.cloud_print_jobs(branch_id,requested_by,kind,station_code,payload,idempotency_key)$old$;
+DECLARE v_def text:=pg_get_functiondef('public.enqueue_cloud_kitchen_print(uuid,text,jsonb,text)'::regprocedure); v_old text:=$old$INSERT INTO public.cloud_print_jobs($old$;
 BEGIN
  IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'POS_TYPE_BASELINE_MISMATCH_17'; END IF;
  EXECUTE replace(v_def,v_old,$new$IF v_source_order_id IS NOT NULL THEN
@@ -172,8 +172,43 @@ BEGIN
 ELSIF NOT public.can_permission('pos.print_kitchen') THEN
   RETURN jsonb_build_object('success',false,'error','PERMISSION_DENIED','permission','pos.print_kitchen');
 END IF;
-INSERT INTO public.cloud_print_jobs(branch_id,requested_by,kind,station_code,payload,idempotency_key)$new$);
+INSERT INTO public.cloud_print_jobs($new$);
 END $patch_17$;
+
+DO $patch_18$
+DECLARE v_def text:=pg_get_functiondef('public.create_order(uuid,text,uuid,uuid,integer,text,jsonb,numeric,numeric,text,numeric,numeric,uuid)'::regprocedure); v_old text:=$old$'permission', 'pos.order.create'$old$;
+BEGIN
+ IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'POS_TYPE_BASELINE_MISMATCH_18'; END IF;
+ EXECUTE replace(v_def,v_old,$new$'permission', 'pos.order.type'$new$);
+END $patch_18$;
+
+DO $patch_19$
+DECLARE v_def text:=pg_get_functiondef('public.send_to_kitchen(uuid,uuid)'::regprocedure); v_old text:=$old$'permission','pos.send_kitchen'$old$;
+BEGIN
+ IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'POS_TYPE_BASELINE_MISMATCH_19'; END IF;
+ EXECUTE replace(v_def,v_old,$new$'permission','pos.order.type'$new$);
+END $patch_19$;
+
+DO $patch_20$
+DECLARE v_def text:=pg_get_functiondef('public._send_to_kitchen_core_20260914(uuid,uuid)'::regprocedure); v_old text:=$old$'detail', 'pos.send_kitchen'$old$;
+BEGIN
+ IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'POS_TYPE_BASELINE_MISMATCH_20'; END IF;
+ EXECUTE replace(v_def,v_old,$new$'detail', 'pos.order.type'$new$);
+END $patch_20$;
+
+DO $patch_21$
+DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_old text:=$old$RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.create'$old$;
+BEGIN
+ IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'POS_TYPE_BASELINE_MISMATCH_21'; END IF;
+ EXECUTE replace(v_def,v_old,$new$RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.type'$new$);
+END $patch_21$;
+
+DO $patch_22$
+DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_old text:=$old$RAISE EXCEPTION 'PERMISSION_DENIED:pos.send_kitchen'$old$;
+BEGIN
+ IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'POS_TYPE_BASELINE_MISMATCH_22'; END IF;
+ EXECUTE replace(v_def,v_old,$new$RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.type'$new$);
+END $patch_22$;
 
 -- Conservative one-time conversion, independent of role names.
 -- Generic send-only roles gain no creation capability. Quick is always explicit.
