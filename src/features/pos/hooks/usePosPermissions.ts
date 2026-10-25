@@ -1,4 +1,6 @@
 import { useMemo } from 'react';
+import { ORDER_TYPE_PERMISSION, canOperateOrderType } from '@/lib/posOrderPermissions';
+import type { OrderType } from '@/lib/types';
 import { useCan } from '@/lib/permissions';
 
 export interface PosPermissions {
@@ -12,7 +14,10 @@ export interface PosPermissions {
   canDiscount: boolean;
   canChangePrice: boolean;
   canHoldOrder: boolean;
-  canSendKitchen: boolean;
+  canOperateType: (type: OrderType, tableId?: string | null) => boolean;
+  canCreateDelivery: boolean;
+  canCreateDriveThru: boolean;
+  canCreateAnyOrder: boolean;
   canViewKitchen: boolean;
   canPrintKitchen: boolean;
   canPay: boolean;
@@ -36,8 +41,8 @@ export function usePosPermissions(): PosPermissions {
 
   return useMemo<PosPermissions>(() => ({
     canViewPos: can('pos.view'),
-    canCreateOrder: can('pos.order.create'),
-    canCreateQuickOrder: can('pos.order.create') || can('pos.order.quick_create'),
+    canCreateOrder: can('pos.order.dine_in'),
+    canCreateQuickOrder: can('pos.order.takeaway'),
     canEditOrder: can('pos.order.edit'),
     // Unsent line removal is an order edit. Sent-item Void stays a separate
     // direct capability; users without it can still enter the approval path.
@@ -47,7 +52,10 @@ export function usePosPermissions(): PosPermissions {
     canDiscount: can('pos.discount'),
     canChangePrice: can('pos.change_price'),
     canHoldOrder: can('pos.hold'),
-    canSendKitchen: can('pos.send_kitchen'),
+    canOperateType: (type, tableId) => canOperateOrderType(can, type, tableId),
+    canCreateDelivery: can('pos.order.delivery'),
+    canCreateDriveThru: can('pos.order.drive_thru'),
+    canCreateAnyOrder: Object.values(ORDER_TYPE_PERMISSION).some(key => can(key)),
     canViewKitchen: can('pos.kds_view'),
     canPrintKitchen: can('pos.print_kitchen'),
     canPay: can('pos.payment.take'),

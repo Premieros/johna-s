@@ -70,7 +70,7 @@ export function ActiveOrdersPage() {
   const currentBranch = useRef(effectiveBranch);
   currentBranch.current = effectiveBranch;
   const canManage = can('floor_plan.manage');
-  const canCreateOrder = can('pos.order.create');
+  const canCreateOrder = can('pos.order.dine_in');
   const canPayOrder = can('pos.payment.take');
   const canCancelOrder = can('pos.cancel_order');
   const canReassignCashier = can('pos.order.transfer');

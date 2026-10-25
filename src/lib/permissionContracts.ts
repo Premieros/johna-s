@@ -25,8 +25,10 @@ export interface PermissionContract {
 }
 
 const REQUIREMENTS: Partial<Record<Permission, Permission[]>> = {
-  'pos.order.create': ['pos.view'],
-  'pos.order.quick_create': ['pos.view'],
+  'pos.order.dine_in': ['pos.view'],
+  'pos.order.takeaway': ['pos.view'],
+  'pos.order.drive_thru': ['pos.view'],
+  'pos.order.delivery': ['pos.view'],
   'pos.order.edit': ['pos.view'],
   'pos.payment.take': ['pos.view'],
   'pos.order.split': ['pos.view'],
@@ -34,7 +36,6 @@ const REQUIREMENTS: Partial<Record<Permission, Permission[]>> = {
   'pos.discount': ['pos.view'],
   'pos.change_price': ['pos.view'],
   'pos.hold': ['pos.view'],
-  'pos.send_kitchen': ['pos.view'],
   'pos.void': ['pos.view'],
   'pos.cancel_order': ['pos.view'],
   'pos.change_branch': ['pos.view'],
@@ -379,8 +380,10 @@ export function missingPermissionDependencies(input: Iterable<Permission>): Arra
 
 export const POS_INTERACTIVE_PRESET_SCOPE: Permission[] = [
   'pos.view',
-  'pos.order.create',
-  'pos.order.quick_create',
+  'pos.order.dine_in',
+  'pos.order.takeaway',
+  'pos.order.drive_thru',
+  'pos.order.delivery',
   'pos.order.edit',
   'pos.payment.take',
   'pos.order.split',
@@ -388,7 +391,6 @@ export const POS_INTERACTIVE_PRESET_SCOPE: Permission[] = [
   'pos.discount',
   'pos.change_price',
   'pos.hold',
-  'pos.send_kitchen',
   'pos.void',
   'pos.cancel_order',
   'pos.change_branch',

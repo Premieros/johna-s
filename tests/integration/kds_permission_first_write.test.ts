@@ -78,7 +78,7 @@ describe.skipIf(skip)('KDS permission-first write boundary', () => {
     );
     await client.query(
       `UPDATE public.roles
-       SET permissions = (COALESCE(permissions, '[]'::jsonb) - 'pos.order.edit' - 'pos.send_kitchen') || '["pos.kds_view","pos.kds_update"]'::jsonb,
+       SET permissions = (COALESCE(permissions, '[]'::jsonb) - 'pos.order.edit' - 'pos.order.dine_in') || '["pos.kds_view","pos.kds_update"]'::jsonb,
            updated_at = now()
        WHERE role = 'production_manager'`,
     );

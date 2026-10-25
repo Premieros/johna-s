@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({ fetch: vi.fn(), create: vi.fn(), update: vi.fn
 vi.mock('@/api', () => ({ supabase: { from: vi.fn() }, floorPlan: { createOrder: mocks.create, updateOrder: mocks.update } }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en', t: (key: string) => key }) }));
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'cashier' } }) }));
+vi.mock('@/lib/permissions', () => ({ useCan: () => (key: string) => ['pos.order.takeaway', 'pos.order.edit'].includes(key) }));
 vi.mock('@/components/Toast', () => ({ useToast: () => ({ show: mocks.show }) }));
 vi.mock('@/features/pos/services/posOrders', () => ({ fetchOrderForWorkspace: mocks.fetch }));
 vi.mock('@/features/pos/services/kitchen', () => ({ sendOrderToKitchen: mocks.send }));

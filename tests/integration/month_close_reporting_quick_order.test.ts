@@ -14,7 +14,7 @@ describe.skipIf(!local)('monthly consumption and independent quick creation — 
   db=openDb(url!);await db.connect();await db.query('BEGIN');
   await db.query("SET LOCAL statement_timeout='8s'");ids=await seedRlsFixture(db);
   await db.query(`UPDATE public.roles SET permissions=permissions || '["reports.view","reports.costing","history.unlimited"]'::jsonb WHERE role='branch_manager'`);
-  await db.query(`UPDATE public.roles SET permissions='["pos.view","pos.order.quick_create"]'::jsonb WHERE role='cashier'`);
+  await db.query(`UPDATE public.roles SET permissions='["pos.view","pos.order.takeaway"]'::jsonb WHERE role='cashier'`);
   // A positive catalog cost creates a real pricing event; start unpriced so only the explicit source fixtures compete.
   await db.query(`INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost) VALUES($1,$2,$3,$4,0),($5,$6,$7,$4,0)`,[raw,randomUUID(),prefix+' priced',ids.branchA,missing,randomUUID(),prefix+' missing']);
   await db.query(`INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,batch_number,created_at)

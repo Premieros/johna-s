@@ -177,7 +177,7 @@ export function DashboardDataPage() {
   const { effectiveSettings } = useSettings();
   const { branches } = useBranches();
   const ar = lang === 'ar';
-  const canCreateSale = can('pos.view') && can('pos.order.create');
+  const canCreateSale = can('pos.view') && (['pos.order.dine_in', 'pos.order.takeaway', 'pos.order.drive_thru', 'pos.order.delivery'] as const).some(permission => can(permission));
   const canViewPos = can('pos.view');
   const canViewSales = can('sales.view') || can('reports.view');
   const canViewReports = can('reports.view');

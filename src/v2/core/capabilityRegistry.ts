@@ -75,9 +75,11 @@ export const V2_MODULES: V2ModuleDefinition[] = [
     branchScoped: true,
     backend: ['orders', 'order_items', 'order_kitchen_sends', 'sales', 'sale_items', 'shifts'],
     actions: [
-      { key: 'create_order', labelAr: 'إنشاء طلب', labelEn: 'Create order', permission: 'pos.order.create', backend: ['create_order'] },
+      { key: 'dine_in_orders', labelAr: 'طلبات الطاولات', labelEn: 'Table orders', permission: 'pos.order.dine_in', backend: ['create_order', 'send_to_kitchen'] },
+      { key: 'takeaway_orders', labelAr: 'الطلبات السريعة', labelEn: 'Quick orders', permission: 'pos.order.takeaway', backend: ['create_order', 'send_to_kitchen'] },
+      { key: 'drive_thru_orders', labelAr: 'طلبات السيارة', labelEn: 'Car orders', permission: 'pos.order.drive_thru', backend: ['create_order', 'send_to_kitchen'] },
+      { key: 'delivery_orders', labelAr: 'طلبات التوصيل', labelEn: 'Delivery orders', permission: 'pos.order.delivery', backend: ['create_order', 'send_to_kitchen'] },
       { key: 'edit_order', labelAr: 'تعديل طلب', labelEn: 'Edit order', permission: 'pos.order.edit', backend: ['update_order'] },
-      { key: 'send_kitchen', labelAr: 'إرسال للمطبخ', labelEn: 'Send to kitchen', permission: 'pos.send_kitchen', backend: ['send_to_kitchen'] },
       { key: 'discount', labelAr: 'خصم', labelEn: 'Discount', permission: 'pos.discount', backend: ['update_order', 'guard_sale_discount'], approval: 'manager policy when configured' },
       { key: 'split_order', labelAr: 'تقسيم طلب', labelEn: 'Split order', permission: 'pos.order.split', backend: ['perform_pos_order_action'], approval: 'manager approval' },
       { key: 'transfer_order', labelAr: 'نقل/دمج طلب', labelEn: 'Transfer / merge order', permission: 'pos.order.transfer', backend: ['perform_pos_order_action'], approval: 'manager approval' },

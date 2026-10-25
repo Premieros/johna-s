@@ -20,7 +20,7 @@ describe.skipIf(skip)('kitchen station branch isolation', () => {
     ids = await seedRlsFixture(client);
     await client.query(
       `UPDATE public.roles
-       SET permissions = permissions || '["settings.manage","pos.send_kitchen"]'::jsonb
+       SET permissions = permissions || '["settings.manage","pos.print_kitchen"]'::jsonb
        WHERE role = 'branch_manager'`,
     );
 

@@ -151,7 +151,7 @@ export function PosWorkspacePage() {
     products,
     stockMap: EMPTY_POS_STOCK_MAP,
   });
-  const canModifyCurrentOrder = pos.activeOrderId ? perms.canEditOrder : (pos.orderType === 'takeaway' ? perms.canCreateQuickOrder : perms.canCreateOrder);
+  const canModifyCurrentOrder = pos.activeOrderId ? perms.canEditOrder : perms.canOperateType(pos.orderType, pos.tableId);
 
   useEffect(() => {
     if (pos.receiptSaleId) setMobileOrderOpen(false);
@@ -496,7 +496,7 @@ export function PosWorkspacePage() {
   };
 
   const handleStartOrder = (opts: StartOrderOptions) => {
-    if (opts.orderType === 'takeaway' ? !perms.canCreateQuickOrder : !perms.canCreateOrder) return;
+    if (!perms.canOperateType(opts.orderType, opts.tableId)) return;
     pos.resetWorkspace();
     pos.setOrderType(opts.orderType);
     if (opts.tableId) pos.setTableId(opts.tableId);
@@ -809,13 +809,13 @@ export function PosWorkspacePage() {
               setTransferModalOpen(true);
             }}
             onStartQuick={perms.canCreateQuickOrder ? () => handleStartOrder({ orderType: 'takeaway' }) : undefined}
-            onStartDelivery={perms.canCreateOrder ? () => {
+            onStartDelivery={perms.canCreateDelivery ? () => {
               setStartStep('delivery');
               setPreselectedTableId(null);
               setPanel(null);
               setMobileOrderOpen(false);
             } : undefined}
-            onStartDriveThru={perms.canCreateOrder ? () => {
+            onStartDriveThru={perms.canCreateDriveThru ? () => {
               setStartStep('car');
               setPreselectedTableId(null);
               setPanel(null);
