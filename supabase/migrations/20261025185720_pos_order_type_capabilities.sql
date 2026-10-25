@@ -81,10 +81,12 @@ BEGIN
 END $patch_5$;
 
 DO $patch_6$
-DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_old text:=$old$public.can_permission('pos.send_kitchen')$old$;
+DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_old text:=$old$AND public.can_permission('pos.send_kitchen')
+         AND EXISTS$old$;
 BEGIN
  IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>2 THEN RAISE EXCEPTION 'POS_TYPE_BASELINE_MISMATCH_6'; END IF;
- EXECUTE replace(v_def,v_old,$new$public._pos_order_type_allowed(OLD.order_type,OLD.table_id)$new$);
+ EXECUTE replace(v_def,v_old,$new$AND public._pos_order_type_allowed(OLD.order_type,OLD.table_id)
+         AND EXISTS$new$);
 END $patch_6$;
 
 DO $patch_7$
@@ -197,17 +199,19 @@ BEGIN
 END $patch_20$;
 
 DO $patch_21$
-DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_old text:=$old$RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.create'$old$;
+DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_old text:=$old$THEN RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.create'; END IF;$old$;
 BEGIN
  IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'POS_TYPE_BASELINE_MISMATCH_21'; END IF;
- EXECUTE replace(v_def,v_old,$new$RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.type'$new$);
+ EXECUTE replace(v_def,v_old,$new$THEN RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.type'; END IF;$new$);
 END $patch_21$;
 
 DO $patch_22$
-DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_old text:=$old$RAISE EXCEPTION 'PERMISSION_DENIED:pos.send_kitchen'$old$;
+DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_old text:=$old$AND NOT v_sent_item_void_context THEN
+      RAISE EXCEPTION 'PERMISSION_DENIED:pos.send_kitchen';$old$;
 BEGIN
  IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'POS_TYPE_BASELINE_MISMATCH_22'; END IF;
- EXECUTE replace(v_def,v_old,$new$RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.type'$new$);
+ EXECUTE replace(v_def,v_old,$new$AND NOT v_sent_item_void_context THEN
+      RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.type';$new$);
 END $patch_22$;
 
 -- Conservative one-time conversion, independent of role names.

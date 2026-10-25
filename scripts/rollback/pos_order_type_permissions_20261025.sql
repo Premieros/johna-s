@@ -3,17 +3,19 @@ BEGIN;
 SET LOCAL lock_timeout='2s';
 SET LOCAL statement_timeout='15s';
 DO $undo_0$
-DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_new text:=$new$RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.type'$new$;
+DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_new text:=$new$AND NOT v_sent_item_void_context THEN
+      RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.type';$new$;
 BEGIN
  IF (length(v_def)-length(replace(v_def,v_new,'')))/length(v_new)<>1 THEN RAISE EXCEPTION 'POS_TYPE_ROLLBACK_DRIFT_0'; END IF;
- EXECUTE replace(v_def,v_new,$old$RAISE EXCEPTION 'PERMISSION_DENIED:pos.send_kitchen'$old$);
+ EXECUTE replace(v_def,v_new,$old$AND NOT v_sent_item_void_context THEN
+      RAISE EXCEPTION 'PERMISSION_DENIED:pos.send_kitchen';$old$);
 END $undo_0$;
 
 DO $undo_1$
-DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_new text:=$new$RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.type'$new$;
+DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_new text:=$new$THEN RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.type'; END IF;$new$;
 BEGIN
  IF (length(v_def)-length(replace(v_def,v_new,'')))/length(v_new)<>1 THEN RAISE EXCEPTION 'POS_TYPE_ROLLBACK_DRIFT_1'; END IF;
- EXECUTE replace(v_def,v_new,$old$RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.create'$old$);
+ EXECUTE replace(v_def,v_new,$old$THEN RAISE EXCEPTION 'PERMISSION_DENIED:pos.order.create'; END IF;$old$);
 END $undo_1$;
 
 DO $undo_2$
@@ -70,10 +72,12 @@ BEGIN
 END $undo_15$;
 
 DO $undo_16$
-DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_new text:=$new$public._pos_order_type_allowed(OLD.order_type,OLD.table_id)$new$;
+DECLARE v_def text:=pg_get_functiondef('public.enforce_pos_permission_mutation()'::regprocedure); v_new text:=$new$AND public._pos_order_type_allowed(OLD.order_type,OLD.table_id)
+         AND EXISTS$new$;
 BEGIN
  IF (length(v_def)-length(replace(v_def,v_new,'')))/length(v_new)<>2 THEN RAISE EXCEPTION 'POS_TYPE_ROLLBACK_DRIFT_16'; END IF;
- EXECUTE replace(v_def,v_new,$old$public.can_permission('pos.send_kitchen')$old$);
+ EXECUTE replace(v_def,v_new,$old$AND public.can_permission('pos.send_kitchen')
+         AND EXISTS$old$);
 END $undo_16$;
 
 DO $undo_17$
@@ -131,7 +135,7 @@ BEGIN
  EXECUTE replace(v_def,v_new,$old$IF NOT public.can_permission('pos.order.create') AND NOT (public.can_permission('pos.order.quick_create') AND COALESCE(p_order_type='takeaway' AND p_table_id IS NULL AND (public.can_permission('pos.discount') OR (COALESCE(p_discount_amount,0)=0 AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(p_items) qi WHERE COALESCE((qi->>'discount_amount')::numeric,0)<>0 OR COALESCE((qi->>'bonus_quantity')::numeric,0)<>0))),false)) THEN$old$);
 END $undo_22$;
 
-CREATE OR REPLACE FUNCTION public.enqueue_cloud_kitchen_print(p_branch_id uuid, p_station_code text, p_payload jsonb, p_idempotency_key text)
+DO $restore_full$ BEGIN IF (SELECT md5(prosrc) FROM pg_proc WHERE oid='public.enqueue_cloud_kitchen_print(uuid,text,jsonb,text)'::regprocedure)<>'aedf66725bb85d6e6022d900b9fa62d2' THEN RAISE EXCEPTION 'POS_TYPE_FULL_ROLLBACK_DRIFT'; END IF; EXECUTE $original$CREATE OR REPLACE FUNCTION public.enqueue_cloud_kitchen_print(p_branch_id uuid, p_station_code text, p_payload jsonb, p_idempotency_key text)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -158,8 +162,8 @@ AS $function$ DECLARE v_source_branch uuid; v_source_number text; v_source_match
     RETURN jsonb_build_object('success',false,'error','ORDER_PRINT_BRANCH_MISMATCH');
   END IF;
 INSERT INTO public.cloud_print_jobs(branch_id,requested_by,kind,station_code,payload,idempotency_key) VALUES(p_branch_id,auth.uid(),'kitchen',v_station_code,p_payload,btrim(p_idempotency_key)) ON CONFLICT(branch_id,idempotency_key) DO UPDATE SET updated_at=public.cloud_print_jobs.updated_at RETURNING * INTO v_job; RETURN jsonb_build_object('success',true,'job_id',v_job.id,'status',v_job.status); END $function$
-
-CREATE OR REPLACE FUNCTION public._is_branch_captain_order_user(p_user_id uuid, p_branch_id uuid)
+$original$; END $restore_full$;
+DO $restore_full$ BEGIN IF (SELECT md5(prosrc) FROM pg_proc WHERE oid='public._is_branch_captain_order_user(uuid,uuid)'::regprocedure)<>'c1a1b337385c6da70f39eba0b397d1d7' THEN RAISE EXCEPTION 'POS_TYPE_FULL_ROLLBACK_DRIFT'; END IF; EXECUTE $original$CREATE OR REPLACE FUNCTION public._is_branch_captain_order_user(p_user_id uuid, p_branch_id uuid)
  RETURNS boolean
  LANGUAGE sql
  STABLE SECURITY DEFINER
@@ -187,6 +191,7 @@ AS $function$
       AND COALESCE(r.permissions,'[]'::jsonb) ? 'pos.send_kitchen'
   );
 $function$
+$original$; END $restore_full$;
 
 DO $restore_roles$
 DECLARE v_row jsonb;
