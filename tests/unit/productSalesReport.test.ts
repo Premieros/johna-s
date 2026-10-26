@@ -39,4 +39,23 @@ describe('canonical product sales', () => {
     expect(rows.reduce((sum, row) => sum + row.net, 0)).toBeCloseTo(256.5);
     expect(rows.find(row => row.productId === 'a')?.netQuantity).toBe(0.5);
   });
+  it('partitions option combinations without duplicating allocated revenue or mixing sale units', () => {
+    const snapshot = [{group_id:'size',group_name:'الحجم',option_id:'double',option_name:'دبل',price_delta:20}];
+    const modified = {...item('a',120),id:'a-double',modifiers_snapshot:snapshot,bonus_quantity:1};
+    const plain = {...item('a',100),id:'a-plain',modifiers_snapshot:[]};
+    const invoice = sale([modified,plain]);
+    const lines = buildStationSalesLines([invoice],{},'ar');
+    const rows = summarizeProductSales(lines,true,'ar');
+    expect(rows).toHaveLength(2);
+    expect(rows.reduce((sum,row)=>sum+row.net,0)).toBeCloseTo(invoice.total);
+    expect(rows.find(row=>row.options.includes('دبل'))).toMatchObject({bonusQuantity:1,invoiceCount:1});
+    expect(summarizeProductSales(lines)).toHaveLength(1);
+    expect(snapshot[0].option_name).toBe('دبل');
+  });
+  it('counts an invoice once per product group and rejects missing option metadata', () => {
+    const lines=buildStationSalesLines([sale([item('a',100),{...item('a',100),id:'other-row'}])],{},'en');
+    expect(summarizeProductSales(lines)[0].invoiceCount).toBe(1);
+    expect(()=>summarizeProductSales(lines,true)).toThrow('SALES_OPTIONS_SOURCE_UNAVAILABLE');
+  });
+
 });

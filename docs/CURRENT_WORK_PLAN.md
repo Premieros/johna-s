@@ -2,10 +2,10 @@
 
 ## Active work
 - Repository: `Premieros/johna-s`; production Supabase: `azzdesuowpdcoflmyezn`.
-- Baseline: `950e5694f16b57b07f563c7c69a540c9c863c2ae` (#540 deployed).
-- Branch: `fix/smouha-single-report-job-20261026`.
-- Mandatory active work log: `docs/SMOUHA_SINGLE_REPORT_JOB_20261026.md`.
-- Owner explicitly requests one report job and the same path as Cleopatra, after diagnosis of the Smouha-only database split. Approved scope: remove only that branch exception after isolated verification; preserve existing jobs, dedup, permissions, routes, payload normalization, agent, sales/stock/accounting and A4.
+- Baseline: `d3649e42320902c9a6bb1aaaecaac80fb2cd7180` (#541 deployed).
+- Branch: `feat/sales-composition-reports-20261026`.
+- Mandatory active work log: `docs/SALES_COMPOSITION_REPORTS_20261026.md`.
+- Owner requests product/material/manufactured-unit/modifier sales views and review of omissions, using canonical sources. Prepare read-only report changes; no production migration or release before separate approval. Preserve all operational writers, installed printing and thermal/A4 scope.
 
 ## Active usability polish — 2026-10-25
 Owner approved implementing the browser-review findings: compact reports with useful filters and in-page expansion, visible POS branch/dispatch/bill context, readable mobile table cards, safer cancellation presentation and compact dashboard welcome. Presentation only; retain business logic, permissions, queries and installed printers. No production log scans. Prepare one reviewed candidate; publication requires separate final approval.
