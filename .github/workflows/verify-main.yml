@@ -138,6 +138,7 @@ jobs:
       - name: Verify locked Supabase project identity
         run: node scripts/db/verify-database-identity.js
       - name: Install Playwright Chromium
+        timeout-minutes: 5
         run: npx playwright install --with-deps chromium
       - name: Build application
         run: npm run build
