@@ -10,7 +10,7 @@ const financial = (view: FinancialReportView, ar: string, en: string): Workspace
 export const BASIC_REPORTS: BasicReport[] = [
   { key: 'sales', ar: 'المبيعات الشامل', en: 'Comprehensive Sales', descriptionAr: 'الفواتير والمنتجات والإضافات والخامات والوحدات المصنعة والمرتجعات', descriptionEn: 'Invoices, products, saved modifiers, materials, manufactured units and returns', views: [
     op('sales', 'الفواتير', 'Invoices'), op('sales_by_product', 'المنتجات وخيارات الإضافات', 'Products & saved options'),
-    { ...op('component_consumption','الخامات المرتبطة بالمبيعات','Sales-related materials'),key:'sales_materials',consumptionGroup:'product' },
+    { ...op('component_consumption','الخامات المرتبطة بالمبيعات','Sales-related materials'),key:'sales_materials',consumptionGroup:'material' },
     { ...op('component_consumption','الوحدات المصنعة المرتبطة بالمبيعات','Sales-related manufactured units'),key:'sales_manufactured_units',consumptionGroup:'unit' },
     op('sales_by_station', 'تفاصيل الأصناف والمحطات', 'Items & stations'), op('cashier_performance', 'أداء الموظفين', 'Employee performance'), op('returns', 'المرتجعات', 'Returns'),
   ] },

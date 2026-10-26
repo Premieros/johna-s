@@ -116,7 +116,7 @@ describe.skipIf(!local)('sold current-recipe consumption — owned localhost',()
    await db.query('UPDATE public.sale_items SET modifiers_snapshot=$1::jsonb,bonus_quantity=2 WHERE sale_id=$2 AND product_id=$3',[JSON.stringify(snapshot),ids.saleA,ids.prodA]);
    const response=await runAs(db,ids.users.branch_manager,`SELECT public.get_operational_report_dataset('sales',$1,CURRENT_DATE-1,CURRENT_DATE+1,'{"include_items":"true","settled_only":"true"}'::jsonb) r`,[ids.branchA]);
    expect(response.error).toBeUndefined();
-   const rows=response.rows[0].r.rows as Array<{id:string;items:Array<{product_id:string;modifiers_snapshot:unknown;bonus_quantity:number}>}>;
+   const rows=(response.rows[0].r as {rows:unknown}).rows as Array<{id:string;items:Array<{product_id:string;modifiers_snapshot:unknown;bonus_quantity:number}>}>;
    expect(rows.find(row=>row.id===ids.saleA)?.items.find(row=>row.product_id===ids.prodA)).toMatchObject({modifiers_snapshot:snapshot,bonus_quantity:2});
   } finally {await db.query('ROLLBACK TO SAVEPOINT saved_options');}
  });
