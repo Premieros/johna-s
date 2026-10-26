@@ -56,7 +56,7 @@ describe('thermal receipt and Z-report readability contract', () => {
     expect(thermal).toContain('التفاصيل الكاملة متاحة في تقرير A4');
     expect(thermal).not.toContain('INVOICES & TENDERS');
     expect(thermal).not.toContain('sale.invoiceNumber');
-    expect(zReport.slice(htmlStart)).toContain('INVOICES & TENDERS');
+    expect(zReport.slice(htmlStart)).toContain('Invoices & Tender Allocation');
   });
 
   it('normalizes receipt/report payloads at the durable queue boundary', () => {
