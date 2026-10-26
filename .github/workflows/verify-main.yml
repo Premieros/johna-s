@@ -137,12 +137,16 @@ jobs:
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
       - name: Verify locked Supabase project identity
         run: node scripts/db/verify-database-identity.js
-      - name: Install Playwright Chromium
-        timeout-minutes: 5
-        run: npx playwright install --with-deps chromium
+      - name: Use installed Chrome and prepare video helper
+        timeout-minutes: 2
+        run: |
+          google-chrome --version
+          npx playwright install ffmpeg
       - name: Build application
         run: npm run build
       - name: Run Playwright smoke tests
+        env:
+          PLAYWRIGHT_CHANNEL: chrome
         run: npx playwright test --project=chromium
       - uses: actions/upload-artifact@v4
         if: always()

@@ -22,7 +22,7 @@ export default defineConfig({
     },
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'], channel: process.env.PLAYWRIGHT_CHANNEL === 'chrome' ? 'chrome' : undefined } },
   ],
   webServer: {
     command: 'npm run preview -- --host 0.0.0.0 --port 4173',

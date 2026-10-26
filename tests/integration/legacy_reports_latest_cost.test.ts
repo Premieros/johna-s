@@ -13,7 +13,10 @@ describe.skipIf(!local)('installed agent report pages and latest raw cost — ow
   const r=await runAsPersist(db,actor,query,args); expect(r.error).toBeUndefined(); return r.rows[0]?.r as Record<string, unknown>;
  };
  beforeAll(async()=>{
-  db=openDb(url!);await db.connect();await db.query('BEGIN');ids=await seedRlsFixture(db);
+  db=openDb(url!);await db.connect();await db.query('BEGIN');
+  // Rehearse the historical split contract only inside this owned-localhost rollback transaction.
+  await db.query(readFileSync('supabase/migrations/20261016224825_report_normalizer_production_dependency.sql','utf8'));
+  ids=await seedRlsFixture(db);
   await db.query(`UPDATE public.roles SET permissions=permissions || '["reports.costing","shifts.report.shift"]'::jsonb WHERE role='branch_manager'`);
   await db.query(`UPDATE public.roles SET permissions=permissions - 'reports.costing' - 'shifts.report.shift' - 'shifts.day_close' WHERE role='cashier'`);
   await db.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost) VALUES($1,$2,'Priced raw',$3,0),($4,$5,'Unpriced raw',$3,0)",[raw,randomUUID(),ids.branchA,missing,randomUUID()]);

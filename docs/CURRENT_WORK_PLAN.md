@@ -2,10 +2,10 @@
 
 ## Active work
 - Repository: `Premieros/johna-s`; production Supabase: `azzdesuowpdcoflmyezn`.
-- Baseline: `c6f01f2cb7c2395c6f79b8749c47aae1843e061f`.
-- Branch: `fix/thermal-shift-financial-summary-20261026`.
-- Mandatory active work log: `docs/THERMAL_SHIFT_SUMMARY_20261026.md`.
-- Owner requests a compact financial thermal shift close, invoice count and captain sales; no products/materials. Preserve A4, data reads, financial equations, queue/idempotency and installed agents. Prepare verified candidate.
+- Baseline: `950e5694f16b57b07f563c7c69a540c9c863c2ae` (#540 deployed).
+- Branch: `fix/smouha-single-report-job-20261026`.
+- Mandatory active work log: `docs/SMOUHA_SINGLE_REPORT_JOB_20261026.md`.
+- Owner explicitly requests one report job and the same path as Cleopatra, after diagnosis of the Smouha-only database split. Approved scope: remove only that branch exception after isolated verification; preserve existing jobs, dedup, permissions, routes, payload normalization, agent, sales/stock/accounting and A4.
 
 ## Active usability polish — 2026-10-25
 Owner approved implementing the browser-review findings: compact reports with useful filters and in-page expansion, visible POS branch/dispatch/bill context, readable mobile table cards, safer cancellation presentation and compact dashboard welcome. Presentation only; retain business logic, permissions, queries and installed printers. No production log scans. Prepare one reviewed candidate; publication requires separate final approval.
