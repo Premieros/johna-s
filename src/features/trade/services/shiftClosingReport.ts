@@ -470,33 +470,21 @@ export function buildThermalZReportText(summary: ShiftClosingSummary, currency =
       : 'Full invoice detail is available in the A4 report',
   );
 
-  rows.push(line, isAr ? 'المنتجات المباعة / PRODUCTS' : 'PRODUCTS SOLD');
-  for (const product of summary.productsSold || []) {
-    rows.push(`${String(product.productName).replace(/[\r\n]+/g, ' ')} | ${zThermalNumber(product.quantity, 4)} ${product.unitName} | ${money(product.total)}`);
-  }
-  if (!summary.productsSold?.length) rows.push(isAr ? 'لا توجد منتجات مباعة' : 'No products sold');
-
-  rows.push(line, isAr ? 'الخامات المستهلكة / MATERIALS' : 'MATERIALS CONSUMED');
-  for (const material of summary.ingredientsConsumed || []) {
+  const captains = (summary.userReports || []).filter(user => user.invoiceCount > 0 || user.salesTotal !== 0);
+  rows.push(line, isAr ? 'مبيعات الكباتن' : 'CAPTAIN SALES');
+  for (const captain of captains) {
     rows.push(
-      `${String(material.materialName).replace(/[\r\n]+/g, ' ')}: ${zThermalNumber(material.quantity, 4)} ${material.unit}`,
-      material.pricingBasis === 'latest_approved'
-        ? `${isAr ? 'بآخر سعر' : 'Latest price cost'}: ${material.priceMissing ? (isAr ? 'غير مسعر' : 'Unpriced') : money(material.displayedCost)}`
-        : `${isAr ? 'فعلي' : 'Actual'}: ${money(material.actualCost)} | ${isAr ? 'تقديري' : 'Estimated'}: ${money(material.estimatedCost)}`,
+      String(captain.displayName || '-').replace(/[\r\n]+/g, ' '),
+      `${isAr ? 'فواتير' : 'Invoices'}: ${zThermalNumber(captain.invoiceCount, 0)} | ${isAr ? 'مبيعات بعد الخصم' : 'Sales after discount'}: ${money(captain.salesTotal)}`,
     );
   }
-  rows.push(
-    `${isAr ? 'إجمالي تكلفة الخامات' : 'Total material cost'}: ${money((summary.ingredientsConsumed || []).reduce((total, material) => total + material.displayedCost, 0))}`,
-    ...((summary.ingredientsConsumed || []).some(m => m.priceMissing) ? [isAr ? 'الإجمالي جزئي: توجد خامات غير مسعرة' : 'Partial total: some materials are unpriced'] : []),
-    isAr ? 'تكلفة الخامات لا تخصم من النقدية' : 'Material cost does not reduce drawer cash',
-  );
+  if (!captains.length) rows.push(isAr ? 'لا توجد مبيعات للكباتن' : 'No captain sales');
 
   return rows.join('\r\n');
 }
 
 export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency = 'EGP', lang: Language = 'ar'): string {
   const isAr = lang === 'ar';
-  const latestRawPricing = summary.ingredientsConsumed.some(m => m.pricingBasis === 'latest_approved');
   const dir = isAr ? 'rtl' : 'ltr';
 
   const diffColor = Math.abs(summary.difference) > 0.01 ? '#dc2626' : '#16a34a';
@@ -606,6 +594,8 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
     <span>${formatCurrency(summary.netRevenue, currency, lang)}</span>
   </div>
 
+  ${[[isAr ? 'المرتجعات' : 'Returns', summary.returns], [isAr ? 'الإلغاءات' : 'Voids', summary.voids], [isAr ? 'المصروفات' : 'Expenses', summary.expenses]].map(([label, amount]) => `<div class="flex justify-between py-1"><span>${label}:</span><span>${formatCurrency(Number(amount), currency, lang)}</span></div>`).join('')}
+
   <!-- Payment Methods Breakdown -->
   <div class="section-title">${isAr ? 'طرق الدفع المحصلة' : 'COLLECTED PAYMENTS'}</div>
   ${paymentSummary.collected.map((pm) => `
@@ -632,19 +622,6 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
     </div>
   ` : ''}
 
-  ${(summary.salesDetails || []).length > 0 ? `
-    <div class="section-title">${isAr ? 'الفواتير وطرق الدفع' : 'INVOICES & TENDERS'}</div>
-    ${(summary.salesDetails || []).map((sale) => `
-      <div class="py-1 border-b">
-        <div class="flex justify-between"><span class="font-bold">${escapeHtml(sale.invoiceNumber)}</span><span class="font-bold">${formatCurrency(sale.total, currency, lang)}</span></div>
-        ${sale.orderNumber ? `<div style="font-size:9px;font-weight:700;">${isAr ? 'الطلب الأصلي' : 'Original order'}: ${escapeHtml(sale.orderNumber)}</div>` : ''}
-        <div style="font-size:9px;">${escapeHtml(sale.userName || '-')} · ${formatDateTime(sale.createdAt, lang)}</div>
-        ${(sale.payments && sale.payments.length > 0)
-          ? sale.payments.map((payment) => `<div class="flex justify-between" style="font-size:10px;"><span>${escapeHtml(payment.method)}</span><span>${formatCurrency(payment.amount, currency, lang)}</span></div>`).join('')
-          : `<div class="flex justify-between" style="font-size:10px;"><span>${escapeHtml(sale.paymentMethod || '-')}</span><span>${formatCurrency(sale.paidAmount, currency, lang)}</span></div>`}
-      </div>
-    `).join('')}
-  ` : ''}
   <!-- Cash Drawer Balancing -->
   <div class="section-title">${isAr ? 'تسوية الدرج والنقدية' : 'CASH RECONCILIATION'}</div>
   <div class="flex justify-between py-1">
@@ -678,91 +655,14 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
     <span>${formatCurrency(summary.difference, currency, lang)}</span>
   </div>
 
-  ${(summary.expenseDetails || []).length > 0 ? `
-    <div class="section-title">${isAr ? 'المصروفات بالتفصيل' : 'EXPENSE DETAILS'}</div>
-    ${(summary.expenseDetails || []).map((e) => `
-      <div class="py-1 border-b">
-        <div class="flex justify-between"><span class="font-bold">${escapeHtml(e.category || '-')}</span><span class="font-bold">-${formatCurrency(e.amount, currency, lang)}</span></div>
-        <div class="flex justify-between"><span>${escapeHtml(e.description || '-')}</span><span>${escapeHtml(e.paymentMethod)}</span></div>
-        <div style="font-size:9px;">${escapeHtml(e.createdByName)} · ${formatDateTime(e.createdAt, lang)}</div>
-      </div>
-    `).join('')}
-  ` : ''}
-
-  ${(summary.cashPurchaseDetails || []).length > 0 ? `
-    <div class="section-title">${isAr ? 'مشتريات الكاش' : 'CASH PURCHASES'}</div>
-    ${(summary.cashPurchaseDetails || []).map((p) => `
-      <div class="py-1 border-b">
-        <div class="flex justify-between"><span class="font-bold">${escapeHtml(p.invoiceNumber || '-')}</span><span class="font-bold">-${formatCurrency(p.amount, currency, lang)}</span></div>
-        <div style="font-size:9px;">${formatDateTime(p.createdAt, lang)}</div>
-      </div>
-    `).join('')}
-  ` : ''}
-
-  ${(summary.userReports || []).length > 0 ? `
-    <div class="section-title">${isAr ? 'تفاصيل المستخدمين' : 'USER DETAILS'}</div>
-    ${(summary.userReports || []).map((u) => `
-      <div class="py-1 border-b">
-        <div class="font-bold">${escapeHtml(u.displayName)}</div>
-        <div class="flex justify-between"><span>${isAr ? 'المبيعات' : 'Sales'}</span><span>${formatCurrency(u.salesTotal, currency, lang)}</span></div>
-        <div class="flex justify-between"><span>${isAr ? 'الفواتير' : 'Invoices'}</span><span>${u.invoiceCount}</span></div>
-        <div class="flex justify-between"><span>${isAr ? 'الخصومات' : 'Discounts'}</span><span>${formatCurrency(u.discounts, currency, lang)}</span></div>
-        <div class="flex justify-between"><span>${isAr ? 'المرتجعات' : 'Returns'}</span><span>${formatCurrency(u.returns, currency, lang)}</span></div>
-        <div class="flex justify-between"><span>${isAr ? 'المصروفات' : 'Expenses'}</span><span>${formatCurrency(u.expenses, currency, lang)}</span></div>
-        <div class="flex justify-between font-bold"><span>${isAr ? 'الصافي' : 'Net'}</span><span>${formatCurrency(u.netContribution, currency, lang)}</span></div>
-      </div>
-    `).join('')}
-  ` : ''}
-
-  <!-- Products Sold -->
-  ${summary.productsSold.length > 0 ? `
-    <div class="section-title">${isAr ? 'المنتجات المباعة' : 'PRODUCTS SOLD'}</div>
-    <table>
-      <thead>
-        <tr>
-          <th style="text-align: ${isAr ? 'right' : 'left'};">${isAr ? 'الصنف' : 'Item'}</th>
-          <th class="text-center">${isAr ? 'الكمية' : 'Qty'}</th>
-          <th class="text-end">${isAr ? 'الإجمالي' : 'Total'}</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${summary.productsSold.map((p) => `
-          <tr>
-            <td>${escapeHtml(p.productName)}</td>
-            <td class="text-center font-bold">${p.quantity}</td>
-            <td class="text-end font-bold">${formatCurrency(p.total, currency, lang)}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  ` : ''}
-
-  <!-- Ingredients Consumed -->
-  ${summary.ingredientsConsumed.length > 0 ? `
-    <div class="section-title">${isAr ? 'المكونات والمواد الخام المستهلكة' : 'INGREDIENTS CONSUMED'}</div>
-    <table>
-      <thead>
-        <tr>
-          <th style="text-align: ${isAr ? 'right' : 'left'};">${isAr ? 'المادة' : 'Material'}</th>
-          <th class="text-center">${isAr ? 'الكمية' : 'Qty'}</th>
-          ${!latestRawPricing ? `<th class="text-end">${isAr ? 'التكلفة الفعلية' : 'Actual Cost'}</th>` : ''}
-          ${!latestRawPricing ? `<th class="text-end">${isAr ? 'السالب التقديري' : 'Negative Estimate'}</th>` : ''}
-          <th class="text-end">${latestRawPricing ? (isAr ? 'التكلفة بآخر سعر' : 'Latest-price cost') : (isAr ? 'الإجمالي المعروض' : 'Displayed Total')}</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${summary.ingredientsConsumed.map((m) => `
-          <tr>
-            <td>${escapeHtml(m.materialName)}</td>
-            <td class="text-center font-bold">${m.quantity} ${escapeHtml(m.unit)}</td>
-            ${!latestRawPricing ? `<td class="text-end">${formatCurrency(m.actualCost, currency, lang)}</td>` : ''}
-            ${!latestRawPricing ? `<td class="text-end">${m.estimatedQuantity > 0 ? formatCurrency(m.estimatedCost, currency, lang) : '-'}</td>` : ''}
-            <td class="text-end font-bold">${m.priceMissing ? (isAr ? 'غير مسعر' : 'Unpriced') : formatCurrency(m.displayedCost, currency, lang)}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  ` : ''}
+  <div class="section-title">${isAr ? 'مبيعات الكباتن' : 'CAPTAIN SALES'}</div>
+  ${(summary.userReports || []).filter(user => user.invoiceCount > 0 || user.salesTotal !== 0).map(user => `
+    <div class="py-1 border-b">
+      <div class="font-bold">${escapeHtml(user.displayName || '-')}</div>
+      <div class="flex justify-between"><span>${isAr ? 'الفواتير' : 'Invoices'}: ${user.invoiceCount}</span><span>${isAr ? 'مبيعات بعد الخصم' : 'Sales after discount'}: ${formatCurrency(user.salesTotal, currency, lang)}</span></div>
+    </div>
+  `).join('')}
+  <p style="font-size:9px;">${isAr ? 'التفاصيل الكاملة متاحة في تقرير A4' : 'Full detail is available in the A4 report'}</p>
 
   <div class="border-double my-2"></div>
   <div class="text-center" style="font-size: 9px;">

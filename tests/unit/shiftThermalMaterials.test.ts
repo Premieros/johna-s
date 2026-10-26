@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('@/api', () => ({ supabase: {} }));
 vi.mock('@/features/costing/services/rawCurrentPriceData', () => ({}));
-import { buildThermalZReportText, type ShiftClosingSummary } from '@/features/trade/services/shiftClosingReport';
+import { buildThermalZReportText, buildThermalZReportHtml, buildA4ZReportHtml, type ShiftClosingSummary } from '@/features/trade/services/shiftClosingReport';
 
 const summary: ShiftClosingSummary = {
   shiftId: 'shift-12345678', branchId: 'cleopatra', branchName: 'كليوباترا', cashierName: 'Cashier',
@@ -18,46 +18,21 @@ const summary: ShiftClosingSummary = {
   ],
 };
 
-describe('thermal closing materials', () => {
-  it.each(['ar', 'en'] as const)('includes authoritative quantities and separate actual/estimated costs (%s)', (lang) => {
-    const before = structuredClone(summary);
-    const text = buildThermalZReportText(summary, 'EGP', lang);
-    expect(text).toContain('Burger | 2 piece | 40 EGP');
-    expect(text).toContain('دجاج');
-    expect(text).toContain('1.2345 kg');
-    expect(text).toContain('250 g');
-    expect(text).toContain('Sauce Special');
-    expect(text).toContain('120 EGP');
-    expect(text).toContain('28.14 EGP');
-    expect(text).toContain('158.14 EGP');
-    expect(text).toContain(`${lang === 'ar' ? 'المتوقع بالدرج' : 'Expected Cash'}: 250 EGP`);
-    expect(text).toContain(`${lang === 'ar' ? 'الفارق' : 'Difference'}: -5 EGP`);
-    expect(summary).toEqual(before);
-    expect(text).not.toContain('<html');
+describe('compact financial thermal shift closing', () => {
+  it.each(['ar','en'] as const)('keeps financial totals and captain invoice sales without composition (%s)',lang=>{
+    const input={...summary,userReports:[{userId:'captain',displayName:'Captain A',salesTotal:300,invoiceCount:2,discounts:0,returns:0,expenses:0,netContribution:300}]};
+    const before=structuredClone(input);
+    for(const output of [buildThermalZReportText(input,'EGP',lang),buildThermalZReportHtml(input,'EGP',lang)]) {
+      expect(output).toContain('Captain A');expect(output).toContain('300');expect(output).toContain('245');expect(output).toContain('-5');
+      expect(output).not.toContain('Burger');expect(output).not.toContain('دجاج');expect(output).not.toContain('Sauce');
+      expect(output).not.toContain('INGREDIENTS');expect(output).not.toContain('PRODUCTS SOLD');
+    }
+    expect(input).toEqual(before);
+    const a4=buildA4ZReportHtml(input,'EGP',lang);expect(a4).toContain('Burger');expect(a4).toContain('دجاج');
   });
-
-  it('keeps every material with two source lines rather than four and identical totals', () => {
-    const materials = Array.from({ length: 120 }, (_, i) => ({ ...summary.ingredientsConsumed![0], materialId: String(i), materialName: `Material ${i}` }));
-    const text = buildThermalZReportText({ ...summary, ingredientsConsumed: materials }, 'EGP', 'en');
-    expect(text.split('\r\n').length).toBeLessThan(300);
-    for (let i = 0; i < 120; i++) expect(text).toContain(`Material ${i}: 1.2345 kg`);
-    expect(text).toContain('120 EGP | Estimated: 28.14 EGP');
-    expect(text).toContain('17,776.8 EGP');
-  });
-
-  it('labels latest-price consumption and missing prices without presenting a fake zero', () => {
-    const row = { ...summary.ingredientsConsumed[0], pricingBasis: 'latest_approved' as const, priceMissing: false, displayedCost: 34 };
-    const text = buildThermalZReportText({ ...summary, ingredientsConsumed: [row] }, 'EGP', 'en');
-    expect(text).toContain('Latest price cost: 34 EGP');
-    expect(text).not.toContain('Estimated:');
-    const unknown = buildThermalZReportText({ ...summary, ingredientsConsumed: [{ ...row, priceMissing: true, displayedCost: 0 }] }, 'EGP', 'en');
-    expect(unknown).toContain('Latest price cost: Unpriced');
-    expect(unknown).toContain('Partial total: some materials are unpriced');
-  });
-
-  it('keeps zero consumption distinct from missing report data and never combines unlike quantities', () => {
-    const text = buildThermalZReportText({ ...summary, ingredientsConsumed: [] }, 'EGP', 'en');
-    expect(text).toContain('Total material cost: 0 EGP');
-    expect(text).not.toContain('251.2345');
+  it('does not grow when hundreds of products and materials exist',()=>{
+    const large={...summary,productsSold:Array(500).fill(summary.productsSold[0]),ingredientsConsumed:Array(500).fill(summary.ingredientsConsumed[0])};
+    expect(buildThermalZReportText(large)).toBe(buildThermalZReportText(summary));
+    expect(buildThermalZReportHtml(large).length).toBeLessThan(16000);
   });
 });
