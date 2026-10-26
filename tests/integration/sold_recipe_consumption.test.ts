@@ -94,4 +94,31 @@ describe.skipIf(!local)('sold current-recipe consumption — owned localhost',()
   expect((await report('invalid')).error).toBe('INVALID_REPORT_OPTIONS');
   expect((await report('material',0,5001)).error).toBe('INVALID_REPORT_OPTIONS');
  });
+ it('projects manufactured units from the same normalized sold quantities and nested walk',async()=>{
+  const rawBefore=value(await report());
+  const result=value(await report('unit'));
+  expect(result.pricing_basis).toBe('current_recipe_manufactured_units');
+  expect(result.manufactured_unit_count).toBe(2);
+  expect(result.manufactured_units?.find(row=>row.inventory_unit_id===parent)).toMatchObject({consumed_quantity:16,returned_quantity:4,net_quantity:12,product_sold_quantity:6});
+  expect(result.manufactured_units?.find(row=>row.inventory_unit_id===child)).toMatchObject({consumed_quantity:8.8,returned_quantity:2.2,net_quantity:6.6});
+  expect(result.rows).toEqual([]); // Unit quantities never masquerade as raw prices or sales revenue.
+  const first=value(await report('unit',0,1));const second=value(await report('unit',1,1));
+  expect(first.manufactured_units).toHaveLength(1);expect(second.manufactured_units).toHaveLength(1);
+  expect(first.manufactured_units?.[0].inventory_unit_id).not.toBe(second.manufactured_units?.[0].inventory_unit_id);
+  expect(value(await report()).rows).toEqual(rawBefore.rows);
+  expect((await report('unit',0,100,ids.users.cashier)).error).toContain('PERMISSION_DENIED');
+  expect((await report('unit',0,100,ids.users.branch_manager,ids.branchB)).error).toBe('BRANCH_ACCESS_DENIED');
+ });
+ it('exposes saved options and bonus quantities through the canonical whole-invoice source',async()=>{
+  await db.query('SAVEPOINT saved_options');
+  try {
+   const snapshot=[{group_id:randomUUID(),group_name:'size',option_id:randomUUID(),option_name:'Double at sale time',price_delta:12}];
+   await db.query('UPDATE public.sale_items SET modifiers_snapshot=$1::jsonb,bonus_quantity=2 WHERE sale_id=$2 AND product_id=$3',[JSON.stringify(snapshot),ids.saleA,ids.prodA]);
+   const response=await runAs(db,ids.users.branch_manager,`SELECT public.get_operational_report_dataset('sales',$1,CURRENT_DATE-1,CURRENT_DATE+1,'{"include_items":"true","settled_only":"true"}'::jsonb) r`,[ids.branchA]);
+   expect(response.error).toBeUndefined();
+   const rows=(response.rows[0].r as {rows:unknown}).rows as Array<{id:string;items:Array<{product_id:string;modifiers_snapshot:unknown;bonus_quantity:number}>}>;
+   expect(rows.find(row=>row.id===ids.saleA)?.items.find(row=>row.product_id===ids.prodA)).toMatchObject({modifiers_snapshot:snapshot,bonus_quantity:2});
+  } finally {await db.query('ROLLBACK TO SAVEPOINT saved_options');}
+ });
+
 });

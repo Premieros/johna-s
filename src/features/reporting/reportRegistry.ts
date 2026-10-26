@@ -101,7 +101,7 @@ export const REPORT_REGISTRY: ReportDefinition[] = [
     descriptionEn: 'Top selling products with quantity and revenue',
     icon: 'ShoppingBag',
     permissions: ['reports.view'],
-    filterDimensions: ['order_type', 'warehouse', 'cashier', 'customer', 'product', 'category', 'payment_method', 'status'],
+    filterDimensions: ['station', 'order_type', 'warehouse', 'cashier', 'customer', 'product', 'category', 'payment_method', 'status'],
     dateDriven: true,
     deepLinkKey: 'sales_by_product',
   },

@@ -618,7 +618,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       const rows = products.map((product) => withBranch(product.branchId, {
         [label('المنتج', 'Product')]: product.name || label('غير معروف', 'Unknown'),
         [label('معرف المنتج', 'Product ID')]: product.productId || '-',
+        [label('التصنيف', 'Category')]: product.category,
+        [label('المحطة', 'Station')]: product.station,
         [label('الوحدة', 'Unit')]: product.unit,
+        ...(filters.sales_view === 'options' ? { [label('خيارات الإضافات المحفوظة', 'Saved modifier combination')]: product.options || label('بدون إضافات', 'No modifiers') } : {}),
+        [label('عدد الفواتير المحتوية', 'Containing invoices')]: product.invoiceCount,
+        [label('كمية مجانية مسجلة', 'Recorded bonus quantity')]: product.bonusQuantity,
         [label('الكمية المباعة', 'Sold Quantity')]: product.soldQuantity,
         [label('الكمية المرتجعة', 'Returned Quantity')]: product.returnedQuantity,
         [label('صافي الكمية', 'Net Quantity')]: product.netQuantity,
@@ -630,7 +635,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         [label('صافي الإيراد', 'Net Revenue')]: product.net,
       }));
       setData(rows);
-      setChartData(products.slice(0, 10).map((product) => ({ name: `${product.name || label('غير معروف', 'Unknown')} (${product.unit})`, value: product.net })));
+      setChartData(products.slice(0, 10).map((product) => ({ name: `${product.name || label('غير معروف', 'Unknown')} (${product.unit})${filters.sales_view==='options' ? ` · ${product.options || label('بدون إضافات','No modifiers')}` : ''}`, value: product.net })));
       setSummary({ total: products.reduce((sum, product) => sum + product.net, 0), count: rows.length });
     } else if (reportType === 'detailed_invoices') {
       const sales = await loadDetailedInvoiceRows({
@@ -1475,8 +1480,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         allLabel={allLabel}
         filterDimensions={REPORT_FILTER_DIMS[reportType]}
         optionsLoading={optionsLoading}
-        onClearFilters={() => { setFilters(({purchase_view}) => ({purchase_view})); setFiltersDirty(true); }}
-        viewControl={reportType === 'purchases' ? <label className="text-xs font-medium">{lang === 'ar' ? 'عرض المشتريات حسب' : 'Purchase view'}<select aria-label={lang === 'ar' ? 'عرض المشتريات حسب' : 'Purchase view'} className="mt-1 h-9 w-full rounded border border-ui-border bg-ui-surface px-2" value={filters.purchase_view || 'invoice'} onChange={event => { setFilters(previous => ({...previous,purchase_view:event.target.value})); setFiltersDirty(true); }}><option value="invoice">{lang === 'ar' ? 'الفواتير' : 'Invoices'}</option><option value="material">{lang === 'ar' ? 'الخامات والأصناف' : 'Materials and items'}</option><option value="category">{lang === 'ar' ? 'أنواع الخامات' : 'Material categories'}</option><option value="supplier">{lang === 'ar' ? 'الموردين' : 'Suppliers'}</option></select></label> : undefined}
+        onClearFilters={() => { setFilters(({purchase_view,sales_view}) => ({purchase_view,sales_view})); setFiltersDirty(true); }}
+        viewControl={reportType === 'sales_by_product' ? <label className="text-xs font-medium">{lang==='ar'?'تجميع المبيعات':'Sales grouping'}<select aria-label={lang==='ar'?'تجميع المبيعات':'Sales grouping'} className="mt-1 h-9 w-full rounded border border-ui-border bg-ui-surface px-2" value={filters.sales_view || 'product'} onChange={event=>{setFilters(previous=>({...previous,sales_view:event.target.value}));setFiltersDirty(true);}}><option value="product">{lang==='ar'?'المنتج ووحدة البيع':'Product and sale unit'}</option><option value="options">{lang==='ar'?'المنتج وخيارات الإضافات':'Product and saved options'}</option></select></label> : reportType === 'purchases' ? <label className="text-xs font-medium">{lang === 'ar' ? 'عرض المشتريات حسب' : 'Purchase view'}<select aria-label={lang === 'ar' ? 'عرض المشتريات حسب' : 'Purchase view'} className="mt-1 h-9 w-full rounded border border-ui-border bg-ui-surface px-2" value={filters.purchase_view || 'invoice'} onChange={event => { setFilters(previous => ({...previous,purchase_view:event.target.value})); setFiltersDirty(true); }}><option value="invoice">{lang === 'ar' ? 'الفواتير' : 'Invoices'}</option><option value="material">{lang === 'ar' ? 'الخامات والأصناف' : 'Materials and items'}</option><option value="category">{lang === 'ar' ? 'أنواع الخامات' : 'Material categories'}</option><option value="supplier">{lang === 'ar' ? 'الموردين' : 'Suppliers'}</option></select></label> : undefined}
         showTotal={presentation.showTotal}
         totalLabel={presentation.label}
         countLabel={presentation.countLabel}
@@ -1510,6 +1515,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       {reportType === 'inventory_as_of' && <p role="note" className="mb-3 text-sm text-ui-muted">{lang === 'ar' ? `أرصدة الخامات من الحركات المسموح لك عرضها حتى نهاية يوم ${snapshot?.to || to} بتوقيت القاهرة. القيمة هي المسجلة في الحركات؛ لا تمثل إعادة تسعير المخزون بأسعار اليوم.` : `Material balances from permitted movements through end of ${snapshot?.to || to} in Cairo. Values are recorded movement costs, not a repricing at today's prices.`}</p>}
       {reportType === 'sales_by_station' && <details className="mb-3 text-xs text-ui-muted"><summary className="cursor-pointer">{lang === 'ar' ? 'تفاصيل حساب المبيعات والتكلفة' : 'Sales and cost calculation details'}</summary><p data-testid="station-sales-source-note">{getReportExcelProfile(reportType, lang).sourceNote}</p></details>}
 
+      {reportType === 'sales_by_product' && <p className="mb-2 text-xs text-ui-muted">{lang==='ar'?'الإضافات داخلة في سعر المنتج ولا تُجمع كإيراد آخر. خيارات البيع محفوظة وقت الفاتورة؛ الكميات المجانية منفصلة. عدد الفواتير المحتوية والكميات بوحدات مختلفة لا تُجمع بين المنتجات.':'Modifiers are included in the product price, not additional revenue. Options are saved at sale time; bonus quantities are separate. Containing invoice counts and quantities in different units must not be summed across products.'}</p>}
       {reportType === 'sales_by_product' && <p data-testid="product-sales-source-note" className="mb-3 text-xs text-ui-muted">{getReportExcelProfile(reportType, lang).sourceNote}</p>}
       <div className="flex flex-wrap items-center gap-2 text-xs"><Button size="sm" variant="outline" disabled={loading} onClick={() => runReport(true)}>{lang === 'ar' ? 'تحديث التقرير' : 'Refresh report'}</Button>
       <details className="text-xs text-ui-muted"><summary className="cursor-pointer">{lang === 'ar' ? 'معلومات التحديث' : 'Refresh details'}</summary><p>{lang === 'ar' ? 'تتشارك الصفحات النتائج المتطابقة لمدة دقيقة. اضغط تحديث التقرير لطلب أحدث البيانات.' : 'Identical results are shared for up to one minute. Refresh report requests the latest data.'}</p></details></div>

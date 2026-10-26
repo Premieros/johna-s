@@ -67,4 +67,20 @@ describe('latest-approved-price consumption workspace',()=>{
  it('denies the report without costing permission',()=>{
   state.permissions.delete('reports.costing');open();expect(screen.getByRole('alert').textContent).toContain('permission');expect(state.load).not.toHaveBeenCalled();
  });
+ it('reuses the canonical RPC for manufactured units, without fake prices or automatic reads',async()=>{
+  const units={...data,rows:[],pricing_basis:'current_recipe_manufactured_units',manufactured_unit_count:101,manufactured_units:[{branch_id:'branch-a',branch_name:'A',product_id:'p',product_name:'Burger',inventory_unit_id:'patty',inventory_unit_name:'Patty',inventory_unit_code:'P',consumed_quantity:12,returned_quantity:2,net_quantity:10,product_sold_quantity:5}]};
+  state.load.mockResolvedValue({data:units,error:null});
+  render(<MemoryRouter initialEntries={['/reports?from=2026-10-01&to=2026-10-31']}><ConsumptionReportPage fixedGroup="unit" /></MemoryRouter>);
+  expect(state.load).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button',{name:'Run report'}));
+  await waitFor(()=>expect(screen.getByText('Patty')).toBeTruthy());
+  expect(state.load.mock.calls[0][0]).toMatchObject({p_group_by:'unit',p_page:0,p_page_size:100});
+  expect(screen.getByRole('columnheader',{name:'Manufactured unit'})).toBeTruthy();
+  expect(screen.queryByRole('columnheader',{name:'Latest approved / unit'})).toBeNull();
+  expect(screen.queryByRole('columnheader',{name:'Consumption value'})).toBeNull();
+  expect(screen.getByRole('button',{name:'Next'})).not.toBeDisabled();
+  fireEvent.click(screen.getByRole('button',{name:'Next'}));
+  await waitFor(()=>expect(state.load.mock.calls[1][0].p_page).toBe(1));
+ });
+
 });

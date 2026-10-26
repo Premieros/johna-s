@@ -2,14 +2,16 @@ import { REPORT_REGISTRY } from './reportRegistry';
 import type { ReportType } from './reportFilters';
 import type { FinancialReportView } from './reportFamilies';
 
-export type WorkspaceView = { key: string; type?: ReportType; financial?: FinancialReportView; ar: string; en: string; permissions: string[] };
+export type WorkspaceView = { consumptionGroup?: 'material'|'product'|'unit'; key: string; type?: ReportType; financial?: FinancialReportView; ar: string; en: string; permissions: string[] };
 export type BasicReport = { key: string; ar: string; en: string; descriptionAr: string; descriptionEn: string; views: WorkspaceView[] };
 const op = (type: ReportType, ar: string, en: string): WorkspaceView => ({ key: type, type, ar, en, permissions: REPORT_REGISTRY.find(r => r.key === type)!.permissions });
 const financial = (view: FinancialReportView, ar: string, en: string): WorkspaceView => ({ key: `financial:${view}`, financial: view, ar, en, permissions: ['reports.financial'] });
 
 export const BASIC_REPORTS: BasicReport[] = [
-  { key: 'sales', ar: 'المبيعات الشامل', en: 'Comprehensive Sales', descriptionAr: 'الفواتير والأصناف والمرتجعات وأداء الموظفين', descriptionEn: 'Invoices, items, returns and employee performance', views: [
-    op('sales', 'الفواتير', 'Invoices'), op('sales_by_product', 'ملخص الأصناف', 'Item summary'),
+  { key: 'sales', ar: 'المبيعات الشامل', en: 'Comprehensive Sales', descriptionAr: 'الفواتير والمنتجات والإضافات والخامات والوحدات المصنعة والمرتجعات', descriptionEn: 'Invoices, products, saved modifiers, materials, manufactured units and returns', views: [
+    op('sales', 'الفواتير', 'Invoices'), op('sales_by_product', 'المنتجات وخيارات الإضافات', 'Products & saved options'),
+    { ...op('component_consumption','الخامات المرتبطة بالمبيعات','Sales-related materials'),key:'sales_materials',consumptionGroup:'material' },
+    { ...op('component_consumption','الوحدات المصنعة المرتبطة بالمبيعات','Sales-related manufactured units'),key:'sales_manufactured_units',consumptionGroup:'unit' },
     op('sales_by_station', 'تفاصيل الأصناف والمحطات', 'Items & stations'), op('cashier_performance', 'أداء الموظفين', 'Employee performance'), op('returns', 'المرتجعات', 'Returns'),
   ] },
   { key: 'consumption', ar: 'استهلاك الخامات وتكلفته', en: 'Material Consumption & Cost', descriptionAr: 'صافي المباع × الوصفة الحالية × آخر سعر معتمد؛ بالخامـة أو المنتج، وبلا سعر يُحسب بصفر', descriptionEn: 'Net sold × current recipes × latest approved price, by material or product; missing prices count as zero', views: [

@@ -44,6 +44,7 @@ export type ReportFilterKey =
   | 'status';
 
 export interface ReportFilters {
+  sales_view?: string;
   purchase_view?: string;
   raw_material?: string;
   material_category?: string;
@@ -92,7 +93,7 @@ export const REPORT_FILTER_DIMS: Record<ReportType, ReportFilterKey[]> = {
   sales: ['order_type', 'warehouse', 'cashier', 'customer', 'product', 'category', 'payment_method', 'table', 'status'],
   sales_by_payment: ['order_type', 'warehouse', 'cashier', 'payment_method', 'status'],
   sales_by_employee: ['order_type', 'warehouse', 'cashier', 'payment_method', 'status'],
-  sales_by_product: ['order_type', 'warehouse', 'cashier', 'customer', 'product', 'category', 'payment_method', 'status'],
+  sales_by_product: ['station', 'order_type', 'warehouse', 'cashier', 'customer', 'product', 'category', 'payment_method', 'status'],
   detailed_invoices: ['order_type', 'warehouse', 'cashier', 'customer', 'product', 'category', 'payment_method', 'table', 'status'],
   purchases: ['raw_material', 'material_category', 'supplier', 'buyer', 'warehouse', 'status'],
   expenses: ['payment_method', 'category'],
