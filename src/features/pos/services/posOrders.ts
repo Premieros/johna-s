@@ -142,7 +142,7 @@ export async function fetchOrderForWorkspace(orderId: string): Promise<{ order: 
 
   const { data: o, error: orderError } = await supabase
     .from('orders')
-    .select('*, order_items!order_items_order_id_fkey(*, product:products!order_items_product_id_fkey(*))')
+    .select('*, table:dining_tables(*), order_items!order_items_order_id_fkey(*, product:products!order_items_product_id_fkey(*))')
     .eq('id', orderId)
     .maybeSingle();
   if (orderError) throw orderError;

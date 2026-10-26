@@ -49,6 +49,14 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [settlementReceiptSaleId, setSettlementReceiptSaleId] = useState<string | null>(null);
   const [settlementReceiptOrderCompleted, setSettlementReceiptOrderCompleted] = useState<boolean | null>(null);
   const [openCheckPrintLockedOrderId, setOpenCheckPrintLockedOrderId] = useState<string | null>(null);
+  const receiptWorkspace = useMemo(() => ({
+    orderId: base.activeOrderId, branchId: input.branchId, orderNumber: base.activeOrderNumber,
+    tableId: base.tableId, loadedTableId: base.activeTable?.id, customerId: base.customerId, guestCount: base.guestCount, tableName: base.activeTable?.name, tableBranch: base.activeTable?.branch_id,
+    orderType: base.orderType, loading: base.orderLoading, cart: base.cart,
+  }), [base.activeOrderId, input.branchId, base.activeOrderNumber, base.tableId, base.activeTable?.id, base.customerId, base.guestCount, base.activeTable?.name, base.activeTable?.branch_id, base.orderType, base.orderLoading, base.cart]);
+  const receiptWorkspaceRef = useRef(receiptWorkspace);
+  receiptWorkspaceRef.current = receiptWorkspace;
+
 
   const findCartSource = useCallback((item: ItemPayload) => {
     const wanted = [...(item.modifier_option_ids || [])].sort().join(',');
@@ -533,6 +541,11 @@ export function usePosOrder(input: UsePosOrderInput) {
 
   const printReceipt = useCallback(async () => {
     if (!input.effSettings) return;
+    if (base.orderLoading || (base.activeOrderId && !base.activeOrderNumber)
+      || (base.tableId && (base.activeTable?.id !== base.tableId || base.activeTable.branch_id !== input.branchId))) {
+      show(isAr ? 'انتظر اكتمال تحميل بيانات الطلب والطاولة قبل الطباعة.' : 'Wait for the order and table details to finish loading before printing.', 'warning');
+      return;
+    }
 
     if (!base.activeOrderId) {
       if (settlementReceipt) {
@@ -548,15 +561,9 @@ export function usePosOrder(input: UsePosOrderInput) {
     if (openCheckPrintLockedOrderId === base.activeOrderId && !perms.canReprint) return;
 
     const preview = await loadSettlementPreview(false);
-    if (!preview) {
-      if (settlementReceipt) {
-        const html = await buildReceiptHtml(settlementReceipt, input.effSettings, lang, isAr);
-        openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
-      }
-      return;
-    }
-
-    const receipt = buildSettlementReceipt(preview, base.activeOrderNumber || `ORDER-${Date.now()}`, 0);
+    // An active-order preview failure must never print a different, previously paid receipt.
+    if (!preview || !isCurrentSettlementPreview(preview) || receiptWorkspaceRef.current !== receiptWorkspace) return;
+    const receipt = buildSettlementReceipt(preview, base.activeOrderNumber!, 0);
     receipt.isOpenOrder = true;
     const text = buildReceiptThermalText(receipt, input.effSettings, lang, isAr);
     const template = buildReceiptFixedTemplate(receipt, input.effSettings, lang, isAr);
@@ -581,7 +588,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     }
     setOpenCheckPrintLockedOrderId(base.activeOrderId);
     show(isAr ? 'تم إرسال الحساب إلى محطة طباعة الكاشير.' : 'Open check queued to the cashier print station.', 'success');
-  }, [base, buildSettlementReceipt, input.effSettings, isAr, lang, loadSettlementPreview, openCheckPrintLockedOrderId, perms.canReprint, settlementReceipt]);
+  }, [base, buildSettlementReceipt, input.effSettings, isAr, lang, loadSettlementPreview, openCheckPrintLockedOrderId, perms.canReprint, settlementReceipt, isCurrentSettlementPreview, receiptWorkspace, input.branchId, show]);
 
   const settlementTotals = base.checkoutOpen && base.activeOrderId && settlementPreview
     ? {

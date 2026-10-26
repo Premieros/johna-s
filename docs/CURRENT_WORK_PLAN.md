@@ -2,10 +2,10 @@
 
 ## Active work
 - Repository: `Premieros/johna-s`; production Supabase: `azzdesuowpdcoflmyezn`.
-- Baseline: `d3649e42320902c9a6bb1aaaecaac80fb2cd7180` (#541 deployed).
-- Branch: `feat/sales-composition-reports-20261026`.
-- Mandatory active work log: `docs/SALES_COMPOSITION_REPORTS_20261026.md`.
-- Owner requests product/material/manufactured-unit/modifier sales views and review of omissions, using canonical sources. Prepare read-only report changes; no production migration or release before separate approval. Preserve all operational writers, installed printing and thermal/A4 scope.
+- Baseline: `79718c7b0435920bfdfc6c5f71135f1826374b64` (#542 deployed).
+- Branch: `fix/receipt-table-captain-counts-20261027`.
+- Mandatory active work log: `docs/RECEIPT_TABLE_CAPTAIN_COUNTS_20261027.md`.
+- Owner reports missing/wrong customer-check table and incorrect captain invoice counts; inspect the last two hours in Cleopatra. Sales belong to the captain registered on the order at closure, independently of the collecting cashier. Prepare minimal repairs; no production writes/migration/release without separate approval. Preserve sale attribution, transfer identities, kitchen/bar, stock, accounting and print idempotency.
 
 ## Active usability polish — 2026-10-25
 Owner approved implementing the browser-review findings: compact reports with useful filters and in-page expansion, visible POS branch/dispatch/bill context, readable mobile table cards, safer cancellation presentation and compact dashboard welcome. Presentation only; retain business logic, permissions, queries and installed printers. No production log scans. Prepare one reviewed candidate; publication requires separate final approval.

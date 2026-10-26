@@ -1,9 +1,9 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Order, OrderItem, Product } from '@/lib/types';
+import type { Order, OrderItem, Product, DiningTable } from '@/lib/types';
 import { usePosOrder, type UsePosOrderInput } from '@/features/pos/hooks/usePosOrderBase';
 const mocks = vi.hoisted(() => ({ fetch: vi.fn(), create: vi.fn(), update: vi.fn(), send: vi.fn(), show: vi.fn(), grants: new Set<string>() }));
-vi.mock('@/api', () => ({ supabase: { from: vi.fn() }, floorPlan: { createOrder: mocks.create, updateOrder: mocks.update } }));
+vi.mock('@/api', () => ({ supabase: { from: vi.fn(()=>{const query={select:()=>query,eq:()=>query,maybeSingle:()=>Promise.resolve({data:{status:'occupied'},error:null})};return query;}) }, floorPlan: { createOrder: mocks.create, updateOrder: mocks.update } }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en', t: (key: string) => key }) }));
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'cashier' } }) }));
 vi.mock('@/lib/permissions', () => ({ useCan: () => (key: string) => mocks.grants.has(key) }));
@@ -66,6 +66,31 @@ describe('POS saved-order and cart recovery', () => {
     expect(mocks.send).not.toHaveBeenCalled();
     expect(mocks.update).not.toHaveBeenCalled();
     expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it('hydrates a resumed table with its items before a separate table read can complete', async () => {
+    const table={id:'table-27',branch_id:'branch',name:'27'} as DiningTable;
+    mocks.fetch.mockResolvedValue({...snapshot(),order:{...snapshot().order,table_id:table.id,table,order_type:'dine_in'}});
+    const {result}=renderHook(()=>usePosOrder(input('order')));
+    await waitFor(()=>expect(result.current.orderLoading).toBe(false));
+    expect(result.current.activeTable).toEqual(table);
+    expect(result.current.activeOrderNumber).toBe('O1');
+    expect(result.current.tableId).toBe('table-27');
+  });
+  it('clears previous table identity while another order is loading', async () => {
+    const table={id:'table-28',branch_id:'branch',name:'28'} as DiningTable;
+    mocks.fetch.mockResolvedValueOnce({...snapshot(),order:{...snapshot().order,table_id:table.id,table,order_type:'dine_in'}});
+    const {result,rerender}=renderHook(({id})=>usePosOrder(input(id)),{initialProps:{id:'order'}});
+    await waitFor(()=>expect(result.current.activeTable?.name).toBe('28'));
+    let finish!: (value:ReturnType<typeof snapshot>)=>void;
+    mocks.fetch.mockImplementationOnce(()=>new Promise(done=>{finish=done;}));
+    rerender({id:'second-order'});
+    expect(result.current.orderLoading).toBe(true);
+    expect(result.current.activeTable).toBeNull();
+    expect(result.current.activeOrderNumber).toBeNull();
+    await act(async()=>{finish({...snapshot(),order:{...snapshot().order,id:'second-order'}});});
+    expect(result.current.activeTable).toBeNull();
+    expect(result.current.orderType).toBe('takeaway');
   });
 
 });
