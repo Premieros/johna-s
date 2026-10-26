@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/receipt-table-captain-counts-20261027`
-Current PR: #0
+Current PR: #543
 Last updated: 2026-10-27
 
 ## Work status
