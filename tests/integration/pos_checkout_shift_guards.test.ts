@@ -16,8 +16,17 @@ describe.skipIf(!dbUrl)('checkout explicit shift guard and rollback',()=>{
     const invoke=async(shift:string)=>{
      const method=split?'process_sale_split':'process_sale';
      const paid=split?"'[{\"payment_method\":\"cash\",\"amount\":1},{\"payment_method\":\"card\",\"amount\":1}]'::jsonb":"2";
-     const sql=`SELECT public.${method}('SHIFT-GUARD',$1,$2,NULL,NULL,2,0,'amount',0,0,2,${paid},'completed','[]'::jsonb,$3,'takeaway',NULL,NULL,NULL) r`;
+     const collection=split ? `p_payments := ${paid}` : `p_paid_amount := ${paid}, p_payment_method := 'cash'`;
+     const sql=`SELECT public.${method}(
+       p_invoice_number := 'SHIFT-GUARD', p_branch_id := $1, p_warehouse_id := $2,
+       p_customer_id := NULL, p_salesperson_id := NULL, p_subtotal := 2,
+       p_discount_amount := 0, p_discount_type := 'amount', p_tax_amount := 0,
+       p_bonus_amount := 0, p_total := 2, ${collection}, p_status := 'completed',
+       p_items := '[]'::jsonb, p_shift_id := $3, p_order_type := 'takeaway',
+       p_table_id := NULL, p_order_id := NULL, p_guest_count := NULL) r`;
+     await client.query('SAVEPOINT guard_case');
      const result=await runAsPersist(client,ids.users[role],sql,[ids.branchA,ids.whA,shift]);
+     await client.query('ROLLBACK TO SAVEPOINT guard_case');
      expect(result.error).toBeUndefined();
      expect(result.rows[0].r).toMatchObject({success:false,error:'NO_OPEN_SHIFT'});
     };
