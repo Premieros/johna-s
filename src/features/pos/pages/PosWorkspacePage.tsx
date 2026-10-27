@@ -473,6 +473,7 @@ export function PosWorkspacePage() {
 
 
   const openOrderWorkspace = (orderId: string, opts: { pay?: boolean } = {}) => {
+    if (pos.completing || pos.kitchenSending) return;
     if (pos.activeOrderId === orderId) {
       if (opts.pay && perms.canPay) handlePay();
       setPanel(null);
@@ -483,6 +484,7 @@ export function PosWorkspacePage() {
   };
 
   const startOrderAtTable = (tableId: string) => {
+    if (pos.completing || pos.kitchenSending) return;
     if (!perms.canCreateOrder) return;
     if (pos.activeOrderId || pos.cart.length > 0) {
       const ok = window.confirm(isAr ? 'سيتم إغلاق الطلب الحالي محلياً وبدء طلب جديد على الطاولة. متابعة؟' : 'The current workspace order will be cleared. Continue?');
@@ -496,6 +498,7 @@ export function PosWorkspacePage() {
   };
 
   const handleStartOrder = (opts: StartOrderOptions) => {
+    if (pos.completing || pos.kitchenSending) return;
     if (!perms.canOperateType(opts.orderType, opts.tableId)) return;
     pos.resetWorkspace();
     pos.setOrderType(opts.orderType);
@@ -548,6 +551,7 @@ export function PosWorkspacePage() {
   };
 
   const handleBranchChange = (v: string) => {
+    if (pos.completing || pos.kitchenSending) return;
     if (v !== effectiveBranch && (pos.cart.length > 0 || pos.activeOrderId)) {
       const ok = window.confirm(isAr ? 'تبديل الفرع سيمسح السلة الحالية. متابعة؟' : 'Switching branch will clear the current cart. Continue?');
       if (!ok) return;
@@ -647,7 +651,7 @@ export function PosWorkspacePage() {
       canDirectDiscount={perms.canDiscount}
       activeOrderId={pos.activeOrderId}
       onApprovedDiscount={pos.applyApprovedDiscount}
-      onComplete={() => { if (perms.canPay) void pos.completeSale(); }}
+      onComplete={(payments) => { if (perms.canPay) void pos.completeSale(payments); }}
       onBack={() => { pos.setCheckoutOpen(false); setMobileOrderOpen(true); }}
       currency={pos.effCurrency}
       cart={pos.cart}

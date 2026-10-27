@@ -27,7 +27,7 @@ describe('POS kitchen-send click reliability contract', () => {
 
   it('keeps the hook guard against transient order/loading/send races', () => {
     expect(orderHook).toContain(
-      'if (cart.length === 0 || completing || orderLoading || kitchenSending) return false;',
+      'if (saleMutationLockRef.current || cart.length === 0 || completing || orderLoading || kitchenSending) return false;',
     );
     expect(orderHook).toContain('setKitchenSending(true);');
     expect(orderHook).toContain('setKitchenSending(false);');

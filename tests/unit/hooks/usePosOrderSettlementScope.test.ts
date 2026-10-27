@@ -11,7 +11,7 @@ vi.mock('@/features/pos/services/payment',()=>({nextInvoiceNumber:mocks.invoice,
 import { usePosOrder, type UsePosOrderInput } from '@/features/pos/hooks/usePosOrder';
 const input={branchId:'branch-a',products:[],customers:[],activeShift:{id:'shift-a'}} as unknown as UsePosOrderInput;
 const preview=(order:string,branch:string,warehouse:string)=>({preview:{success:true,order_id:order,branch_id:branch,warehouse_id:warehouse,items:[],subtotal:20,discount_amount:0,tax_amount:0,total:20,pending_quantity:1,unsent_quantity:0,has_payable_items:true},error:null});
-beforeEach(()=>{vi.clearAllMocks();mocks.base.activeOrderId='a';mocks.base.discountAmount=0;mocks.base.discountType='amount';mocks.permissions.canDiscount=false;mocks.invoice.mockReset().mockResolvedValue('INV');mocks.pay.mockResolvedValue({result:{success:false,error:'TEST_STOP'},error:null});});
+beforeEach(()=>{vi.clearAllMocks();mocks.fetch.mockReset();mocks.pay.mockReset();mocks.base.cart=[];mocks.base.activeOrderId='a';mocks.base.discountAmount=0;mocks.base.discountType='amount';mocks.permissions.canDiscount=false;mocks.invoice.mockReset().mockResolvedValue('INV');mocks.pay.mockResolvedValue({result:{success:false,error:'TEST_STOP'},error:null});});
 describe('payment confirmation warehouse source',()=>{
   it('re-reads warehouse on confirmation rather than reusing checkout preview',async()=>{
     mocks.fetch.mockResolvedValueOnce(preview('a','branch-a','old-warehouse')).mockResolvedValueOnce(preview('a','branch-a','pinned-warehouse'));
@@ -153,4 +153,41 @@ describe('persisted settlement closure', () => {
     expect(mocks.base.resetWorkspace).toHaveBeenCalledOnce();
     expect(mocks.show.mock.calls.some(call=>call[1]==='warning')).toBe(false);
   });
+});
+
+it('does not clear a different workspace when an earlier payment completes', async () => {
+  mocks.fetch.mockResolvedValue(preview('a','branch-a','warehouse-a'));
+  let finish!: (value:unknown)=>void;
+  mocks.pay.mockImplementationOnce(()=>new Promise(done=>{finish=done;}));
+  const {result,rerender}=renderHook(()=>usePosOrder(input));
+  let pending!:Promise<boolean>;
+  act(()=>{pending=result.current.completeSale();});
+  await waitFor(()=>expect(mocks.pay).toHaveBeenCalledOnce());
+  mocks.base.activeOrderId='b';rerender();
+  await act(async()=>{finish({result:{success:true,sale_id:'sale-a',order_completed:true},error:null});await pending;});
+  expect(mocks.base.activeOrderId).toBe('b');
+  expect(mocks.base.resetWorkspace).not.toHaveBeenCalled();
+});
+it('recovers an ambiguous linked payment with its exact original attempt without a new preview', async () => {
+  mocks.fetch.mockResolvedValueOnce(preview('a','branch-a','warehouse-a')).mockResolvedValueOnce({preview:null,error:'ORDER_NOT_EDITABLE'});
+  mocks.pay.mockResolvedValueOnce({result:null,error:'Network timeout'}).mockResolvedValueOnce({result:{success:true,sale_id:'sale-a',invoice_number:'INV',idempotent_replay:true,order_completed:true},error:null});
+  const {result}=renderHook(()=>usePosOrder(input));
+  await act(async()=>{expect(await result.current.completeSale()).toBe(false);});
+  await act(async()=>{expect(await result.current.completeSale()).toBe(true);});
+  expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  expect(mocks.pay).toHaveBeenCalledTimes(2);
+  expect(mocks.pay.mock.calls[1]).toEqual(mocks.pay.mock.calls[0]);
+  expect(mocks.invoice).toHaveBeenCalledOnce();
+  expect(mocks.base.resetWorkspace).toHaveBeenCalledOnce();
+});
+
+it('does not discard newer local cart edits while recovering an earlier ambiguous payment',async()=>{
+ mocks.fetch.mockResolvedValue(preview('a','branch-a','warehouse-a'));
+ mocks.pay.mockResolvedValueOnce({result:null,error:'Network timeout'}).mockResolvedValueOnce({result:{success:true,sale_id:'sale-a',order_completed:true},error:null});
+ const {result,rerender}=renderHook(()=>usePosOrder(input));
+ await act(async()=>{expect(await result.current.completeSale()).toBe(false);});
+ mocks.base.cart=[];rerender();
+ await act(async()=>{expect(await result.current.completeSale()).toBe(true);});
+ expect(mocks.base.resetWorkspace).not.toHaveBeenCalled();
+ expect(mocks.pay.mock.calls[1]).toEqual(mocks.pay.mock.calls[0]);
 });

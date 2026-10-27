@@ -29,6 +29,8 @@ describe.skipIf(skip)('POS durable sale idempotency', () => {
   const productId = randomUUID();
   const unitId = randomUUID();
   const cashierId = randomUUID();
+  const secondCaptainId = randomUUID();
+  let captainRaceOrderId = '';
   let shiftId = '';
   let rawId = '';
   let normalOperationKey = '';
@@ -56,6 +58,7 @@ describe.skipIf(skip)('POS durable sale idempotency', () => {
     operationKey: string,
     invoice: string,
     total = 100,
+    linkedOrderId: string | null = null,
   ): Promise<SaleResult> {
     const result = await client.query(
       `SELECT public.process_sale_idempotent(
@@ -78,10 +81,10 @@ describe.skipIf(skip)('POS durable sale idempotency', () => {
          p_shift_id := $7,
          p_order_type := 'takeaway',
          p_table_id := NULL,
-         p_order_id := NULL,
+         p_order_id := $8,
          p_guest_count := NULL
        ) AS r`,
-      [operationKey, invoice, branchId, warehouseId, total, items, shiftId],
+      [operationKey, invoice, branchId, warehouseId, total, items, shiftId, linkedOrderId],
     );
     return (result.rows[0]?.r || {}) as SaleResult;
   }
@@ -177,6 +180,8 @@ describe.skipIf(skip)('POS durable sale idempotency', () => {
          VALUES ($1,$2,'member',true)`,
         [orgId, cashierId],
       );
+      await admin.query(`INSERT INTO public.users(id,email,full_name,role,branch_id,is_active) VALUES($1,$2,'Second captain','cashier',$3,true)`,[secondCaptainId,`captain-race-${randomUUID()}@test.local`,branchId]);
+      await admin.query(`INSERT INTO public.organization_members(organization_id,user_id,membership_role,is_active) VALUES($1,$2,'member',true)`,[orgId,secondCaptainId]);
       const shift = await admin.query<{ id: string }>(
         `INSERT INTO public.shifts(branch_id,cashier_id,opening_amount,status)
          VALUES ($1,$2,0,'open') RETURNING id`,
@@ -201,6 +206,14 @@ describe.skipIf(skip)('POS durable sale idempotency', () => {
     }
 
     if (admin) {
+      if (captainRaceOrderId) {
+        await admin.query(`DELETE FROM public.order_kitchen_inventory_events WHERE order_id=$1`,[captainRaceOrderId]).catch(()=>{});
+        await admin.query(`DELETE FROM public.order_kitchen_sends WHERE order_id=$1`,[captainRaceOrderId]).catch(()=>{});
+        await admin.query(`DELETE FROM public.order_items WHERE order_id=$1`,[captainRaceOrderId]).catch(()=>{});
+        await admin.query(`DELETE FROM public.orders WHERE id=$1`,[captainRaceOrderId]).catch(()=>{});
+      }
+      await admin.query(`DELETE FROM public.organization_members WHERE organization_id=$1 AND user_id=$2`,[orgId,secondCaptainId]).catch(()=>{});
+      await admin.query(`DELETE FROM public.users WHERE id=$1`,[secondCaptainId]).catch(()=>{});
       await admin.query(`DELETE FROM private.pos_sale_idempotency WHERE branch_id=$1`, [branchId]).catch(() => {});
       await admin.query(
         `DELETE FROM public.sale_payments WHERE sale_id IN (SELECT id FROM public.sales WHERE branch_id=$1)`,
@@ -363,5 +376,54 @@ describe.skipIf(skip)('POS durable sale idempotency', () => {
     );
     expect(shiftOps.rows[0].c).toBe(2);
     expect(Number(shiftOps.rows[0].total)).toBe(100);
+  });
+
+  for (const split of [false,true]) {
+    it(`holds the explicit shift open until ${split?'split':'normal'} payment finishes`,async()=>{
+      await beginAsCashier(sessionA);
+      await sessionB.query('BEGIN');
+      let closing:Promise<unknown> | null=null;
+      try {
+        const paid=split ? await splitSale(sessionA,`lock:${randomUUID()}`,`LOCK-${randomUUID()}`) : await normalSale(sessionA,`lock:${randomUUID()}`,`LOCK-${randomUUID()}`);
+        expect(paid.success,JSON.stringify(paid)).toBe(true);
+        let closed=false;
+        closing=sessionB.query(`UPDATE public.shifts SET status='closed' WHERE id=$1`,[shiftId]).then(()=>{closed=true;});
+        await pause(60);
+        expect(closed).toBe(false);
+        await sessionA.query('ROLLBACK');
+        await closing;
+      } finally {
+        await sessionA.query('ROLLBACK').catch(()=>{});
+        if(closing) await closing;
+        await sessionB.query('ROLLBACK');
+      }
+    });
+  }
+  it('captures the captain only after a simultaneous operator transfer commits',async()=>{
+    await beginAsCashier(sessionA);
+    const created=await sessionA.query(`SELECT public.create_order($1,'takeaway',NULL,NULL,NULL,NULL,$2::jsonb,100,0,'amount',0,100,$3) r`,[branchId,items,cashierId]);
+    expect(created.rows[0].r.success,JSON.stringify(created.rows[0].r)).toBe(true);
+    captainRaceOrderId=created.rows[0].r.order_id;
+    const sent=await sessionA.query(`SELECT public.send_to_kitchen($1,NULL) r`,[captainRaceOrderId]);
+    expect(sent.rows[0].r.success,JSON.stringify(sent.rows[0].r)).toBe(true);
+    await sessionA.query('COMMIT');
+    await admin.query('BEGIN');
+    await admin.query(`UPDATE public.orders SET cashier_id=$1 WHERE id=$2`,[secondCaptainId,captainRaceOrderId]);
+    await beginAsCashier(sessionB);
+    let pending:Promise<SaleResult> | null=null;
+    try {
+      let finished=false;
+      pending=normalSale(sessionB,`owner:${randomUUID()}`,`OWNER-${randomUUID()}`,100,captainRaceOrderId).then(r=>{finished=true;return r;});
+      await pause(60);expect(finished).toBe(false);
+      await admin.query('COMMIT');
+      const paid=await pending;
+      expect(paid.success,JSON.stringify(paid)).toBe(true);
+      const row=await sessionB.query(`SELECT cashier_id FROM public.sales WHERE id=$1`,[paid.sale_id]);
+      expect(row.rows[0].cashier_id).toBe(secondCaptainId);
+    } finally {
+      await admin.query('ROLLBACK').catch(()=>{});
+      if(pending) await pending;
+      await sessionB.query('ROLLBACK');
+    }
   });
 });

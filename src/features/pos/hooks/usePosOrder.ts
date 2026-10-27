@@ -1,11 +1,11 @@
 import type { PosItemTransferResult } from '../types';
 import { useMemo, useRef, useState, useCallback } from 'react';
-import { supabase } from '@/api';
+import { supabase, type SplitTenderInput } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { cartToItems, type ItemPayload } from '../utils/cart';
-import { createSaleOperationKey, nextInvoiceNumber, processSaleForOrder } from '../services/payment';
+import { createSaleOperationKey, nextInvoiceNumber, processSaleForOrder, type ProcessSalePayload } from '../services/payment';
 import type { OrderSettlementPreview } from '../services/settlementPreview';
 import { useScopedSettlementPreview } from './useScopedSettlementPreview';
 import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, enqueueAutomaticReceiptPrint, openPrintWindow, type ReceiptData } from '../utils/printing';
@@ -41,7 +41,9 @@ export function usePosOrder(input: UsePosOrderInput) {
   const { show } = useToast();
   const perms = usePosPermissions();
   const [offlineCompleting, setOfflineCompleting] = useState(false);
-  const saleMutationLockRef = useRef(false);
+  const fallbackMutationLockRef = useRef(false);
+  const saleMutationLockRef = base.mutationLockRef || fallbackMutationLockRef;
+  const pendingSaleRef = useRef<{payload:ProcessSalePayload; payments?:SplitTenderInput[]; preview:OrderSettlementPreview; receipt:ReceiptData; scope:object} | null>(null);
   const directDiscountDirtyOrderRef = useRef<string | null>(null);
   const saleAttemptRef = useRef<{ fingerprint: string; operationKey: string } | null>(null);
   const { preview: settlementPreview, load: loadScopedSettlementPreview, clear: clearSettlementPreview, isCurrent: isCurrentSettlementPreview } = useScopedSettlementPreview(base.activeOrderId, input.branchId);
@@ -206,13 +208,14 @@ export function usePosOrder(input: UsePosOrderInput) {
       saleMutationLockRef.current = false;
       setOfflineCompleting(false);
     }
-  }, [base, loadSettlementPreview, isCurrentSettlementPreview]);
+  }, [base, loadSettlementPreview, isCurrentSettlementPreview, saleMutationLockRef]);
 
   const transferOrderToTable = useCallback(async (
     targetOrderId: string,
     _fromTableId: string,
     toTableId: string,
   ): Promise<boolean> => {
+    if (saleMutationLockRef.current) return false;
     try {
       const { data, error } = await supabase.rpc('transfer_order_to_table', {
         p_order_id: targetOrderId,
@@ -240,7 +243,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       show(error instanceof Error ? error.message : (isAr ? 'تعذر تحويل الطلب' : 'Order transfer failed'), 'error');
       return false;
     }
-  }, [base.activeOrderId, base.setTableId, isAr, show]);
+  }, [base.activeOrderId, base.setTableId, isAr, show, saleMutationLockRef]);
 
   const loadPaymentPreview = useCallback(async (): Promise<OrderSettlementPreview | null> => {
     let preview = await loadSettlementPreview(false);
@@ -300,10 +303,11 @@ export function usePosOrder(input: UsePosOrderInput) {
     })();
   }, [base, clearSettlementPreview, isAr, loadPaymentPreview, show]);
 
-  const completeSale = useCallback(async (): Promise<boolean> => {
+  const completeSale = useCallback(async (payments?: SplitTenderInput[]): Promise<boolean> => {
     const explicitlyOffline = typeof navigator !== 'undefined' && !navigator.onLine;
 
     if (explicitlyOffline) {
+      if (payments) { show(isAr ? 'الدفع المقسّم يتطلب اتصالًا بالإنترنت' : 'Split payment requires an online connection', 'error'); return false; }
       if (saleMutationLockRef.current || base.cart.length === 0 || base.completing || offlineCompleting) return false;
       if (!input.branchId) {
         show(isAr ? 'اختر الفرع أولاً' : 'Select a branch first', 'error');
@@ -396,7 +400,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
     }
 
-    if (!base.activeOrderId) return base.completeSale();
+    if (!base.activeOrderId) return base.completeSale(payments);
     if (saleMutationLockRef.current) return false;
     if (!input.branchId || !input.activeShift?.id) {
       show(isAr ? 'يجب اختيار فرع وفتح وردية قبل التحصيل' : 'Select a branch and open a shift before settlement', 'error');
@@ -407,11 +411,13 @@ export function usePosOrder(input: UsePosOrderInput) {
     setOfflineCompleting(true);
     try {
       // Re-read authoritative sent items and pinned warehouse at confirmation.
-      const preview = await loadPaymentPreview();
+      const previous = pendingSaleRef.current;
+      const retry = previous?.payload.p_order_id === base.activeOrderId && previous.payload.p_branch_id === input.branchId ? previous : null;
+      const preview = retry?.preview || await loadPaymentPreview();
       if (!preview) return false;
 
-      const invoiceNumber = await nextInvoiceNumber();
-      if (!isCurrentSettlementPreview(preview)) return false;
+      const invoiceNumber = retry?.payload.p_invoice_number || await nextInvoiceNumber();
+      if ((!retry && !isCurrentSettlementPreview(preview)) || receiptWorkspaceRef.current !== receiptWorkspace) return false;
       const paidAmountToUse = base.paymentMethod === 'credit' ? 0 : (base.paidAmount || preview.total);
       const binding = resolveOrderBindingForSave({
         activeOrderId: base.activeOrderId,
@@ -435,7 +441,7 @@ export function usePosOrder(input: UsePosOrderInput) {
         orderType: binding.orderType,
         tableId: binding.tableId,
         orderId: base.activeOrderId,
-        guestCount: base.guestCount,
+        guestCount: base.guestCount, payments,
       });
       if (!saleAttemptRef.current || saleAttemptRef.current.fingerprint !== attemptFingerprint) {
         saleAttemptRef.current = {
@@ -443,7 +449,8 @@ export function usePosOrder(input: UsePosOrderInput) {
           operationKey: createSaleOperationKey(),
         };
       }
-      const { result, error, diagnostic } = await processSaleForOrder({
+      const attempt = retry || {
+        payload: {
         p_client_operation_key: saleAttemptRef.current.operationKey,
         p_invoice_number: invoiceNumber,
         p_branch_id: input.branchId,
@@ -465,9 +472,15 @@ export function usePosOrder(input: UsePosOrderInput) {
         p_table_id: binding.tableId,
         p_order_id: base.activeOrderId,
         p_guest_count: base.guestCount,
-      });
+      },
+        payments: payments?.map(entry=>({...entry})), preview,
+        receipt: buildSettlementReceipt(preview,invoiceNumber,paidAmountToUse), scope:receiptWorkspace,
+      };
+      pendingSaleRef.current = attempt;
+      const { result, error, diagnostic } = await processSaleForOrder(attempt.payload, attempt.payments);
 
       if (error || !result?.success) {
+        if (result?.success === false) pendingSaleRef.current = null;
         // Refresh only an explicit rejection; transport failures can follow a
         // committed sale. Never resubmit a payment automatically.
         if (result?.success === false && result.error === 'KITCHEN_WAREHOUSE_MISMATCH') {
@@ -490,7 +503,13 @@ export function usePosOrder(input: UsePosOrderInput) {
         payments?: Array<{ payment_method: string; amount: number }>;
       };
       const confirmedInvoiceNumber = extended.invoice_number || invoiceNumber;
-      const receipt = buildSettlementReceipt(preview, confirmedInvoiceNumber, paidAmountToUse, extended.payments || []);
+      pendingSaleRef.current = null;
+      const receipt: ReceiptData = {...attempt.receipt,invoice:confirmedInvoiceNumber,
+        payments:(extended.payments || []).map(entry=>({method:entry.payment_method,amount:Number(entry.amount || 0)}))};
+      if (receiptWorkspaceRef.current !== attempt.scope) {
+        show(t('saleCompleted'), 'success');
+        return true;
+      }
       setSettlementReceipt(receipt);
       setSettlementReceiptSaleId(extended.sale_id || null);
       setSettlementReceiptOrderCompleted(Boolean(extended.order_completed));
@@ -520,6 +539,7 @@ export function usePosOrder(input: UsePosOrderInput) {
         }
       }
 
+      if (receiptWorkspaceRef.current !== receiptWorkspace) return true;
       if (extended.order_completed) {
         base.resetWorkspace();
         show(t('saleCompleted'), 'success');
@@ -537,7 +557,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       saleMutationLockRef.current = false;
       setOfflineCompleting(false);
     }
-  }, [base, buildSettlementReceipt, clearSettlementPreview, input.activeShift?.id, input.branchId, input.effSettings, isAr, isCurrentSettlementPreview, lang, loadPaymentPreview, offlineCompleting, show, t]);
+  }, [base, buildSettlementReceipt, clearSettlementPreview, input.activeShift?.id, input.branchId, input.effSettings, isAr, isCurrentSettlementPreview, lang, loadPaymentPreview, offlineCompleting, show, t, receiptWorkspace, saleMutationLockRef]);
 
   const printReceipt = useCallback(async () => {
     if (!input.effSettings) return;
