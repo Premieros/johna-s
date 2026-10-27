@@ -154,3 +154,29 @@ describe('persisted settlement closure', () => {
     expect(mocks.show.mock.calls.some(call=>call[1]==='warning')).toBe(false);
   });
 });
+
+it('does not clear a different workspace when an earlier payment completes', async () => {
+  mocks.fetch.mockResolvedValue(preview('a','branch-a','warehouse-a'));
+  let finish!: (value:unknown)=>void;
+  mocks.pay.mockImplementationOnce(()=>new Promise(done=>{finish=done;}));
+  const {result,rerender}=renderHook(()=>usePosOrder(input));
+  let pending!:Promise<boolean>;
+  act(()=>{pending=result.current.completeSale();});
+  await waitFor(()=>expect(mocks.pay).toHaveBeenCalledOnce());
+  mocks.base.activeOrderId='b';rerender();
+  await act(async()=>{finish({result:{success:true,sale_id:'sale-a',order_completed:true},error:null});await pending;});
+  expect(mocks.base.activeOrderId).toBe('b');
+  expect(mocks.base.resetWorkspace).not.toHaveBeenCalled();
+});
+it('recovers an ambiguous linked payment with its exact original attempt without a new preview', async () => {
+  mocks.fetch.mockResolvedValueOnce(preview('a','branch-a','warehouse-a')).mockResolvedValueOnce({preview:null,error:'ORDER_NOT_EDITABLE'});
+  mocks.pay.mockResolvedValueOnce({result:null,error:'Network timeout'}).mockResolvedValueOnce({result:{success:true,sale_id:'sale-a',invoice_number:'INV',idempotent_replay:true,order_completed:true},error:null});
+  const {result}=renderHook(()=>usePosOrder(input));
+  await act(async()=>{expect(await result.current.completeSale()).toBe(false);});
+  await act(async()=>{expect(await result.current.completeSale()).toBe(true);});
+  expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  expect(mocks.pay).toHaveBeenCalledTimes(2);
+  expect(mocks.pay.mock.calls[1]).toEqual(mocks.pay.mock.calls[0]);
+  expect(mocks.invoice).toHaveBeenCalledOnce();
+  expect(mocks.base.resetWorkspace).toHaveBeenCalledOnce();
+});
