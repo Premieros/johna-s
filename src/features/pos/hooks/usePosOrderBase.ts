@@ -127,6 +127,9 @@ export function usePosOrder(input: UsePosOrderInput) {
 
   useEffect(() => {
     setActiveOrderId(orderId);
+    setTableId(null);
+    setActiveOrderNumber(null);
+    setActiveTable(null);
     setOpenCheckPrintLocked(false);
     setOpenCheckPrintStateReady(!orderId);
     if (!orderId) {
@@ -166,6 +169,7 @@ export function usePosOrder(input: UsePosOrderInput) {
         }
         setOrderType(order.order_type as OrderType);
         setTableId(order.table_id);
+        setActiveTable(order.table?.id === order.table_id && order.table?.branch_id === branchId ? order.table : null);
         setActiveOrderId(order.id);
         setActiveOrderNumber(order.order_number);
         setGuestCount(order.guest_count);
@@ -190,12 +194,13 @@ export function usePosOrder(input: UsePosOrderInput) {
 
   useEffect(() => {
     if (!tableId) { setActiveTable(null); return; }
+    if (activeTable?.id === tableId && activeTable.branch_id === branchId) return;
     let cancelled = false;
-    supabase.from('dining_tables').select('*').eq('id', tableId).maybeSingle().then(({ data }) => {
+    supabase.from('dining_tables').select('*').eq('id', tableId).eq('branch_id', branchId).maybeSingle().then(({ data }) => {
       if (!cancelled) setActiveTable((data as DiningTable | null) || null);
     });
     return () => { cancelled = true; };
-  }, [tableId]);
+  }, [tableId, branchId, activeTable?.id, activeTable?.branch_id]);
 
   const addToCart = useCallback((
     product: Product,
