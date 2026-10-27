@@ -35,7 +35,7 @@ $checkout_process_sale$;
 DO $checkout_process_sale_split$
 DECLARE v_oid oid; v_def text; v_before text; v_old text; v_new text;
 BEGIN
-  SELECT p.oid,pg_get_functiondef(p.oid) INTO v_oid,v_def FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname='process_sale_split' AND p.pronargs=20;
+  SELECT p.oid,pg_get_functiondef(p.oid) INTO v_oid,v_def FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname='process_sale_split' AND p.pronargs=19;
   IF v_oid IS NULL THEN RAISE EXCEPTION 'process_sale_split missing'; END IF;
   v_before := v_def;
   v_old := $old$    IF p_payments IS NULL OR jsonb_typeof(p_payments) <> 'array' OR jsonb_array_length(p_payments) < 2 THEN$old$;

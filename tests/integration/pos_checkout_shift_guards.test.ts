@@ -31,8 +31,9 @@ describe.skipIf(!dbUrl)('checkout explicit shift guard and rollback',()=>{
   }
  }
  it('reverses only the two function edits and reapplies with identical security metadata',async()=>{
-  const read=()=>client.query("SELECT p.proname,pg_get_functiondef(p.oid) definition,p.prosecdef,p.proowner,p.proacl,p.proconfig FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN ('process_sale','process_sale_split') AND p.pronargs=20 ORDER BY p.proname");
+  const read=()=>client.query("SELECT p.proname,pg_get_functiondef(p.oid) definition,p.prosecdef,p.proowner,p.proacl,p.proconfig FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND ((p.proname='process_sale' AND p.pronargs=20) OR (p.proname='process_sale_split' AND p.pronargs=19)) ORDER BY p.proname");
   const before=(await read()).rows;
+  expect(before).toHaveLength(2);
   await client.query('SAVEPOINT checkout_rollback');
   try {
    await client.query(readFileSync('scripts/rollback/pos_checkout_concurrency_safety_20261027.sql','utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));

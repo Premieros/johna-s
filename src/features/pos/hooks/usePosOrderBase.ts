@@ -92,7 +92,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [completing, setCompleting] = useState(false);
   const saleMutationLockRef = useRef(false);
   const workspaceEpochRef = useRef(0);
-  const pendingSaleRef = useRef<{payload: ProcessSalePayload; payments?: SplitTenderInput[]; receipt: ReceiptData} | null>(null);
+  const pendingSaleRef = useRef<{payload: ProcessSalePayload; payments?: SplitTenderInput[]; receipt: ReceiptData; cartRevision:number} | null>(null);
   const saleAttemptRef = useRef<{ fingerprint: string; operationKey: string } | null>(null);
   const [orderLoading, setOrderLoading] = useState(false);
   const [kitchenSending, setKitchenSending] = useState(false);
@@ -938,7 +938,7 @@ export function usePosOrder(input: UsePosOrderInput) {
         p_table_id: binding.tableId,
         p_order_id: activeOrderId,
         p_guest_count: guestCount,
-      }, payments: payments?.map(entry=>({...entry})),receipt:receiptSnapshot};
+      }, payments: payments?.map(entry=>({...entry})),receipt:receiptSnapshot, cartRevision:cartRevisionRef.current};
       pendingSaleRef.current = attempt;
       const { result, error: saleError } = await processSaleForOrder(attempt.payload, attempt.payments);
       if (saleError || !result?.success) {
@@ -947,7 +947,7 @@ export function usePosOrder(input: UsePosOrderInput) {
         return false;
       }
       pendingSaleRef.current = null;
-      if (epoch !== workspaceEpochRef.current) {
+      if (epoch !== workspaceEpochRef.current || cartRevisionRef.current !== attempt.cartRevision) {
         show(t('saleCompleted'), 'success');
         return true;
       }
@@ -955,7 +955,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       const confirmedInvoiceNumber = result.invoice_number || invoiceNumber;
 
       // Audit logging must not strand a server-confirmed sale in the cart.
-      void logAudit('create', 'sales', saleId, { invoice: confirmedInvoiceNumber, total: attempt.receipt.total }).catch(() => {});
+      void Promise.resolve(logAudit('create', 'sales', saleId, { invoice: confirmedInvoiceNumber, total: attempt.receipt.total })).catch(() => {});
 
       const receiptPayload: ReceiptData = {
         ...attempt.receipt, invoice:confirmedInvoiceNumber,

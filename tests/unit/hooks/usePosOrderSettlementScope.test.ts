@@ -180,3 +180,14 @@ it('recovers an ambiguous linked payment with its exact original attempt without
   expect(mocks.invoice).toHaveBeenCalledOnce();
   expect(mocks.base.resetWorkspace).toHaveBeenCalledOnce();
 });
+
+it('does not discard newer local cart edits while recovering an earlier ambiguous payment',async()=>{
+ mocks.fetch.mockResolvedValue(preview('a','branch-a','warehouse-a'));
+ mocks.pay.mockResolvedValueOnce({result:null,error:'Network timeout'}).mockResolvedValueOnce({result:{success:true,sale_id:'sale-a',order_completed:true},error:null});
+ const {result,rerender}=renderHook(()=>usePosOrder(input));
+ await act(async()=>{expect(await result.current.completeSale()).toBe(false);});
+ mocks.base.cart=[];rerender();
+ await act(async()=>{expect(await result.current.completeSale()).toBe(true);});
+ expect(mocks.base.resetWorkspace).not.toHaveBeenCalled();
+ expect(mocks.pay.mock.calls[1]).toEqual(mocks.pay.mock.calls[0]);
+});

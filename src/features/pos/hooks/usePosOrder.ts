@@ -43,7 +43,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [offlineCompleting, setOfflineCompleting] = useState(false);
   const fallbackMutationLockRef = useRef(false);
   const saleMutationLockRef = base.mutationLockRef || fallbackMutationLockRef;
-  const pendingSaleRef = useRef<{payload:ProcessSalePayload; payments?:SplitTenderInput[]; preview:OrderSettlementPreview; receipt:ReceiptData} | null>(null);
+  const pendingSaleRef = useRef<{payload:ProcessSalePayload; payments?:SplitTenderInput[]; preview:OrderSettlementPreview; receipt:ReceiptData; scope:object} | null>(null);
   const directDiscountDirtyOrderRef = useRef<string | null>(null);
   const saleAttemptRef = useRef<{ fingerprint: string; operationKey: string } | null>(null);
   const { preview: settlementPreview, load: loadScopedSettlementPreview, clear: clearSettlementPreview, isCurrent: isCurrentSettlementPreview } = useScopedSettlementPreview(base.activeOrderId, input.branchId);
@@ -474,7 +474,7 @@ export function usePosOrder(input: UsePosOrderInput) {
         p_guest_count: base.guestCount,
       },
         payments: payments?.map(entry=>({...entry})), preview,
-        receipt: buildSettlementReceipt(preview,invoiceNumber,paidAmountToUse),
+        receipt: buildSettlementReceipt(preview,invoiceNumber,paidAmountToUse), scope:receiptWorkspace,
       };
       pendingSaleRef.current = attempt;
       const { result, error, diagnostic } = await processSaleForOrder(attempt.payload, attempt.payments);
@@ -506,7 +506,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       pendingSaleRef.current = null;
       const receipt: ReceiptData = {...attempt.receipt,invoice:confirmedInvoiceNumber,
         payments:(extended.payments || []).map(entry=>({method:entry.payment_method,amount:Number(entry.amount || 0)}))};
-      if (receiptWorkspaceRef.current !== receiptWorkspace) {
+      if (receiptWorkspaceRef.current !== attempt.scope) {
         show(t('saleCompleted'), 'success');
         return true;
       }
