@@ -959,7 +959,7 @@ export function usePosOrder(input: UsePosOrderInput) {
 
       const receiptPayload: ReceiptData = {
         ...attempt.receipt, invoice:confirmedInvoiceNumber,
-        payments:(result.payments || []).map(payment=>({method:payment.payment_method,amount:Number(payment.amount || 0)})),
+        payments: (result.payments || []).map(payment=>({method:payment.payment_method,amount:Number(payment.amount || 0)})),
       };
       setLastReceipt(receiptPayload);
       setReceiptSaleId(saleId);
