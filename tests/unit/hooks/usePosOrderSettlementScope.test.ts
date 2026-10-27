@@ -11,7 +11,7 @@ vi.mock('@/features/pos/services/payment',()=>({nextInvoiceNumber:mocks.invoice,
 import { usePosOrder, type UsePosOrderInput } from '@/features/pos/hooks/usePosOrder';
 const input={branchId:'branch-a',products:[],customers:[],activeShift:{id:'shift-a'}} as unknown as UsePosOrderInput;
 const preview=(order:string,branch:string,warehouse:string)=>({preview:{success:true,order_id:order,branch_id:branch,warehouse_id:warehouse,items:[],subtotal:20,discount_amount:0,tax_amount:0,total:20,pending_quantity:1,unsent_quantity:0,has_payable_items:true},error:null});
-beforeEach(()=>{vi.clearAllMocks();mocks.base.activeOrderId='a';mocks.base.discountAmount=0;mocks.base.discountType='amount';mocks.permissions.canDiscount=false;mocks.invoice.mockReset().mockResolvedValue('INV');mocks.pay.mockResolvedValue({result:{success:false,error:'TEST_STOP'},error:null});});
+beforeEach(()=>{vi.clearAllMocks();mocks.fetch.mockReset();mocks.pay.mockReset();mocks.base.cart=[];mocks.base.activeOrderId='a';mocks.base.discountAmount=0;mocks.base.discountType='amount';mocks.permissions.canDiscount=false;mocks.invoice.mockReset().mockResolvedValue('INV');mocks.pay.mockResolvedValue({result:{success:false,error:'TEST_STOP'},error:null});});
 describe('payment confirmation warehouse source',()=>{
   it('re-reads warehouse on confirmation rather than reusing checkout preview',async()=>{
     mocks.fetch.mockResolvedValueOnce(preview('a','branch-a','old-warehouse')).mockResolvedValueOnce(preview('a','branch-a','pinned-warehouse'));
