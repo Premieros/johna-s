@@ -57,6 +57,10 @@ DO $patch_process_sale$
 DECLARE v_def text; v_old text; v_new text;
 BEGIN
  SELECT pg_get_functiondef(p.oid) INTO STRICT v_def FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname='process_sale' AND p.pronargs=20;
+ v_old:=$old$IF v_order_owner IS DISTINCT FROM auth.uid() THEN$old$;
+ v_new:=$new$IF p_order_id IS NOT NULL THEN -- Scope payment bookkeeping for both own and other operators orders.$new$;
+ IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'process_sale source drift'; END IF;
+ v_def:=replace(v_def,v_old,v_new);
  v_old:=$old$  v_req_id uuid;$old$;
  v_new:=$new$  v_req_id uuid;
   v_discount_handoff jsonb;
@@ -114,6 +118,10 @@ DO $patch_process_sale_split$
 DECLARE v_def text; v_old text; v_new text;
 BEGIN
  SELECT pg_get_functiondef(p.oid) INTO STRICT v_def FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname='process_sale_split' AND p.pronargs=19;
+ v_old:=$old$IF v_order_owner IS DISTINCT FROM auth.uid() THEN$old$;
+ v_new:=$new$IF p_order_id IS NOT NULL THEN -- Scope payment bookkeeping for both own and other operators orders.$new$;
+ IF (length(v_def)-length(replace(v_def,v_old,'')))/length(v_old)<>1 THEN RAISE EXCEPTION 'process_sale_split source drift'; END IF;
+ v_def:=replace(v_def,v_old,v_new);
  v_old:=$old$  v_req_id uuid;$old$;
  v_new:=$new$  v_req_id uuid;
   v_discount_handoff jsonb;
