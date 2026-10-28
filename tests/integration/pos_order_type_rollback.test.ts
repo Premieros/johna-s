@@ -8,6 +8,8 @@ const local = !!url && ['localhost', '127.0.0.1', '[::1]'].includes(new URL(url)
 const read = (path: string) => readFileSync(path, 'utf8');
 const migration = read('supabase/migrations/20261025185720_pos_order_type_capabilities.sql');
 const inverse = read('scripts/rollback/pos_order_type_permissions_20261025.sql');
+const discountHandoff = read('supabase/migrations/20261028111145_discount_handoff_authority.sql');
+const discountHandoffInverse = read('scripts/rollback/discount_handoff_authority_20261028.sql');
 const baseline = JSON.parse(read('scripts/db/candidates/pos_order_type_permissions_baseline.json')) as {functions: Array<{signature: string; body_md5: string}>};
 const roles = JSON.parse(read('scripts/db/candidates/pos_order_type_role_conversion.json')) as Array<{role: string; before: string[]; after: string[]}>;
 const originals = [...JSON.parse(read('scripts/db/candidates/pos_order_type_original_print_target_defs.json')), ...JSON.parse(read('scripts/db/candidates/pos_order_type_original_order_defs.json'))] as Array<{proname: string; definition: string}>;
@@ -18,6 +20,9 @@ describe.skipIf(!local)('production-specific order-type rollback rehearsal — o
   beforeAll(async () => { db = openDb(url!); await db.connect(); await db.query('BEGIN'); });
   afterAll(async () => { if (db) { await db.query('ROLLBACK').catch(() => {}); await db.end(); } });
   it('restores exact captured function digests and permissions, then reapplies without touching business rows', async () => {
+    // Peel the later dependent repair before rehearsing the historical snapshot.
+    // Keep the exact original digest assertions; reapply in forward order below.
+    await db.query(inTransaction(discountHandoffInverse));
     // The migration chain formats the print function differently from production.
     // Rehearse its exact captured variant, in this rollback-only local transaction.
     for (const original of originals) {
@@ -47,5 +52,6 @@ describe.skipIf(!local)('production-specific order-type rollback rehearsal — o
       const converted = await db.query('SELECT permissions FROM public.roles WHERE role=$1', [role.role]);
       expect(converted.rows[0].permissions).toEqual(role.after);
     }
+    await db.query(inTransaction(discountHandoff));
   });
 });
