@@ -41,6 +41,11 @@ describe.skipIf(!dbUrl)('permission-based saved discount handoff',()=>{
   const audit=(await client.query("SELECT details->>'authorized_by' actor FROM public.audit_log WHERE entity_id=$1 AND action='ORDER_DISCOUNT_INHERITED'",[ids.rows.orders.own])).rows[0];
   expect(audit.actor).toBe(ids.users.branch_manager);
  });
+ it('collects a manager-authored discount without granting order-edit or discount authority to the cashier',async()=>{
+  expect((await apply(ids.users.branch_manager)).success).toBe(true);
+  await client.query(`UPDATE public.roles SET permissions=permissions-'pos.order.edit'-'pos.discount' WHERE role='cashier'`);
+  const r=await pay();expect(r.success,JSON.stringify(r)).toBe(true);expect(r.order_completed).toBe(true);
+ });
  it('uses discount capability rather than a manager role name',async()=>{
   expect(await apply(ids.users.warehouse_manager)).toMatchObject({success:true});
   expect((await pay()).success).toBe(true);
