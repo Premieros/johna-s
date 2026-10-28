@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/discount-handoff-inbox-20261028`
-Current PR: #0
+Current PR: #545
 Last updated: 2026-10-28
 
 ## Work status
