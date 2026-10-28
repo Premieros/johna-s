@@ -191,3 +191,13 @@ it('does not discard newer local cart edits while recovering an earlier ambiguou
  expect(mocks.base.resetWorkspace).not.toHaveBeenCalled();
  expect(mocks.pay.mock.calls[1]).toEqual(mocks.pay.mock.calls[0]);
 });
+
+it('persists an explicit confirmation of the same saved discount amount',async()=>{
+ mocks.permissions.canDiscount=true;
+ const saved=preview('a','branch-a','warehouse-a');saved.preview.discount_amount=5;saved.preview.total=15;
+ mocks.fetch.mockResolvedValue(saved);mocks.discount.mockResolvedValue({data:{success:true},error:null});
+ const {result,rerender}=renderHook(()=>usePosOrder(input));
+ act(()=>result.current.setDiscountAmount(5));mocks.base.discountAmount=5;rerender();
+ await act(async()=>{await result.current.completeSale();});
+ expect(mocks.discount).toHaveBeenCalledWith({p_order_id:'a',p_discount_amount:5,p_approval_request_id:null});
+});

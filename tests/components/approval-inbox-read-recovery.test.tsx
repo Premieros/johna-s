@@ -3,10 +3,10 @@ import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApprovalInbox } from '@/components/ApprovalInbox';
 const m = vi.hoisted(() => ({
-  user: { id: 'operator', branch_id: 'A' }, print: vi.fn(), or: vi.fn(), rpc: vi.fn(), callbacks: [] as Array<(payload?: {new?: Record<string, unknown>; old?: Record<string, unknown>}) => void>, statuses: [] as Array<(status: string) => void>,
+  allowed:true,user: { id: 'operator', branch_id: 'A' }, print: vi.fn(), or: vi.fn(), rpc: vi.fn(), callbacks: [] as Array<(payload?: {new?: Record<string, unknown>; old?: Record<string, unknown>}) => void>, statuses: [] as Array<(status: string) => void>,
 }));
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: m.user }) }));
-vi.mock('@/lib/permissions', () => ({ useCan: () => () => true }));
+vi.mock('@/lib/permissions', () => ({ useCan: () => () => m.allowed }));
 vi.mock('@/api', () => ({ supabase: {
   rpc: m.rpc,
   from: () => { const q = { select: () => q, eq: () => q, in: () => q, or: (x: string) => { m.or(x); return q; }, gte: () => q, order: () => q, limit: m.print }; return q; },
@@ -14,8 +14,8 @@ vi.mock('@/api', () => ({ supabase: {
   removeChannel: vi.fn().mockResolvedValue(undefined),
 } }));
 const alert = { id: 'job', kind: 'receipt', station_code: 'cashier', status: 'failed', attempts: 5, last_error: 'route', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-beforeEach(() => { vi.clearAllMocks(); m.callbacks.length = 0; m.statuses.length = 0; m.user = { id: 'operator', branch_id: 'A' }; m.rpc.mockResolvedValue({ data: [], error: null }); m.print.mockResolvedValue({ data: [], error: null }); localStorage.clear(); });
-afterEach(() => { cleanup(); Reflect.deleteProperty(document, 'hidden'); vi.unstubAllGlobals(); });
+beforeEach(() => { vi.clearAllMocks();m.allowed=true; m.callbacks.length = 0; m.statuses.length = 0; m.user = { id: 'operator', branch_id: 'A' }; m.rpc.mockResolvedValue({ data: [], error: null }); m.print.mockResolvedValue({ data: [], error: null }); localStorage.clear(); });
+afterEach(() => {vi.useRealTimers(); cleanup(); Reflect.deleteProperty(document, 'hidden'); vi.unstubAllGlobals(); });
 describe('approval inbox read recovery', () => {
   it('filters ordinary successes before the server limit and serializes realtime bursts', async () => {
     let finish!: (x: unknown) => void;
@@ -103,5 +103,50 @@ describe('approval inbox read recovery', () => {
     expect(screen.queryByTestId('system-alerts-count')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('system-alerts-button'));
     expect(screen.getByText('No important notifications')).toBeInTheDocument();
+  });
+
+  it('reconciles a request created between the initial read and first subscription',async()=>{
+    m.rpc.mockResolvedValueOnce({data:[],error:null}).mockResolvedValue({data:[{source_type:'manager_approval',source_id:'request',title:'discount',status:'pending',requested_by:'cashier',requested_at:new Date().toISOString(),payload:{reason:'discount'}}],error:null});
+    const screen=render(<ApprovalInbox ar={false}/>);
+    await waitFor(()=>expect(m.rpc).toHaveBeenCalledOnce());
+    expect(screen.queryByTestId('approval-inbox-count')).not.toBeInTheDocument();
+    await act(async()=>{m.statuses[0]('SUBSCRIBED');});
+    await waitFor(()=>expect(screen.getByTestId('approval-inbox-count')).toHaveTextContent('1'));
+    expect(m.print).toHaveBeenCalledOnce();
+  });
+  it('each authorized reviewer independently sees the same pending request',async()=>{
+    m.rpc.mockResolvedValue({data:[{source_type:'manager_approval',source_id:'request',title:'discount',status:'pending',requested_by:'cashier',payload:{}}],error:null});
+    const first=render(<ApprovalInbox ar={false}/>);
+    await waitFor(()=>expect(first.getByTestId('approval-inbox-count')).toHaveTextContent('1'));
+    first.unmount();m.user={id:'second-reviewer',branch_id:'A'};
+    const second=render(<ApprovalInbox ar={false}/>);
+    await waitFor(()=>expect(second.getByTestId('approval-inbox-count')).toHaveTextContent('1'));
+    expect(m.rpc.mock.calls.every(call=>call[0]==='get_operational_approval_queue')).toBe(true);
+  });
+  it('retries only approval reads while disconnected and stops polling after subscription recovers',async()=>{
+    let tick!:()=>void;const original=setInterval;
+    vi.spyOn(window,'setInterval').mockImplementation((handler,ms,...args)=>{if(ms===30_000){tick=()=>{if(typeof handler==='function')handler(...args);};return original(handler,ms,...args);}return original(handler,ms,...args);});
+    render(<ApprovalInbox ar={false}/>);await waitFor(()=>expect(m.rpc).toHaveBeenCalledOnce());
+    await act(async()=>{m.statuses[0]('CHANNEL_ERROR');tick();});
+    expect(m.rpc).toHaveBeenCalledTimes(2);expect(m.print).toHaveBeenCalledOnce();
+    await act(async()=>{m.statuses[0]('SUBSCRIBED');});
+    const calls=m.rpc.mock.calls.length;
+    await act(async()=>{tick();tick();tick();});
+    expect(m.rpc).toHaveBeenCalledTimes(calls);expect(m.print).toHaveBeenCalledOnce();
+  });
+  it('uses review permission rather than a privileged-looking user identity',async()=>{
+    m.allowed=false;m.user={id:'named-manager',branch_id:'A'};
+    const screen=render(<ApprovalInbox ar={false}/>);
+    await act(async()=>{await Promise.resolve();});
+    expect(screen.queryByTestId('approval-inbox-button')).not.toBeInTheDocument();
+    expect(m.rpc).not.toHaveBeenCalled();
+  });
+  it('surfaces rejected decisions and retains the pending request',async()=>{
+    m.rpc.mockImplementation((name:string)=>Promise.resolve(name==='decide_manager_approval'?{data:{success:false,error:'NOT_AUTHORIZED'},error:null}:{data:[{source_type:'manager_approval',source_id:'request',title:'discount',status:'pending',requested_by:'cashier',payload:{}}],error:null}));
+    const screen=render(<ApprovalInbox ar={false}/>);await waitFor(()=>expect(screen.getByTestId('approval-inbox-count')).toHaveTextContent('1'));
+    fireEvent.click(screen.getByTestId('approval-inbox-button'));
+    fireEvent.click(screen.getByText('Approve'));
+    await waitFor(()=>expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(screen.getByTestId('approval-inbox-count')).toHaveTextContent('1');
   });
 });

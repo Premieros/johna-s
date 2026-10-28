@@ -253,24 +253,22 @@ export function usePosOrder(input: UsePosOrderInput) {
     if (perms.canDiscount && directDiscountDirtyOrderRef.current === preview.order_id) {
       const intendedDiscount = Math.round((base.discountType === 'percent'
         ? preview.subtotal * base.discountAmount / 100 : base.discountAmount) * 100) / 100;
-      if (intendedDiscount !== preview.discount_amount) {
-        const saved = await api.floorPlan.setCheckoutDiscount({
-          p_order_id: preview.order_id,
-          p_discount_amount: intendedDiscount,
-          p_approval_request_id: null,
-        });
-        if (saved.error || !saved.data?.success) {
-          show(saved.error?.message || saved.data?.error || 'DISCOUNT_APPLY_FAILED', 'error');
-          return null;
-        }
-        preview = await loadSettlementPreview(false);
-        if (!preview || preview.discount_amount !== intendedDiscount) {
-          show(isAr ? 'تعذر تأكيد الخصم؛ لم يتم تحصيل الطلب' : 'Discount verification failed; payment was not taken', 'error');
-          return null;
-        }
+      // An explicit confirmation also reauthorizes the same saved value.
+      const saved = await api.floorPlan.setCheckoutDiscount({
+        p_order_id: preview.order_id,
+        p_discount_amount: intendedDiscount,
+        p_approval_request_id: null,
+      });
+      if (saved.error || !saved.data?.success) {
+        show(saved.error?.message || saved.data?.error || 'DISCOUNT_APPLY_FAILED', 'error');
+        return null;
+      }
+      preview = await loadSettlementPreview(false);
+      if (!preview || preview.discount_amount !== intendedDiscount) {
+        show(isAr ? 'تعذر تأكيد الخصم؛ لم يتم تحصيل الطلب' : 'Discount verification failed; payment was not taken', 'error');
+        return null;
       }
     }
-
     directDiscountDirtyOrderRef.current = null;
     return preview;
   }, [base, isAr, isCurrentSettlementPreview, loadSettlementPreview, perms.canDiscount, show]);

@@ -2,10 +2,10 @@
 
 ## Active work
 - Repository: `Premieros/johna-s`; production Supabase: `azzdesuowpdcoflmyezn`.
-- Baseline: `77cdfea6d1edcd5f9c29aa56276f2cd42c891f53` (#543 deployed).
-- Branch: `fix/pos-operation-safety-20261027`.
-- Mandatory active work log: `docs/POS_OPERATION_SAFETY_20261027.md`.
-- Owner authorized fixing the eight audited POS failures together. Prepare frontend guards, explicit split-tender submission, exact-attempt manual recovery, and minimal existing checkout row-lock repairs. Preserve captain-at-close attribution, existing permissions, financial equations, stock, transfer line identities, kitchen/bar and print queue/agent behavior. No production log scans, operations or automatic replay. لا Merge ولا Production migration before separate approval of the concrete verified candidate.
+- Baseline: `808c534ca0ff63f6641a4a3c73e4dda40a54317b` (#544 released).
+- Branch: `fix/discount-handoff-inbox-20261028`.
+- Mandatory active work log: `docs/DISCOUNT_HANDOFF_INBOX_20261028.md`.
+- Owner reports a real manager-authored discount blocking cashier settlement and inconsistent delivery of requests to authorized reviewers. Repair by capability/branch, never business role labels. Prepare narrowly scoped private saved-discount proof and existing checkout guard integration, plus reliable inbox reconciliation. Preserve the online-primary architecture, all financial equations/stock/transfer/print identities and #544. The four speculative POS edge cases remain deferred per owner. لا Merge ولا Production migration before final exact-head verification and explicit release approval.
 
 ## Active usability polish — 2026-10-25
 Owner approved implementing the browser-review findings: compact reports with useful filters and in-page expansion, visible POS branch/dispatch/bill context, readable mobile table cards, safer cancellation presentation and compact dashboard welcome. Presentation only; retain business logic, permissions, queries and installed printers. No production log scans. Prepare one reviewed candidate; publication requires separate final approval.

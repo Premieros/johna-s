@@ -3,6 +3,7 @@ import { AlertTriangle, Bell, Check, CheckCircle2, Printer, X } from 'lucide-rea
 import { supabase } from '@/api';
 import { useAuth } from '@/context/AuthContext';
 import { useCan } from '@/lib/permissions';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { createReadRefreshQueue } from '@/lib/readRefreshQueue';
 
 type ApprovalRequest = {
@@ -147,6 +148,7 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
   const [hiddenAlertKeys, setHiddenAlertKeys] = useState<string[]>([]);
   const [readAlertKeys, setReadAlertKeys] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [decisionError, setDecisionError] = useState('');
   const allowed = can('approvals.review');
   const alertStorageKey = user?.id
     ? `${ALERT_STATE_PREFIX}:${user.id}:${user.branch_id || 'all'}`
@@ -298,29 +300,51 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
     }
 
     let subscribed = false;
+    let subscriptionHealthy = false;
     channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
+      subscriptionHealthy = status === 'SUBSCRIBED';
+      if (subscriptionHealthy) {
+        // Reconcile the gap between the initial read and the first subscription.
         if (subscribed) refreshAll();
+        else refresh();
         subscribed = true;
       }
     });
+    // Fallback only while realtime is unavailable; never poll ordinary print jobs.
+    const recoveryTimer = window.setInterval(() => {
+      if (!subscriptionHealthy && !document.hidden) refresh();
+    }, 30_000);
+    const onFocus = () => refresh();
+    window.addEventListener('focus', onFocus);
     const onVisible = () => { if (!document.hidden) refreshAll(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       refreshQueue.cancel(); printQueue.cancel();
+      window.clearInterval(recoveryTimer);
+      window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisible);
       void supabase.removeChannel(channel);
     };
   }, [allowed, user?.branch_id, user?.id, loadApprovals, loadPrintAlerts]);
 
   const decide = async (id: string, approve: boolean) => {
+    if (busy) return;
     setBusy(id);
+    setDecisionError('');
     try {
-      await supabase.rpc('decide_manager_approval', {
+      const { data, error } = await supabase.rpc('decide_manager_approval', {
         p_request_id: id,
         p_approve: approve,
         p_note: null,
       });
+      const result = data as {success?: boolean; error?: string; detail?: string} | null;
+      if (error || !result?.success) throw new Error(error?.message || result?.detail || result?.error || 'APPROVAL_DECISION_FAILED');
+      await refreshQueueRef.current?.request();
+    } catch (error) {
+      const message=error instanceof Error ? error.message : 'APPROVAL_DECISION_FAILED';
+      setDecisionError(message==='NOT_AUTHORIZED'
+        ? (ar ? 'لا تملك صلاحية الموافقة على هذا الطلب.' : 'You are not authorized to approve this request.')
+        : userFacingErrorMessage(error,ar ? 'ar' : 'en'));
       await refreshQueueRef.current?.request();
     } finally {
       setBusy(null);
@@ -359,6 +383,7 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
           data-testid="approval-inbox-button"
           onClick={() => {
             setApprovalOpen((v) => !v);
+            void refreshQueueRef.current?.request().catch(() => {});
             setAlertsOpen(false);
           }}
           className="relative rounded-xl p-2 text-ui-muted transition-colors hover:bg-ui-page-alt hover:text-ui-text"
@@ -378,6 +403,7 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
               <p className="font-semibold text-ui-text">{ar ? 'طلبات الموافقة' : 'Approval requests'}</p>
               <p className="text-xs text-ui-muted">{ar ? 'الطلبات المعلقة التي تحتاج قرارًا' : 'Pending requests that need a decision'}</p>
             </div>
+            {decisionError && <p role="alert" className="px-4 py-2 text-sm text-ui-danger">{decisionError}</p>}
             <div className="max-h-96 overflow-y-auto p-2">
               {items.length === 0 ? (
                 <p className="px-3 py-6 text-center text-sm text-ui-muted">{ar ? 'لا توجد طلبات معلقة' : 'No pending requests'}</p>
