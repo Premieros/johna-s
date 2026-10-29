@@ -29,13 +29,19 @@ date_candidates AS MATERIALIZED (
     AND NOT COALESCE(s.is_archived,false) AND COALESCE(s.status,'') NOT IN ('cancelled','returned')
     AND s.created_at>=b.start_at AND s.created_at<b.end_at
   UNION ALL
-  -- Preserve nullable/infinite/unbounded date semantics exactly on the fallback path.
+  -- The lateral fence prevents a disabled fallback from scanning sales first.
   SELECT s.id,s.branch_id,s.refunded_amount,s.total,s.tax_amount,s.created_at,s.is_archived,s.status
-  FROM public.sales s CROSS JOIN range_bounds b
-  WHERE NOT b.fast_range AND (p_branch_id IS NULL OR s.branch_id=p_branch_id)
-    AND NOT COALESCE(s.is_archived,false) AND COALESCE(s.status,'') NOT IN ('cancelled','returned')
-    AND (b.from_date IS NULL OR (s.created_at AT TIME ZONE 'Africa/Cairo')::date>=b.from_date)
-    AND (b.to_date IS NULL OR (s.created_at AT TIME ZONE 'Africa/Cairo')::date<=b.to_date)
+  FROM range_bounds b
+  CROSS JOIN LATERAL (
+    SELECT s.id,s.branch_id,s.refunded_amount,s.total,s.tax_amount,s.created_at,s.is_archived,s.status
+    FROM public.sales s
+    WHERE (p_branch_id IS NULL OR s.branch_id=p_branch_id)
+      AND NOT COALESCE(s.is_archived,false) AND COALESCE(s.status,'') NOT IN ('cancelled','returned')
+      AND (b.from_date IS NULL OR (s.created_at AT TIME ZONE 'Africa/Cairo')::date>=b.from_date)
+      AND (b.to_date IS NULL OR (s.created_at AT TIME ZONE 'Africa/Cairo')::date<=b.to_date)
+    OFFSET 0
+  ) s
+  WHERE NOT b.fast_range
 ),
 scoped_sales AS MATERIALIZED ($old$;
  v_new:=$new$scoped_sales AS MATERIALIZED ($new$;
@@ -85,13 +91,19 @@ date_candidates AS MATERIALIZED (
     AND NOT COALESCE(s.is_archived,false) AND COALESCE(s.status,'') NOT IN ('cancelled','returned')
     AND s.created_at>=b.start_at AND s.created_at<b.end_at
   UNION ALL
-  -- Preserve nullable/infinite/unbounded date semantics exactly on the fallback path.
+  -- The lateral fence prevents a disabled fallback from scanning sales first.
   SELECT s.id,s.branch_id,s.refunded_amount,s.total,s.tax_amount,s.created_at,s.is_archived,s.status
-  FROM public.sales s CROSS JOIN range_bounds b
-  WHERE NOT b.fast_range AND (p_branch_id IS NULL OR s.branch_id=p_branch_id)
-    AND NOT COALESCE(s.is_archived,false) AND COALESCE(s.status,'') NOT IN ('cancelled','returned')
-    AND (b.from_date IS NULL OR (s.created_at AT TIME ZONE 'Africa/Cairo')::date>=b.from_date)
-    AND (b.to_date IS NULL OR (s.created_at AT TIME ZONE 'Africa/Cairo')::date<=b.to_date)
+  FROM range_bounds b
+  CROSS JOIN LATERAL (
+    SELECT s.id,s.branch_id,s.refunded_amount,s.total,s.tax_amount,s.created_at,s.is_archived,s.status
+    FROM public.sales s
+    WHERE (p_branch_id IS NULL OR s.branch_id=p_branch_id)
+      AND NOT COALESCE(s.is_archived,false) AND COALESCE(s.status,'') NOT IN ('cancelled','returned')
+      AND (b.from_date IS NULL OR (s.created_at AT TIME ZONE 'Africa/Cairo')::date>=b.from_date)
+      AND (b.to_date IS NULL OR (s.created_at AT TIME ZONE 'Africa/Cairo')::date<=b.to_date)
+    OFFSET 0
+  ) s
+  WHERE NOT b.fast_range
 ),
 scoped_sales AS MATERIALIZED ($old$;
  v_new:=$new$  WITH scoped_sales AS MATERIALIZED ($new$;

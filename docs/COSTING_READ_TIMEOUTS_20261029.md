@@ -28,6 +28,8 @@ First exact-head CI40945280417:1162 existing DB/RLS tests passed; the added pari
 
 Second exact-head CI40946028599:1162 existing DB checks passed again; new full-result parity across56 boundary/fallback cases and exact rollback/reapply metadata passed. The final EXPLAIN harness failed because a non-word-boundary parameter replacement also modified history_clamp_from. Restrict replacement to complete parameter identifiers and permit valid bitmap recheck timestamp conditions. SQL/application remain unchanged. Final exact-head CI pending.
 
+Third exact-head CI40946895646:1162 existing checks passed and complete parity/recovery passed, but the scan-loop assertion caught a real candidate inefficiency: PostgreSQL reordered the disabled UNION fallback to scan branch sales before evaluating fast_range. A local ephemeral WASM Postgres reproduction confirmed it. Add a correlated LATERAL OFFSET0 fence so false fallback cannot scan sales. Local plan now has fallback sales Actual Loops0; the normal path uses branch+created_at index bounds. A12001-row synthetic local plan passed16 branch/date parity cases and reduced buffer hits149→3 (normal range12 rows). This is a WASM Postgres fixture, not production latency or whole-RPC proof. Candidate SQL changed, final exact-head re-verification required. No production change.
+
 ## Production gate
 لا Merge ولا Production migration before separate owner release approval and exact-head four-job success. Recheck live original bodies/security before atomic guarded migration (lock2s/statement15s). Rollback scripts restore two original bodies; frontend revert restores rendering/cache behavior. No production integration tests.
 
