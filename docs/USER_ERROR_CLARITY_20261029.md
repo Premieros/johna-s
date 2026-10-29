@@ -24,6 +24,8 @@ Translate station setup, cancelled/completed states, technical/connection failur
 ## Verification ledger
 77 focused checks passed across8 files: user-facing mappings, nested cause telemetry/privacy, Toast reference linkage, ended-order authorization, cart recovery and settlement scope. App/test types and build passed; lint has no errors (one existing hook dependency warning). API contract unchanged171RPC/56tables. Exact-head four-job CI required before release. No production incident reproduction or printer tests.
 
+First exact-head CI passed1157 DB/RLS tests and136 browser checks plus Pages continuity. Frontend1965 passed/2 failed: two old expectations required the previous generic wording and telemetry call without correlation. Update those expectations to the new outcome-uncertainty wording and linked reference; retain query-error rows/hasMore behavior and centralized telemetry assertions. Application source unchanged. Fresh exact-head CI required.
+
 ## Production gate
 لا Merge ولا Production migration before separate final owner release approval and exact-head verification. No database change included. Rollback by reverting this frontend candidate.
 
