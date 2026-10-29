@@ -19,7 +19,7 @@ import { logAudit } from '@/lib/audit';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useOperationalGuard, PrerequisiteAlertBanner, PREREQUISITE_STEPS } from '@/core/guard';
 import type { WarehouseTransfer, Warehouse, Branch, RpcResult } from '@/lib/types';
-import { loadTransferAverageCost, loadTransferMeta, type TransferRawMaterialChoice } from '../services/transferPageData';
+import { loadTransferAverageCost, loadTransferDestinationPrices, loadTransferMeta, type TransferRawMaterialChoice } from '../services/transferPageData';
 
 interface TransferLine { item_type: 'raw_material'; item_id: string; destination_item_id: string; quantity: number; unit_cost: number; }
 interface TransferRow extends WarehouseTransfer { to_branch_id?: string | null; }
@@ -153,12 +153,20 @@ export function TransfersPage() {
   };
 
   const setDestinationBranch = (branchId: string) => {
+    invalidateCosts();
     const firstWarehouse = warehouses.find((w) => w.branch_id === branchId)?.id || '';
     setForm((prev) => ({ ...prev, destination_branch_id: branchId, to_warehouse_id: firstWarehouse }));
-    setLines((current) => current.map((line) => ({ ...line, destination_item_id: resolveDestinationRawId(line.item_id, branchId) })));
+    const next=lines.map(line=>({...line,destination_item_id:resolveDestinationRawId(line.item_id,branchId),unit_cost:0}));
+    setLines(next);
+    void reloadDestinationPrices(next,branchId);
   };
 
-  const lookupAvgCost = async (line: TransferLine): Promise<number> => {
+  const lookupAvgCost = async (line: TransferLine, destinationBranchId=form.destination_branch_id): Promise<number> => {
+    if (destinationBranchId !== form.source_branch_id) {
+      const id=resolveDestinationRawId(line.item_id,destinationBranchId);
+      if (!id) return 0; // The existing matching guard rejects an unresolved destination.
+      return (await loadTransferDestinationPrices(destinationBranchId,[id]))[id];
+    }
     if (!line.item_id || !form.from_warehouse_id) return 0;
     return loadTransferAverageCost({
       rawMaterialId: line.item_id,
@@ -166,19 +174,39 @@ export function TransfersPage() {
       warehouseId: form.from_warehouse_id,
     });
   };
-  const updateLineItem = async (idx: number, itemId: string) => {
+  const updateLineItem = async (idx: number, itemId: string, destinationBranchId=form.destination_branch_id) => {
     const token = costs.current;
     const version = (token.versions.get(idx) || 0) + 1;
     token.versions.set(idx, version);
     const current = () => costs.current === token && token.versions.get(idx) === version;
-    setLines(previous => previous.map((line,i) => i === idx ? {...line,item_id:itemId,destination_item_id:resolveDestinationRawId(itemId,form.destination_branch_id),unit_cost:0} : line));
+    setLines(previous => previous.map((line,i) => i === idx ? {...line,item_id:itemId,destination_item_id:resolveDestinationRawId(itemId,destinationBranchId),unit_cost:0} : line));
     setCostErrors(previous => previous.filter(i => i !== idx));
     setCostPending(previous => [...previous.filter(i => i !== idx),idx]);
     try {
-      const cost = Number((itemId ? await lookupAvgCost({ ...EMPTY_LINE, item_id:itemId }) : 0).toFixed(2));
+      const cost = Number((itemId ? await lookupAvgCost({ ...EMPTY_LINE, item_id:itemId },destinationBranchId) : 0).toFixed(6));
       if (current()) setLines(previous => previous.map((line,i) => i === idx && line.item_id === itemId ? {...line,unit_cost:cost} : line));
     } catch { if (current()) setCostErrors(previous => [...previous.filter(i => i !== idx),idx]); }
     finally { if (current()) setCostPending(previous => previous.filter(i => i !== idx)); }
+  };
+  const reloadDestinationPrices = async (next: TransferLine[], destinationBranchId: string) => {
+    if (destinationBranchId===form.source_branch_id) {
+      for (let i=0;i<next.length;i++) if(next[i].item_id) await updateLineItem(i,next[i].item_id,destinationBranchId);
+      return;
+    }
+    const token=costs.current;
+    const selected=next.map((line,index)=>({line,index})).filter(({line})=>line.destination_item_id);
+    const versions=new Map(selected.map(({index})=>[index,1]));
+    for(const [index,version] of versions) token.versions.set(index,version);
+    setCostPending(selected.map(({index})=>index));
+    const current=(i:number)=>costs.current===token && token.versions.get(i)===versions.get(i);
+    try {
+      const prices=await loadTransferDestinationPrices(destinationBranchId,selected.map(({line})=>line.destination_item_id));
+      setLines(previous=>previous.map((line,index)=>current(index)&&versions.has(index)&&line.destination_item_id===next[index].destination_item_id?{...line,unit_cost:prices[line.destination_item_id]}:line));
+    } catch {
+      if(costs.current===token) setCostErrors(previous=>[...new Set([...previous,...selected.filter(({index})=>current(index)).map(({index})=>index)])]);
+    } finally {
+      if(costs.current===token) setCostPending(previous=>previous.filter(i=>!current(i)));
+    }
   };
   const updateLine = (idx: number, field: 'quantity' | 'unit_cost', value: number) => setLines(previous => previous.map((l, i) => i === idx ? { ...l, [field]: value } : l));
   const addLine = () => setLines(previous => [...previous, { ...EMPTY_LINE }]);
@@ -298,11 +326,12 @@ export function TransfersPage() {
             <Input label={t('reason')} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
           </div>
           <div>
+            {form.source_branch_id !== form.destination_branch_id && <p role="note" className="mb-2 text-sm text-ui-subtle">{lang==='ar'?'سعر التحويل هو آخر سعر معتمد للخامة في الفرع المستلم. السعر المعروض تقديري ويُحدّث ويُثبت عند الموافقة؛ الخامة بلا سعر تُحسب بصفر.':'Transfers use the receiving branch’s latest approved raw price. The preview is refreshed and fixed at approval; an unpriced raw material is valued at zero.'}</p>}
             <div className="flex items-center justify-between mb-2"><div><p className="text-sm font-bold text-ui-muted">{t('transferItems')}</p><p className="text-xs text-ui-subtle">{lang === 'ar' ? 'اختر الخامة والكمية فقط. عند التحويل بين الفروع يحدد النظام الخامة المطابقة تلقائيًا بالاسم والوحدة.' : 'Choose the raw material and quantity only. Cross-branch transfers resolve the matching raw material automatically by name and unit.'}</p></div><Button variant="outline" size="sm" onClick={addLine}><Plus className="w-4 h-4" /> {t('add')}</Button></div>
             <div className="space-y-2">{lines.map((l, idx) => <div key={idx} className="grid grid-cols-1 sm:grid-cols-[1fr_130px_130px_36px] gap-2 items-end">
               <Select aria-label={`${t('rawMaterial')} ${idx + 1}`} value={l.item_id} onChange={(e) => void updateLineItem(idx, e.target.value)}><option value="">{lang === 'ar' ? 'اختر الخامة' : 'Select raw material'}</option>{sourceRawMaterials.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>
               <Input aria-label={`${t('quantity')} ${idx + 1}`} type="number" step="0.0001" value={l.quantity} onChange={(e) => updateLine(idx, 'quantity', parseFloat(e.target.value) || 0)} placeholder={t('quantity')} />
-              <Input aria-label={`${t('unitCost')} ${idx + 1}`} type="number" step="0.01" value={l.unit_cost} onChange={(e) => updateLine(idx, 'unit_cost', parseFloat(e.target.value) || 0)} placeholder={t('unitCost')} />
+              <Input aria-label={`${t('unitCost')} ${idx + 1}`} type="number" step="0.000001" readOnly={form.source_branch_id !== form.destination_branch_id} value={l.unit_cost} onChange={(e) => updateLine(idx, 'unit_cost', parseFloat(e.target.value) || 0)} placeholder={t('unitCost')} />
               <button disabled={costPending.length > 0} onClick={() => removeLine(idx)} className="p-2 rounded-lg text-ui-danger hover:bg-ui-danger-soft" title={t('delete')}><Trash2 className="w-4 h-4" /></button>
             </div>)}</div>
           </div>

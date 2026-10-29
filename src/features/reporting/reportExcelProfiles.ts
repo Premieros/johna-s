@@ -66,7 +66,7 @@ export function getReportExcelProfile(reportType: ReportType, lang: 'ar' | 'en')
       integerColumns: [pick(lang, 'عدد الحركات', 'Movements')],
     },
     recipe_costs: {
-      columns: [branch, pick(lang, 'المنتج', 'Product'), pick(lang, 'تكلفة الوصفة', 'Recipe Cost'), pick(lang, 'سعر البيع', 'Sale Price'), pick(lang, 'الهامش', 'Margin')],
+      columns: [branch, pick(lang, 'المنتج', 'Product'), pick(lang, 'تكلفة الوصفة', 'Recipe Cost'), pick(lang, 'سعر البيع', 'Sale Price'), pick(lang, 'نسبة التكلفة %', 'Cost ratio %'), pick(lang, 'الهامش', 'Margin')],
       columnWidths: { [branch]: 24, [pick(lang, 'المنتج', 'Product')]: 30 },
       integerColumns: [],
     },

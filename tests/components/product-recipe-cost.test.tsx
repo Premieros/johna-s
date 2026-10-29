@@ -6,12 +6,19 @@ vi.mock('@/context/LanguageContext',()=>({useLanguage:()=>({lang:'en'})}));
 vi.mock('@/features/costing/services/recipeEstimateData',()=>({loadRecipeEstimateData:mocks.load}));
 beforeEach(()=>mocks.load.mockReset());
 describe('recipe cost within product editor',()=>{
+  it('withholds a percentage when there is no positive sale price',async()=>{
+    mocks.load.mockResolvedValue({prices:{raw:5},groupCosts:{}});
+    render(<ProductRecipeCost branchId="a" ingredients={[{raw_material_id:'raw',quantity:2,wastage_percent:0}]} groups={[]} yieldQuantity={1} salePrice={0}/>);
+    await waitFor(()=>expect(screen.getByText('10.00 EGP')).toBeVisible());
+    expect(screen.getByText('Cost ratio: —')).toBeVisible();expect(screen.getByText('Expected margin: —')).toBeVisible();
+  });
   it('shows cents and updates quantities without refetching prices',async()=>{
     mocks.load.mockResolvedValue({prices:{coffee:5},groupCosts:{group:3}});
     const props={branchId:'a',ingredients:[{raw_material_id:'coffee',quantity:4,wastage_percent:10}],groups:[{unit_id:'group',quantity:2}],yieldQuantity:2,salePrice:100};
     const view=render(<ProductRecipeCost {...props}/>);
     await waitFor(()=>expect(screen.getByText('17.00 EGP')).toBeVisible());
     expect(screen.getByText('Expected margin: 83%')).toBeVisible();
+    expect(screen.getByText('Cost ratio: 17%')).toBeVisible();
     view.rerender(<ProductRecipeCost {...props} groups={[{unit_id:'group',quantity:3}]}/>);
     expect(screen.getByText('20.00 EGP')).toBeVisible();
     expect(mocks.load).toHaveBeenCalledTimes(1);
@@ -22,12 +29,14 @@ describe('recipe cost within product editor',()=>{
     await waitFor(()=>expect(screen.getByText('Incomplete')).toBeVisible());
     expect(screen.getByRole('status')).toBeVisible();
     expect(screen.getByText('Expected margin: —')).toBeVisible();
+    expect(screen.getByText('Cost ratio: —')).toBeVisible();
     expect(screen.queryByText('0.00 EGP')).not.toBeInTheDocument();
   });
   it('shows the sum of priced ingredients when another raw material is zero',async()=>{
     mocks.load.mockResolvedValue({prices:{priced:5,zero:0},groupCosts:{}});
     render(<ProductRecipeCost branchId="a" ingredients={[{raw_material_id:'priced',quantity:2,wastage_percent:0},{raw_material_id:'zero',quantity:1,wastage_percent:0}]} groups={[]} yieldQuantity={1} salePrice={100}/>);
     await waitFor(()=>expect(screen.getByText('10.00 EGP')).toBeVisible());
+    expect(screen.getByText('Cost ratio: 10%')).toBeVisible();
     expect(screen.queryByText('Incomplete')).not.toBeInTheDocument();
   });
 });

@@ -1,3 +1,4 @@
+import { loadRawCurrentPrices } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import type { Branch, Warehouse } from '@/lib/types';
 
@@ -45,4 +46,21 @@ export async function loadTransferAverageCost(params: {
   const cost = Number((data as { avg_cost?: number } | null)?.avg_cost ?? 0);
   if (!Number.isFinite(cost) || cost < 0) throw new Error('TRANSFER_COST_UNAVAILABLE');
   return cost;
+}
+
+/** One bounded canonical batch; missing prices are zero, failed reads reject. */
+export async function loadTransferDestinationPrices(branchId: string, rawIds: string[]): Promise<Record<string, number>> {
+  const ids=[...new Set(rawIds.filter(Boolean))];
+  if (!ids.length) return {};
+  const rows=await loadRawCurrentPrices(branchId,ids);
+  const prices: Record<string,number>={};
+  const scoped=new Map(rows.filter(row=>row.branch_id===branchId).map(row=>[row.raw_material_id,row]));
+  for (const id of ids) {
+    const row=scoped.get(id);
+    if (!row) throw new Error('TRANSFER_COST_UNAVAILABLE');
+    const cost=Number(row.unit_cost??0);
+    if (!Number.isFinite(cost)||cost<0) throw new Error('TRANSFER_COST_UNAVAILABLE');
+    prices[id]=cost;
+  }
+  return prices;
 }

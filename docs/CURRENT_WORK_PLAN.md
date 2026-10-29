@@ -2,10 +2,10 @@
 
 ## Active work
 - Repository: `Premieros/johna-s`; production Supabase: `azzdesuowpdcoflmyezn`.
-- Baseline: `0e665fc91c54a46c5156909668d1b8d3f59d5ed0` (#545 released).
-- Branch: `fix/user-error-clarity-20261029`.
-- Mandatory active work log: `docs/USER_ERROR_CLARITY_20261029.md`.
-- Owner requests actual understandable error reasons and categories. Frontend error presentation/diagnostic code preservation only. No business data, prices, recipes, stock, permission, printer or database writer changes. No polling. One RLS-filtered header read only after unavailable-order access rejection to distinguish completed/cancelled; successful resume unchanged. لا Merge ولا Production migration before final exact-head verification and separate release approval. Four speculative POS cases remain deferred.
+- Baseline: `dcda01d961ad16d0006f9ed1dd8543562ad4809a` (#546 released).
+- Branch: `fix/cost-ratio-destination-transfer-20261029`.
+- Mandatory active work log: `docs/COST_RATIO_DESTINATION_TRANSFER_20261029.md`.
+- Owner requests cost percentage beside margin and interbranch raw receipts valued at the receiver's latest canonical price. Prepare one reviewed candidate: current source price resolver, zero if unpriced, server recheck/freeze at approval, no sale/printing overhead. Preserve source quantity/cost removal, products and same-branch transfer algorithms, all permissions and RLS. No production writes during preparation. لا Merge ولا Production migration before final exact-head checks and separate release approval. Prior speculative POS issues remain deferred.
 
 ## Active usability polish — 2026-10-25
 Owner approved implementing the browser-review findings: compact reports with useful filters and in-page expansion, visible POS branch/dispatch/bill context, readable mobile table cards, safer cancellation presentation and compact dashboard welcome. Presentation only; retain business logic, permissions, queries and installed printers. No production log scans. Prepare one reviewed candidate; publication requires separate final approval.

@@ -1,3 +1,4 @@
+import { foodCostPct } from '@/lib/costing';
 import { formatReportDate as formatDate, formatReportTimestamp } from '../reportDate';
 import { flattenReportSummaries, reportSummaryPresentation } from '../reportSummaryPresentation';
 import { analysisColumns } from '../reportDataContracts';
@@ -751,6 +752,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
           [lang === 'ar' ? 'المنتج' : 'Product']: row.product_name,
           [lang === 'ar' ? 'تكلفة المكونات' : 'Component Cost']: Number(row.actual_cost),
           [lang === 'ar' ? 'سعر البيع' : 'Sale Price']: Number(row.sale_price),
+          [lang === 'ar' ? 'نسبة التكلفة %' : 'Cost ratio %']: row.actual_cost == null || Number(row.sale_price)<=0 ? '—' : `${foodCostPct(Number(row.actual_cost),Number(row.sale_price)).toFixed(1)}%`,
           [lang === 'ar' ? 'الهامش' : 'Margin']: Number(row.sale_price) - Number(row.actual_cost),
         }));
       setData(rows);
