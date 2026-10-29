@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
 
@@ -41,6 +42,65 @@ describe.skipIf(!dbUrl)('historical zero consumption priced independently of sto
   });
   afterAll(async () => { if (db) { await db.query('ROLLBACK').catch(() => {}); await db.end(); } });
 
+  it('preserves complete costing results at Cairo date boundaries and rehearses exact rollback', async () => {
+    const migration = readFileSync('supabase/migrations/20261029195303_costing_date_range_read_optimization.sql', 'utf8');
+    const rollback = readFileSync('scripts/rollback/costing_date_range_read_optimization_20261029.sql', 'utf8');
+    const inTransaction = (sql: string) => sql.replace(/^BEGIN;$/gm, '').replace(/^COMMIT;$/gm, '');
+    const metadata = async () => (await db.query(`SELECT proname,pg_get_functiondef(oid) definition,
+      prosecdef,proowner,proacl,proconfig FROM pg_proc WHERE oid IN
+      ('public.get_costing_sales_summary(uuid,date,date)'::regprocedure,
+       'public.get_historical_sale_cost_estimates(uuid,date,date)'::regprocedure) ORDER BY proname`)).rows;
+    const before = await metadata();
+    const ranges: (string | null)[][] = [
+      ['2026-04-23', '2026-04-24'], ['2026-10-29', '2026-10-29'], ['2026-10-30', '2026-10-30'],
+      [null, '2026-10-29'], ['2026-04-24', null], [null, null], ['-infinity', 'infinity'],
+      ['0001-01-01', '12000-01-01'],
+    ];
+    const boundaryTimes = ['2026-04-23T21:59:59Z', '2026-04-23T22:00:00Z',
+      '2026-10-29T20:59:59Z', '2026-10-29T21:00:00Z', '2026-10-29T21:59:59Z', '2026-10-29T22:00:00Z', null];
+    const collect = async () => {
+      const results: unknown[] = [];
+      for (const timestamp of boundaryTimes) {
+        await db.query(`UPDATE public.sales SET created_at=$1::timestamptz WHERE id=ANY($2::uuid[])`, [timestamp, [legacy, kitchen]]);
+        for (const [from, to] of ranges) {
+          results.push(await asAdmin(async () => (await db.query(`SELECT
+            (SELECT row_to_json(r) FROM public.get_costing_sales_summary($1,$2,$3) r) summary,
+            public.get_historical_sale_cost_estimates($1,$2,$3) estimates`, [branch, from, to])).rows));
+        }
+      }
+      return results;
+    };
+    await db.query('SAVEPOINT costing_range_parity');
+    try {
+      const optimized = await collect();
+      await db.query(inTransaction(rollback));
+      const restored = await metadata();
+      expect(restored.every(row => !row.definition.includes('COSTING_INDEXED_DATE_RANGE'))).toBe(true);
+      expect(await collect()).toEqual(optimized);
+      await db.query(inTransaction(migration));
+      expect(await metadata()).toEqual(before);
+      // Verify the exact candidate selection can use the existing timestamp index.
+      const definition = before.find(row => row.proname === 'get_costing_sales_summary')!.definition as string;
+      const ctes = definition.slice(definition.indexOf('WITH history_bounds'), definition.indexOf('scoped_sales AS MATERIALIZED'));
+      expect(ctes).toContain('COSTING_INDEXED_DATE_RANGE');
+      await db.query('SET LOCAL enable_seqscan=off');
+      const plan = await db.query('EXPLAIN (ANALYZE, FORMAT JSON) ' + ctes.replace(/p_branch_id/g, '$1::uuid').replace(/p_from/g, '$2::date').replace(/p_to/g, '$3::date').replace(/,\s*$/, '') +
+        ' SELECT count(*) FROM date_candidates', [branch, '2026-10-29', '2026-10-29']);
+      expect(JSON.stringify(plan.rows)).toMatch(/Index Cond[^}]*created_at/);
+      const scans: Record<string, unknown>[] = [];
+      const visit = (value: unknown): void => {
+        if (!value || typeof value !== 'object') return;
+        const node = value as Record<string, unknown>;
+        if (node['Relation Name'] === 'sales' && Number(node['Actual Loops']) > 0) scans.push(node);
+        Object.values(node).forEach(visit);
+      };
+      visit(plan.rows);
+      expect(scans.length).toBeGreaterThan(0);
+      expect(scans.every(node => String(node['Index Cond']).includes('created_at'))).toBe(true);
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT costing_range_parity');
+    }
+  });
   it('prices past zero movements at the known price with negative, zero or positive current stock', async () => {
     for (const quantity of [-10, 0, 10]) {
       await db.query(`UPDATE public.raw_material_inventory SET quantity=$1 WHERE raw_material_id=$2 AND branch_id=$3`, [quantity, raw, branch]);
