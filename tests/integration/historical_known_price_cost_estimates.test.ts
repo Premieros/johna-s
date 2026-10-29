@@ -84,7 +84,7 @@ describe.skipIf(!dbUrl)('historical zero consumption priced independently of sto
       const ctes = definition.slice(definition.indexOf('WITH history_bounds'), definition.indexOf('scoped_sales AS MATERIALIZED'));
       expect(ctes).toContain('COSTING_INDEXED_DATE_RANGE');
       await db.query('SET LOCAL enable_seqscan=off');
-      const plan = await db.query('EXPLAIN (ANALYZE, FORMAT JSON) ' + ctes.replace(/p_branch_id/g, '$1::uuid').replace(/p_from/g, '$2::date').replace(/p_to/g, '$3::date').replace(/,\s*$/, '') +
+      const plan = await db.query('EXPLAIN (ANALYZE, FORMAT JSON) ' + ctes.replace(/\bp_branch_id\b/g, '$1::uuid').replace(/\bp_from\b/g, '$2::date').replace(/\bp_to\b/g, '$3::date').replace(/,\s*$/, '') +
         ' SELECT count(*) FROM date_candidates', [branch, '2026-10-29', '2026-10-29']);
       expect(JSON.stringify(plan.rows)).toMatch(/Index Cond[^}]*created_at/);
       const scans: Record<string, unknown>[] = [];
@@ -96,7 +96,7 @@ describe.skipIf(!dbUrl)('historical zero consumption priced independently of sto
       };
       visit(plan.rows);
       expect(scans.length).toBeGreaterThan(0);
-      expect(scans.every(node => String(node['Index Cond']).includes('created_at'))).toBe(true);
+      expect(scans.every(node => String(node['Index Cond'] || node['Recheck Cond']).includes('created_at'))).toBe(true);
     } finally {
       await db.query('ROLLBACK TO SAVEPOINT costing_range_parity');
     }

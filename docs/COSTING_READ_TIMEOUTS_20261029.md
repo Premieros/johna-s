@@ -26,6 +26,8 @@ Two invoker function bodies use existing sales timestamp indexes for finite UI r
 
 First exact-head CI40945280417:1162 existing DB/RLS tests passed; the added parity test failed because its harness incorrectly called row_to_json on an already-JSON scalar. Correct the test to compare the original JSON directly; SQL/application unchanged. New exact-head verification required.
 
+Second exact-head CI40946028599:1162 existing DB checks passed again; new full-result parity across56 boundary/fallback cases and exact rollback/reapply metadata passed. The final EXPLAIN harness failed because a non-word-boundary parameter replacement also modified history_clamp_from. Restrict replacement to complete parameter identifiers and permit valid bitmap recheck timestamp conditions. SQL/application remain unchanged. Final exact-head CI pending.
+
 ## Production gate
 لا Merge ولا Production migration before separate owner release approval and exact-head four-job success. Recheck live original bodies/security before atomic guarded migration (lock2s/statement15s). Rollback scripts restore two original bodies; frontend revert restores rendering/cache behavior. No production integration tests.
 
