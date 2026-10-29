@@ -1,3 +1,4 @@
+import { formatPercentValue } from '@/lib/format';
 import { clearReportRequestCache } from '@/lib/reportRequestCache';
 import { useReportPermissionVersion } from '@/hooks/useReportPermissionVersion';
 import { loadRawLatestPriceRows, type RawLatestPriceRow } from '../services/rawLatestPriceData';
@@ -362,9 +363,9 @@ export function CostingCenterPage() {
   };
   const pill = (label: string, cls: string) => <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{label}</span>;
   const marginPill = (v: number) => {
-    if (v >= 40) return pill(`${formatNumber(v, 1)}%`, 'bg-ui-success-soft text-ui-success dark:text-ui-success');
-    if (v >= 20) return pill(`${formatNumber(v, 1)}%`, 'bg-ui-warning-soft text-ui-warning');
-    return pill(`${formatNumber(v, 1)}%`, 'bg-ui-danger-soft text-ui-danger');
+    if (v >= 40) return pill(formatPercentValue(v,1), 'bg-ui-success-soft text-ui-success dark:text-ui-success');
+    if (v >= 20) return pill(formatPercentValue(v,1), 'bg-ui-warning-soft text-ui-warning');
+    return pill(formatPercentValue(v,1), 'bg-ui-danger-soft text-ui-danger');
   };
 
   const rawPriceSourceLabel = (source: RawMaterialPriceSource | string) => {
@@ -394,7 +395,8 @@ export function CostingCenterPage() {
     { key: 'product', header: t('product'), render: (r) => <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-ui-page-alt flex items-center justify-center text-xs font-bold text-ui-subtle">{r.product_name[0]}</div><div><p className="font-medium text-ui-text">{r.product_name}</p><p className="text-xs text-ui-subtle">{r.barcode || r.sku || r.category_name || ''}</p></div></div> },
     { key: 'sale', header: t('salePrice'), render: (r) => money(r.sale_price) },
     { key: 'actual', header: isAr ? 'تكلفة الوحدة الحالية (تقديرية)' : 'Current unit cost (estimated)', render: (r) => r.actual_cost == null ? (isAr ? 'غير مكتملة' : 'Incomplete') : money(r.actual_cost) },
-    { key: 'margin', header: t('marginPct'), render: (r) => r.actual_cost == null ? '-' : marginPill(marginPct(Number(r.actual_cost), r.sale_price)) },
+    { key: 'costRatio', header: isAr ? 'نسبة التكلفة %' : 'Cost ratio %', render: (r) => r.actual_cost == null || r.sale_price <= 0 ? '—' : formatPercentValue(foodCostPct(Number(r.actual_cost),r.sale_price),1) },
+    { key: 'margin', header: t('marginPct'), render: (r) => r.actual_cost == null || r.sale_price <= 0 ? '—' : marginPill(marginPct(Number(r.actual_cost), r.sale_price)) },
   ];
 
   const orderColumns: Column<HistoricalOrderMargin & { id: string }>[] = [
@@ -406,7 +408,8 @@ export function CostingCenterPage() {
     { key: 'estimated_cost', header: isAr ? 'تكلفة مستكملة (تقديرية)' : 'Supplemental cost (estimated)', render: (r) => money(r.estimated_cost) },
     { key: 'displayed_cost', header: isAr ? 'إجمالي التكلفة' : 'Total cost', render: (r) => money(r.displayed_cost) },
     { key: 'margin', header: t('grossMargin'), render: (r) => <span className={`font-semibold ${r.displayed_margin >= 0 ? 'text-ui-success dark:text-ui-success' : 'text-ui-danger'}`}>{money(r.displayed_margin)}</span> },
-    { key: 'marginPct', header: t('marginPct'), render: (r) => marginPill(marginPct(r.displayed_cost, r.total)) },
+    { key: 'costRatio', header: isAr ? 'نسبة التكلفة %' : 'Cost ratio %', render: (r) => r.total <= 0 ? '—' : formatPercentValue(foodCostPct(r.displayed_cost,r.total),1) },
+    { key: 'marginPct', header: t('marginPct'), render: (r) => r.total <= 0 ? '—' : marginPill(marginPct(r.displayed_cost, r.total)) },
   ];
 
   const supplierColumns: Column<SupplierPriceImpactRow & { id: string }>[] = [
@@ -574,8 +577,8 @@ export function CostingCenterPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('salePrice')}</p><p className="text-lg font-bold text-ui-text">{money(detail.sale_price)}</p></div>
             <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{isAr ? 'تكلفة الوحدة الحالية (تقديرية)' : 'Current unit cost (estimated)'}</p><p className="text-lg font-bold text-ui-text">{detail.actual_cost == null ? (isAr ? 'غير مكتملة' : 'Incomplete') : money(detail.actual_cost)}</p></div>
-            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('foodCostPct')}</p><p className="text-lg font-bold text-ui-text">{detail.actual_cost == null ? '-' : `${formatNumber(foodCostPct(Number(detail.actual_cost), detail.sale_price || 0), 1)}%`}</p></div>
-            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('marginPct')}</p><p className="text-lg font-bold text-ui-text">{detail.actual_cost == null ? '-' : `${formatNumber(marginPct(Number(detail.actual_cost), detail.sale_price || 0), 1)}%`}</p></div>
+            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('foodCostPct')}</p><p className="text-lg font-bold text-ui-text">{detail.actual_cost == null || (detail.sale_price||0)<=0 ? '—' : formatPercentValue(foodCostPct(Number(detail.actual_cost), detail.sale_price || 0),1)}</p></div>
+            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('marginPct')}</p><p className="text-lg font-bold text-ui-text">{detail.actual_cost == null || (detail.sale_price||0)<=0 ? '—' : formatPercentValue(marginPct(Number(detail.actual_cost), detail.sale_price || 0),1)}</p></div>
           </div>
 
           {(detail.components?.length || 0) > 0 && <div>
