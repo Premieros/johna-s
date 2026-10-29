@@ -363,9 +363,9 @@ export function CostingCenterPage() {
   };
   const pill = (label: string, cls: string) => <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{label}</span>;
   const marginPill = (v: number) => {
-    if (v >= 40) return pill(`${formatNumber(v, 1)}%`, 'bg-ui-success-soft text-ui-success dark:text-ui-success');
-    if (v >= 20) return pill(`${formatNumber(v, 1)}%`, 'bg-ui-warning-soft text-ui-warning');
-    return pill(`${formatNumber(v, 1)}%`, 'bg-ui-danger-soft text-ui-danger');
+    if (v >= 40) return pill(formatPercentValue(v,1), 'bg-ui-success-soft text-ui-success dark:text-ui-success');
+    if (v >= 20) return pill(formatPercentValue(v,1), 'bg-ui-warning-soft text-ui-warning');
+    return pill(formatPercentValue(v,1), 'bg-ui-danger-soft text-ui-danger');
   };
 
   const rawPriceSourceLabel = (source: RawMaterialPriceSource | string) => {
