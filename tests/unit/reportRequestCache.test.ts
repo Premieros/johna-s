@@ -86,3 +86,19 @@ describe('shared authoritative report requests', () => {
     expect(await (await cache.fetch(url, options())).json()).toEqual({ revenue: 20 }); expect(base).toHaveBeenCalledTimes(3);
   });
 });
+
+describe('costing read sharing and nonfinancial telemetry',()=>{
+ it.each(['get_raw_material_latest_valuation','get_raw_consumption_latest_cost'])('shares the current costing RPC %s',async(name)=>{
+  const base=vi.fn(async()=>Response.json([]));const cache=createReportRequestCache(base);
+  const target='https://example.test/rest/v1/rpc/'+name;
+  await cache.fetch(target,options());await cache.fetch(target,options());expect(base).toHaveBeenCalledTimes(1);
+ });
+ it('keeps a valid report through issue logging but invalidates it on a financial write',async()=>{
+  const base=vi.fn(async()=>Response.json({value:1}));const cache=createReportRequestCache(base);
+  await cache.fetch(url,options());
+  await cache.fetch('https://example.test/rest/v1/rpc/record_user_issue',options());
+  await cache.fetch(url,options());expect(base).toHaveBeenCalledTimes(2);
+  await cache.fetch('https://example.test/rest/v1/rpc/set_raw_material_price',options());
+  await cache.fetch(url,options());expect(base).toHaveBeenCalledTimes(4);
+ });
+});

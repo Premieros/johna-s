@@ -32,6 +32,25 @@ beforeEach(() => {
   mocks.consumption.mockReset().mockResolvedValue({ data: [{ raw_material_id: 'r', raw_material_name: 'Sugar', unit_name: 'kg', consumed_quantity: 2, actual_quantity: 1, estimated_quantity: 1, actual_cost: 10, estimated_cost: 12, displayed_cost: 22 }] });
 });
 describe('costing selected-period reports', () => {
+  it('shows completed current product costs while the sales summary is still loading',async()=>{
+    let finish!:(value:unknown)=>void;
+    mocks.overview.mockResolvedValue({data:[{product_id:'p',product_name:'Ready recipe',sale_price:100,actual_cost:25,recipe_item_count:1}]});
+    mocks.summary.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+    render(<MemoryRouter><CostingCenterPage/></MemoryRouter>);fireEvent.click(screen.getByTestId('costing-run-report'));
+    await screen.findByTestId('costing-table-panel');expect(screen.getAllByText('Ready recipe')[0]).toBeVisible();
+    expect(screen.queryByTestId('historical-cost-summary')).not.toBeInTheDocument();
+    finish({data:{cogs:12,net_sales:100,sales_count:1,ratio:12}});
+    await screen.findByTestId('historical-cost-summary');
+  });
+  it('retains completed product costs but hides incomplete financial totals after a summary timeout',async()=>{
+    mocks.overview.mockResolvedValue({data:[{product_id:'p',product_name:'Available recipe',sale_price:100,actual_cost:25,recipe_item_count:1}]});
+    mocks.summary.mockResolvedValueOnce({error:{code:'57014',message:'canceling statement due to statement timeout'}});
+    render(<MemoryRouter><CostingCenterPage/></MemoryRouter>);fireEvent.click(screen.getByTestId('costing-run-report'));
+    await waitFor(()=>expect(screen.getByTestId('costing-report-status')).toHaveTextContent('Sales summary could not be loaded'));
+    expect(screen.getAllByText('Available recipe')[0]).toBeVisible();expect(screen.queryByTestId('historical-cost-summary')).not.toBeInTheDocument();
+    expect(mocks.historical).not.toHaveBeenCalled();expect(screen.getByTestId('costing-run-report')).toBeEnabled();
+  });
+
   it('leaves tab/date navigation idle and omits unused FIFO and price reads from overview', async () => {
     render(<MemoryRouter><CostingCenterPage /></MemoryRouter>);
     await screen.findByRole('option', { name: 'A' });
@@ -111,7 +130,7 @@ describe('costing selected-period reports', () => {
     render(<MemoryRouter><CostingCenterPage /></MemoryRouter>);
     expect(mocks.summary).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId('costing-run-report'));
-    await waitFor(() => expect(mocks.show).toHaveBeenCalledWith('Price read failed', 'error'));
+    await waitFor(() => expect(mocks.show).toHaveBeenCalledWith(expect.stringContaining('Price read failed'), 'error', expect.objectContaining({action:'costing_historical_estimate'})));
     expect(screen.queryByTestId('historical-cost-summary')).toBeNull();
   });
   it('does not load unrelated selectors or rerun overview when branch selectors finish', async () => {
