@@ -1,3 +1,4 @@
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { supabase, type SplitTenderInput } from '@/api';
 import * as api from '@/api';
@@ -673,7 +674,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       });
       if (error) { show(error.message, 'error', { source: error, action: 'pos_update_order', branchId, entityType: 'order', entityId: activeOrderId }); return { ok: false, orderId: null, orderNumber: null }; }
       const r = data as RpcResult | null;
-      if (!r?.success) { show(r?.detail || r?.error || t('error'), 'error', { source: r?.error || r?.detail || 'POS_EMPTY_RESPONSE', action: 'pos_update_order', branchId, entityType: 'order', entityId: activeOrderId }); return { ok: false, orderId: null, orderNumber: null }; }
+      if (!r?.success) { show(userFacingErrorMessage(r ?? 'POS_EMPTY_RESPONSE', isAr ? 'ar' : 'en'), 'error', { source: r ?? 'POS_EMPTY_RESPONSE', action: 'pos_update_order', branchId, entityType: 'order', entityId: activeOrderId }); return { ok: false, orderId: null, orderNumber: null }; }
       if (epoch !== workspaceEpochRef.current) return { ok: false, orderId: null, orderNumber: null };
       return { ok: true, orderId: activeOrderId, orderNumber: activeOrderNumber };
     }
@@ -695,7 +696,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     });
     if (error) { show(error.message, 'error', { source: error, action: 'pos_create_order', branchId }); return { ok: false, orderId: null, orderNumber: null }; }
     const r = data as RpcResult | null;
-    if (!r?.success) { show(r?.detail || r?.error || t('error'), 'error', { source: r?.error || r?.detail || 'POS_EMPTY_RESPONSE', action: 'pos_create_order', branchId }); return { ok: false, orderId: null, orderNumber: null }; }
+    if (!r?.success) { show(userFacingErrorMessage(r ?? 'POS_EMPTY_RESPONSE', isAr ? 'ar' : 'en'), 'error', { source: r ?? 'POS_EMPTY_RESPONSE', action: 'pos_create_order', branchId }); return { ok: false, orderId: null, orderNumber: null }; }
     if (epoch !== workspaceEpochRef.current) return { ok: false, orderId: null, orderNumber: null };
     if (r.order_id) {
       setActiveOrderId(r.order_id);

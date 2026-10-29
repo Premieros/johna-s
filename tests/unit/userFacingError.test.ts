@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { userFacingErrorMessage } from '../../src/lib/userFacingError';
+import { userFacingErrorMessage, userFacingErrorCategory } from '../../src/lib/userFacingError';
 
 describe('userFacingErrorMessage', () => {
   it('explains role assignment permission failures to Arabic users', () => {
@@ -128,5 +128,35 @@ describe('userFacingErrorMessage', () => {
   it('provides English messages when the UI is English', () => {
     expect(userFacingErrorMessage('EMAIL_TAKEN', 'en')).toContain('already used');
     expect(userFacingErrorMessage('TARGET_OUT_OF_SCOPE', 'en')).toContain('branch');
+  });
+});
+
+describe('operational error clarity', () => {
+  it('explains an unconfigured preparation station in both languages', () => {
+    expect(userFacingErrorMessage('KITCHEN_STATION_NOT_CONFIGURED', 'ar')).toContain('محطة تجهيز');
+    expect(userFacingErrorMessage('KITCHEN_STATION_NOT_CONFIGURED', 'en')).toContain('preparation station');
+    expect(userFacingErrorCategory('KITCHEN_STATION_NOT_CONFIGURED', 'ar')).toBe('إعدادات التشغيل');
+  });
+  it('retains a specific response code despite an unrelated human detail', () => {
+    expect(userFacingErrorMessage({error:'ORDER_CANCELLED',detail:'not editable'}, 'ar')).toContain('ملغى');
+  });
+  it('unwraps an actionable transaction cause without leaking database details', () => {
+    const error = {error:'TRANSACTION_FAILED',detail:'PERMISSION_DENIED:pos.order.transfer'};
+    expect(userFacingErrorMessage(error, 'ar')).toContain('نقل الطلبات');
+    expect(userFacingErrorCategory(error, 'en')).toBe('Permissions');
+    const sql = userFacingErrorMessage({error:'TRANSACTION_FAILED',detail:'duplicate key value violates unique constraint "private_secret" (23505)'}, 'ar');
+    expect(sql).toContain('سجل بنفس البيانات');
+    expect(sql).not.toContain('private_secret');
+  });
+  it('does not promise a rollback or safe blind retry for unknown/network outcomes', () => {
+    for (const error of ['MYSTERY_FAILURE', 'Failed to fetch', '57014 statement cancelled']) {
+      const msg = userFacingErrorMessage(error, 'ar');
+      expect(msg).not.toContain('لم يتم تنفيذ');
+      expect(msg).not.toContain('لم يتم اعتماد');
+      expect(msg).toContain('راجع حالة');
+    }
+  });
+  it('does not match a known error as a substring of an unknown code', () => {
+    expect(userFacingErrorMessage('NOT_ORDER_CLOSED_EXTRA', 'en')).not.toContain('already closed');
   });
 });

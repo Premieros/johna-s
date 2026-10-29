@@ -231,7 +231,7 @@ describe('usePaginatedRows', () => {
     const { result } = renderHook(() => usePaginatedRows<{ id: number }>({ table: 'sales' }));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.error).toContain('تعذر إكمال العملية بسبب خطأ في النظام');
+    expect(result.current.error).toContain('لم نتمكن من تأكيد النتيجة');
     expect(result.current.rows).toHaveLength(0);
     expect(result.current.hasMore).toBe(false);
   });
