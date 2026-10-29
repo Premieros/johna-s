@@ -39,4 +39,11 @@ describe('recipe cost within product editor',()=>{
     expect(screen.getByText('Cost ratio: 10%')).toBeVisible();
     expect(screen.queryByText('Incomplete')).not.toBeInTheDocument();
   });
+  it('shows zero cost percent as zero and keeps the matching margin at100 percent',async()=>{
+    mocks.load.mockResolvedValue({prices:{raw:0},groupCosts:{}});
+    render(<ProductRecipeCost branchId="a" ingredients={[{raw_material_id:'raw',quantity:1,wastage_percent:0}]} groups={[]} yieldQuantity={1} salePrice={100}/>);
+    await waitFor(()=>expect(screen.getByText('Cost ratio: 0%')).toBeVisible());
+    expect(screen.getByText('Expected margin: 100%')).toBeVisible();
+  });
+
 });

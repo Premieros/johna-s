@@ -1,3 +1,4 @@
+import { formatPercentValue } from '@/lib/format';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, Edit2, Trash2, ChefHat, Calculator, Package } from 'lucide-react';
 import * as api from '@/api';
@@ -386,8 +387,8 @@ export function RecipesPage() {
               {calculatedCost.unpriced && <p role="status" className="text-sm text-ui-warning sm:col-span-2">{isAr ? 'التكلفة غير مكتملة: توجد خامات بلا سعر معتمد.' : 'Incomplete cost: some raw materials have no approved price.'}</p>}
               <div className="rounded-lg border border-ui-border p-3"><p className="text-xs text-ui-subtle">{isAr ? 'إجمالي تكلفة المواد' : 'Material cost'}</p><p className="font-bold">{formatCurrency(calculatedCost.rawCost, 'EGP', lang)}</p></div>
               <div className="rounded-lg border border-ui-border p-3"><p className="text-xs text-ui-subtle">{isAr ? 'تكلفة الوحدة الواحدة' : 'Unit cost'}</p><p className="font-bold text-ui-primary">{formatCurrency(calculatedCost.costPerUnit, 'EGP', lang)}</p></div>
-              <div className="rounded-lg border border-ui-border p-3"><p className="text-xs text-ui-subtle">{isAr ? 'نسبة تكلفة الطعام' : 'Food cost %'}</p><p className="font-bold">{calculatedCost.sellPrice > 0 ? `${formatNumber(calculatedCost.foodCostRatio, 1)}%` : '-'}</p></div>
-              <div className="rounded-lg border border-ui-border p-3"><p className="text-xs text-ui-subtle">{isAr ? 'هامش الربح المتوقع' : 'Expected margin'}</p><p className="font-bold">{calculatedCost.sellPrice > 0 ? `${formatNumber(calculatedCost.margin, 1)}%` : '-'}</p></div>
+              <div className="rounded-lg border border-ui-border p-3"><p className="text-xs text-ui-subtle">{isAr ? 'نسبة تكلفة الطعام' : 'Food cost %'}</p><p className="font-bold">{calculatedCost.sellPrice > 0 ? formatPercentValue(calculatedCost.foodCostRatio,1) : '-'}</p></div>
+              <div className="rounded-lg border border-ui-border p-3"><p className="text-xs text-ui-subtle">{isAr ? 'هامش الربح المتوقع' : 'Expected margin'}</p><p className="font-bold">{calculatedCost.sellPrice > 0 ? formatPercentValue(calculatedCost.margin,1) : '-'}</p></div>
             </div>
           </div>
 

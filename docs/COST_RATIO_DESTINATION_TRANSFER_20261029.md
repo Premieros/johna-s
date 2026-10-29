@@ -26,6 +26,8 @@ Widen warehouse_transfer_items.unit_cost to numeric18,6. Private RLS receipt aud
 ## Verification ledger
 21 focused UI/read/worklog checks passed; app/test typechecks, build and changed-source lint passed. Canonical API contract remains171RPC/56public tables; the numeric precision widening does not change its type signature. Isolated integration covers receiver vs source/client, approval-time price change, zero missing receiver price, exact6-decimal storage/receipt, repeated approval, no source repair propagation, failure atomicity/privacy and rollback/reapply metadata. Required exact-head four-job CI before release. No production order/stock/print test.
 
+First exact-head CI passed1162 DB/RLS tests including13 cross-branch cases,136 browser checks and Pages continuity. Frontend1972 passed/1 failed: report percentages used local toFixed instead of the mandatory central formatter. Use a central formatPercentValue variant preserving valid0% versus unavailable dash; existing formatPercent and global guard remain unchanged. Product/recipe displays share the safe formatter. Local workspace became unavailable during correction; final verification must run on the remote candidate. SQL and business formulas unchanged; fresh exact-head CI required.
+
 ## Production gate
 لا Merge ولا Production migration before owner approval of this concrete candidate after exact-head verification. Preflight original function/security fingerprints and table metadata before apply. Atomic DDL lock_timeout2s/statement_timeout15s. Rollback script restores three function bodies; intentionally retains private audit rows and widened precision so approved history and fractional unit prices are never lost. Frontend rollback reverts candidate.
 
