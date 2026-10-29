@@ -24,6 +24,8 @@ Two invoker function bodies use existing sales timestamp indexes for finite UI r
 ## Verification ledger
 23 focused cache/component tests passed. Isolated DB parity/recovery test added for complete summary/estimate output, Cairo DST boundaries, nullable and one-sided dates, infinite/extreme dates, exact restored/reapplied metadata and index eligibility. Existing foreign-branch/anonymous denial and cost source precedence tests retained. DB tests must run only isolated CI, never production. 27 focused UI/cache/worklog tests, app/test typechecks, production build, changed-source lint, locked DB identity and API contract passed. Final exact-head four-job Verify pending. No performance gain or global timeout cure claimed before observation.
 
+First exact-head CI40945280417:1162 existing DB/RLS tests passed; the added parity test failed because its harness incorrectly called row_to_json on an already-JSON scalar. Correct the test to compare the original JSON directly; SQL/application unchanged. New exact-head verification required.
+
 ## Production gate
 لا Merge ولا Production migration before separate owner release approval and exact-head four-job success. Recheck live original bodies/security before atomic guarded migration (lock2s/statement15s). Rollback scripts restore two original bodies; frontend revert restores rendering/cache behavior. No production integration tests.
 

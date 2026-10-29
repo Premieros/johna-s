@@ -64,7 +64,7 @@ describe.skipIf(!dbUrl)('historical zero consumption priced independently of sto
         await db.query(`UPDATE public.sales SET created_at=$1::timestamptz WHERE id=ANY($2::uuid[])`, [timestamp, [legacy, kitchen]]);
         for (const [from, to] of ranges) {
           results.push(await asAdmin(async () => (await db.query(`SELECT
-            (SELECT row_to_json(r) FROM public.get_costing_sales_summary($1,$2,$3) r) summary,
+            public.get_costing_sales_summary($1,$2,$3) summary,
             public.get_historical_sale_cost_estimates($1,$2,$3) estimates`, [branch, from, to])).rows));
         }
       }
