@@ -29,6 +29,14 @@ const TECHNICAL_MARKERS = [
   '23505',
   '23503',
   '23514',
+  'syntax error',
+  'constraint',
+  'stack trace',
+  'cannot read properties',
+  'is not defined',
+  'typeerror',
+  'referenceerror',
+  'syntaxerror',
 ];
 
 const permissionLabels: Record<string, { ar: string; en: string }> = {
@@ -342,9 +350,17 @@ const messages: Record<string, { ar: string; en: string }> = {
     ar: 'هذا دور أساسي في النظام ولا يمكن حذفه.',
     en: 'This is a system role and cannot be deleted.',
   },
+  KITCHEN_STATION_NOT_CONFIGURED: {
+    ar: 'تعذر إرسال الطلب: يوجد صنف بلا فئة مرتبطة بمحطة تجهيز فعّالة. اطلب من المسؤول مراجعة فئات أصناف الطلب وربطها بالمطبخ أو البار، ثم أعد الإرسال.',
+    en: 'The order could not be sent: an item has no category linked to an active preparation station. Ask an administrator to check item categories and kitchen/bar routing before sending again.',
+  },
+  ORDER_CANCELLED: {
+    ar: 'هذا الطلب ملغى بالفعل. ارجع إلى الطلبات الحالية؛ لا يمكن استئنافه أو تعديله.',
+    en: 'This order has already been cancelled. Return to active orders; it cannot be resumed or edited.',
+  },
   ORDER_NOT_FOUND: {
-    ar: 'تعذر العثور على الطلب. حدّث الشاشة ثم حاول مرة أخرى.',
-    en: 'The order could not be found. Refresh and retry.',
+    ar: 'الطلب غير متاح في الشاشة الحالية. قد يكون منتهيًا أو خارج نطاق الوصول؛ ارجع إلى الطلبات الحالية.',
+    en: 'The order is unavailable in this workspace. It may have ended or be outside your access; return to active orders.',
   },
   ORDER_NOT_EDITABLE: {
     ar: 'لا يمكن تعديل هذا الطلب في حالته الحالية.',
@@ -461,6 +477,7 @@ function extractMessage(input: unknown): string {
     if (permission && /PERMISSION_DENIED/i.test(error || code)) {
       return `PERMISSION_DENIED:${permission}`;
     }
+    if (error && error !== 'TRANSACTION_FAILED' && mappedCode(error)) return error;
     for (const key of ['detail', 'message', 'error', 'code']) {
       if (typeof obj[key] === 'string' && obj[key]) return String(obj[key]).trim();
     }
@@ -478,7 +495,7 @@ function mappedCode(text: string): string | null {
   // swallowing SENT_ITEM_APPROVAL_REQUIRED / MANAGER_APPROVAL_REQUIRED.
   const codes = Object.keys(messages).sort((a, b) => b.length - a.length);
   for (const code of codes) {
-    if (upper.includes(code)) return code;
+    if (new RegExp(`(^|[^A-Z0-9_])${code}($|[^A-Z0-9_])`).test(upper)) return code;
   }
   return null;
 }
@@ -547,18 +564,18 @@ export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = cur
   }
   if (/failed to fetch|fetch failed|networkerror|network request failed|connection/i.test(text)) {
     return lang === 'ar'
-      ? 'تعذر الاتصال بالخادم. تحقق من الإنترنت ثم حاول مرة أخرى.'
-      : 'Could not reach the server. Check your internet connection and retry.';
+      ? 'تعذر الاتصال بالخادم. تحقق من الإنترنت وراجع حالة العملية قبل إعادة المحاولة لتجنب تكرارها.'
+      : 'Could not reach the server. Check your connection and the operation state before retrying to avoid duplication.';
   }
   if (/jwt.*expired|token.*expired|session.*expired/i.test(text)) {
     return lang === 'ar'
       ? 'انتهت جلسة الدخول. سجّل الدخول مرة أخرى ثم أعد المحاولة.'
       : 'Your session has expired. Sign in again and retry.';
   }
-  if (/timeout|timed out/i.test(text)) {
+  if (/timeout|timed out|57014|55P03|40P01|40001/i.test(text)) {
     return lang === 'ar'
-      ? 'استغرقت العملية وقتًا أطول من المتوقع. حاول مرة أخرى.'
-      : 'The operation took longer than expected. Please retry.';
+      ? 'تعذر إكمال الطلب بسبب مهلة انتظار أو تعارض مؤقت. راجع حالة الطلب قبل إعادة المحاولة.'
+      : 'The request hit a timeout or temporary conflict. Check the order state before retrying.';
   }
   if (/invalid input syntax|invalid uuid|malformed/i.test(text)) {
     return lang === 'ar'
@@ -575,6 +592,20 @@ export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = cur
   if (lang === 'en' && !looksTechnical(text) && text.length <= 220) return text;
 
   return lang === 'ar'
-    ? 'تعذر إكمال العملية بسبب خطأ في النظام. لم يتم تنفيذ التغيير؛ حاول مرة أخرى وإذا استمرت المشكلة تواصل مع مسؤول النظام.'
-    : 'The action could not be completed because of a system error. No change was made; retry and contact the system administrator if it continues.';
+    ? 'حدث خطأ في النظام ولم نتمكن من تأكيد النتيجة. راجع حالة العملية قبل تكرارها، وأرسل الرقم المرجعي إلى المسؤول.'
+    : 'A system error occurred and the result could not be confirmed. Check the operation before repeating it and give the reference number to an administrator.';
+}
+
+/** User-visible classification only: no SQL, raw server detail or stack is rendered. */
+export function userFacingErrorCategory(input: unknown, lang: ErrorLanguage = currentLanguage()): string {
+  const text = extractMessage(input);
+  let category: [string, string];
+  if (/KITCHEN_STATION_NOT_CONFIGURED|WAREHOUSE.*MISMATCH|إعدادات|محطة تجهيز/i.test(text)) category = ['إعدادات التشغيل', 'Operation setup'];
+  else if (/PERMISSION|AUTH_REQUIRED|DENIED|صلاحية|صلاحيات/i.test(text)) category = ['الصلاحيات', 'Permissions'];
+  else if (/network|fetch|connection|timeout|57014|55P03|40P01|40001|الاتصال|مهلة/i.test(text)) category = ['الاتصال أو الانتظار', 'Connection or timeout'];
+  else if (/ORDER_(CLOSED|CANCELLED|NOT_FOUND|NOT_EDITABLE)|TABLE_BUSY|STALE_|TRANSFER_SOURCE_CHANGED|طلب.*(مغلق|ملغى|منتهي)/i.test(text)) category = ['حالة الطلب', 'Order status'];
+  else if (/REQUIRED|INVALID|EMPTY|EXCEEDS|2350[35]|23514|أدخل|اختر|اكتب|يجب|لا يمكن إغلاق|تعذر إغلاق/i.test(text)) category = ['مراجعة البيانات', 'Check input'];
+  else if (/TRANSACTION_FAILED|SQLSTATE|PGRST|postgres|constraint|syntax|relation|column|TypeError|ReferenceError|SyntaxError|RangeError/i.test(text) || !ARABIC_RE.test(text)) category = ['خطأ بالنظام', 'System error'];
+  else category = ['تعذر تنفيذ الإجراء', 'Action unavailable'];
+  return category[lang === 'ar' ? 0 : 1];
 }

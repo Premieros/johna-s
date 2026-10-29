@@ -137,6 +137,14 @@ export async function fetchOrderForWorkspace(orderId: string): Promise<{ order: 
   if (accessError) throw accessError;
   const access = (accessData as PosOrderAccessResult | null) || null;
   if (!access?.success) {
+    // One bounded, RLS-filtered status read only for an unavailable-order
+    // response. Never hydrate a closed order or override an authorization denial.
+    if (access?.error === 'ORDER_NOT_FOUND') {
+      const { data: ended, error: statusError } = await supabase.from('orders')
+        .select('status').eq('id', orderId).maybeSingle();
+      if (!statusError && ended?.status === 'completed') throw new Error('ORDER_CLOSED');
+      if (!statusError && ended?.status === 'cancelled') throw new Error('ORDER_CANCELLED');
+    }
     throw new Error(access?.error || 'ORDER_OPERATOR_REQUIRED');
   }
 

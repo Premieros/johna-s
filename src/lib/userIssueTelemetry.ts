@@ -61,6 +61,15 @@ function extractRawText(input: unknown): string {
 
 export function deriveUserIssueCode(input: unknown): string {
   // Store a bounded identifier only; never persist the original error or stack.
+  // The wrapper alone hides the cause. Keep only a bounded cause identifier;
+  // never send raw detail, query or stack to telemetry.
+  if (typeof input === 'object' && input !== null) {
+    const obj = input as Record<string, unknown>;
+    if (obj.error === 'TRANSACTION_FAILED' && typeof obj.detail === 'string') {
+      const cause = deriveUserIssueCode(obj.detail);
+      if (cause !== 'CLIENT_ERROR') return cause;
+    }
+  }
   const raw = extractRawText(input).toUpperCase();
   const sourceMessage = typeof input === 'object' && input !== null && 'message' in input
     ? String((input as { message?: unknown }).message || '')
@@ -70,6 +79,15 @@ export function deriveUserIssueCode(input: unknown): string {
   const explicit = sourceMessage.match(/\b[A-Z][A-Z0-9]*_[A-Z0-9_]{1,77}\b/);
   if (explicit) return explicit[0];
   if (/^[A-Z][A-Z0-9]*_[A-Z0-9_]{1,77}$/.test(raw)) return raw;
+  const sqlCauses: [RegExp, string][] = [
+    [/DUPLICATE KEY/, '23505'], [/FOREIGN KEY/, '23503'],
+    [/PERMISSION DENIED|ROW.LEVEL SECURITY/, '42501'],
+    [/COLUMN .* DOES NOT EXIST/, '42703'], [/RELATION .* DOES NOT EXIST/, '42P01'],
+    [/DEADLOCK/, '40P01'], [/COULD NOT SERIALIZE/, '40001'],
+  ];
+  for (const [pattern, state] of sqlCauses) if (pattern.test(message)) return `SQLSTATE_${state}`;
+  const sqlState = message.match(/\b(?:SQLSTATE[_ :]*|code[ :]*)([0-9A-Z]{5})\b/);
+  if (sqlState) return `SQLSTATE_${sqlState[1]}`;
   const apiCode = raw.match(/^PGRST\d{3}$/);
   if (apiCode) return apiCode[0];
   if (typeof input === 'object' && input !== null && 'code' in input && /^[0-9A-Z]{5}$/.test(raw)) {
@@ -92,6 +110,7 @@ export function deriveUserIssueCode(input: unknown): string {
 
 export function classifyUserIssue(input: unknown): UserIssueKind {
   const code = deriveUserIssueCode(input);
+  if (code === 'TRANSACTION_FAILED' || (code === 'CLIENT_ERROR' && !/[\u0600-\u06FF]/.test(extractRawText(input))) || code === 'KITCHEN_STATION_NOT_CONFIGURED') return 'technical';
   if (TECHNICAL_MARKERS.some((marker) => code.includes(marker))) return 'technical';
   if (EXPECTED_CODE_MARKERS.some((marker) => code.includes(marker))) return 'expected';
 

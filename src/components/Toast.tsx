@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import { CheckCircle, XCircle, AlertCircle, Info, X } from 'lucide-react';
-import { userFacingErrorMessage } from '@/lib/userFacingError';
+import { userFacingErrorMessage, userFacingErrorCategory } from '@/lib/userFacingError';
 import { reportUserIssue, type ReportUserIssueOptions } from '@/lib/userIssueTelemetry';
 
 type ToastErrorContext = ReportUserIssueOptions & { source?: unknown };
@@ -11,6 +11,8 @@ interface Toast {
   id: number;
   message: string;
   type: ToastType;
+  category?: string;
+  reference?: string;
 }
 
 interface ToastContextValue {
@@ -30,18 +32,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const show = useCallback((message: string, type: ToastType = 'success', context?: ToastErrorContext) => {
     const id = Date.now() + Math.random();
     const normalizedMessage = normalizeToastMessage(message, type);
+    const source = context?.source ?? message;
+    const category = type === 'error' ? userFacingErrorCategory(source) : undefined;
+    const reference = type === 'error'
+      ? `ERR-${globalThis.crypto?.randomUUID?.().replace(/-/g, '').slice(0, 10) || Math.random().toString(36).slice(2, 12)}`
+      : undefined;
     if (type === 'error') {
       if (context) {
         const { source, ...options } = context;
-        void reportUserIssue(source ?? message, { action: 'toast_error', ...options });
+        void reportUserIssue(source ?? message, { action: 'toast_error', ...options, correlationId: reference });
       } else {
-        void reportUserIssue(message, { action: 'toast_error' });
+        void reportUserIssue(message, { action: 'toast_error', correlationId: reference });
       }
     }
-    setToasts((prev) => [...prev, { id, message: normalizedMessage, type }]);
+    setToasts((prev) => [...prev, { id, message: normalizedMessage, type, category, reference }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3500);
+    }, type === 'error' ? 9000 : 3500);
   }, []);
 
   const remove = (id: number) => setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -63,7 +70,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             className="pointer-events-auto flex min-w-0 items-start gap-2.5 rounded-xl bg-ui-surface px-3 py-2.5 shadow-ui-lg ring-1 ring-ui-border sm:items-center sm:gap-3 sm:px-4 sm:py-3 animate-slide-down"
           >
             {icons[toast.type]}
-            <span className="min-w-0 flex-1 break-words text-xs leading-5 text-ui-text sm:text-sm">{toast.message}</span>
+            <div className="min-w-0 flex-1 break-words text-xs leading-5 text-ui-text sm:text-sm" role={toast.type === 'error' ? 'alert' : 'status'}>
+              {toast.category && <strong className="block">{toast.category}</strong>}
+              <span>{toast.message}</span>
+              {toast.reference && <span className="mt-1 block text-[11px] text-ui-subtle" dir="ltr">{toast.reference}</span>}
+            </div>
             <button onClick={() => remove(toast.id)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ui-subtle transition-colors hover:bg-ui-page-alt hover:text-ui-text" aria-label="Dismiss">
               <X className="h-4 w-4" />
             </button>
