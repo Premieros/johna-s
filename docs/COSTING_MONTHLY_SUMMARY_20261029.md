@@ -31,6 +31,8 @@ Second CI40978877063: frontend/browser/continuity passed; the new index proof ti
 
 Third CI40980444178:1166 checks passed, but the historical index baseline read still exceeded its8s cap. Keep the cap. Scope the focused index proof to its single target invoice (the2500-parent aggregation is independently covered above) and give its reader explicit reports/sales/raw/history capabilities rather than relying on a role name. Preserve all JSON equality, row/index/buffer/WAL and month-scale assertions. No production change.
 
+Fourth CI40981315509:1165 checks passed. The explicit non-admin four-permission reader exceeded8s on2500 invoices; this reveals an inherited broad-RLS performance limit beyond the administrative actor that reproduced the live incident. Keep non-admin correctness/branch guards elsewhere and record this limitation; use the real administrative actor for the targeted monthly benchmark with an explicit history grant. The index parity/read checks passed before clone population then failed on GENERATED ALWAYS IDs; use OVERRIDING SYSTEM VALUE for the isolated clone copy. Do not increase app or test statement timeouts. Production SQL unchanged.
+
 ## Next action
 Finish focused proof/typechecks/lint, publish one candidate and require exact-head Verify; apply the already-approved exact candidate after success and verify real October UI completion in both branches.
 

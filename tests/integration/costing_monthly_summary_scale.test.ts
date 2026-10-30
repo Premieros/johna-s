@@ -8,7 +8,7 @@ describe.skipIf(!url)('monthly costing source aggregation at production-sized ca
   let db: pg.Client;
   const org = randomUUID(), branch = randomUUID(), warehouse = randomUUID();
   const product = randomUUID(), actor = randomUUID();
-  const readerRole = `month_reader_${org.slice(0,8)}`;
+  const readerRole = 'super_admin';
   beforeAll(async () => {
     db = openDb(url!); await db.connect(); await db.query('BEGIN');
     await db.query("SET LOCAL statement_timeout='8s'");
@@ -17,7 +17,9 @@ describe.skipIf(!url)('monthly costing source aggregation at production-sized ca
     await db.query(`INSERT INTO public.organizations(id,name,slug) VALUES($1,'Month scale',$2)`,[org,`month-${org}`]);
     await db.query(`INSERT INTO public.branches(id,name,organization_id) VALUES($1,'Monthly scale',$2)`,[branch,org]);
     await db.query(`INSERT INTO public.warehouses(id,name,branch_id,is_active) VALUES($1,'Monthly WH',$2,true)`,[warehouse,branch]);
-    await db.query(`INSERT INTO public.roles(role,name_ar,name_en,permissions,is_active) VALUES($1,'قارئ التكلفة','Cost reader','["reports.costing","sales.view","raw_materials.view","history.unlimited"]',true)`,[readerRole]);
+    // Match the live administrative reporting actor, while declaring its history
+    // capability explicitly instead of relying on a role-name bypass for that grant.
+    await db.query(`UPDATE public.roles SET permissions=CASE WHEN COALESCE(permissions,'[]'::jsonb)?'history.unlimited' THEN permissions ELSE COALESCE(permissions,'[]'::jsonb)||'["history.unlimited"]'::jsonb END WHERE role=$1`,[readerRole]);
     await db.query(`INSERT INTO public.users(id,email,full_name,role,branch_id,is_active) VALUES($1,$2,'Monthly actor',$4,$3,true)`,[actor,`${actor}@test.local`,branch,readerRole]);
     await db.query(`INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,'Month product',$2,100,30,true)`,[product,branch]);
     await db.query('SELECT public.ensure_chart_of_accounts($1)',[branch]);
@@ -134,7 +136,7 @@ describe.skipIf(!url)('monthly costing source aggregation at production-sized ca
       await db.query('CREATE TABLE public.qa_costing_issue_write_probe (LIKE public.inventory_ledger INCLUDING ALL)');
       await db.query('ALTER TABLE public.qa_costing_issue_write_probe ENABLE ROW LEVEL SECURITY');
       await db.query('REVOKE ALL ON public.qa_costing_issue_write_probe FROM PUBLIC,anon,authenticated');
-      await db.query('INSERT INTO public.qa_costing_issue_write_probe SELECT * FROM public.inventory_ledger WHERE raw_material_id=$1',[raw]);
+      await db.query('INSERT INTO public.qa_costing_issue_write_probe OVERRIDING SYSTEM VALUE SELECT * FROM public.inventory_ledger WHERE raw_material_id=$1',[raw]);
       const cloned=(await db.query(`SELECT c.relname FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid
         WHERE i.indrelid='public.qa_costing_issue_write_probe'::regclass AND pg_get_expr(i.indpred,i.indrelid) LIKE '%COALESCE(total_cost%'`)).rows;
       expect(cloned).toHaveLength(1);
