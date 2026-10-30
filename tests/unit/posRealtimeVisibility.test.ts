@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { subscribePosRealtime } from '@/features/pos/services/posRealtime';
-const mocks = vi.hoisted(() => ({ callbacks: new Map<string, (payload: unknown) => void>(), channel: vi.fn(), remove: vi.fn() }));
+const mocks = vi.hoisted(() => ({ callbacks: new Map<string, (payload: unknown) => void>(), channel: vi.fn(), remove: vi.fn(), subscribed: null as null | ((status: string) => void) }));
 vi.mock('@/api', () => ({ supabase: { channel: mocks.channel, removeChannel: mocks.remove } }));
 let hidden = false;
 let cleanups: (() => void)[] = [];
@@ -9,7 +9,7 @@ beforeEach(() => {
   Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
   const channel = { on: vi.fn(), subscribe: vi.fn() };
   channel.on.mockImplementation((_kind, filter, callback) => { mocks.callbacks.set(filter.table, callback); return channel; });
-  channel.subscribe.mockReturnValue(channel); mocks.channel.mockReturnValue(channel);
+  channel.subscribe.mockImplementation((callback) => {mocks.subscribed=callback;return channel;}); mocks.channel.mockReturnValue(channel);
 });
 afterEach(() => { cleanups.forEach(fn => fn()); cleanups = []; delete (document as unknown as {hidden?: boolean}).hidden; vi.useRealTimers(); });
 function visibility(value: boolean) { hidden = value; document.dispatchEvent(new Event('visibilitychange')); }
@@ -34,4 +34,12 @@ describe('POS display refresh visibility', () => {
     unsubscribe(); visibility(true); visibility(false);
     expect(read).not.toHaveBeenCalled(); expect(mocks.remove).toHaveBeenCalledTimes(1);
   });
+});
+
+it('refreshes branch state once on reconnect without polling or hidden reads',()=>{
+ const read=vi.fn();cleanups.push(subscribePosRealtime({branchId:'reconnect',onEvent:read}));
+ mocks.subscribed?.('SUBSCRIBED');expect(read).toHaveBeenCalledTimes(1);
+ mocks.subscribed?.('CHANNEL_ERROR');vi.advanceTimersByTime(10000);expect(read).toHaveBeenCalledTimes(1);
+ visibility(true);mocks.subscribed?.('SUBSCRIBED');expect(read).toHaveBeenCalledTimes(1);
+ visibility(false);expect(read).toHaveBeenCalledTimes(2);
 });

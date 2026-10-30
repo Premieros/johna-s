@@ -157,6 +157,9 @@ export async function fetchOrderForWorkspace(orderId: string): Promise<{ order: 
 
   const row = (o as WorkspaceOrderRow | null) || null;
   if (!row) return { order: null, items: [], products: [] };
+  // The order may close between authorization and the payload read.
+  if (row.status === 'completed') throw new Error('ORDER_CLOSED');
+  if (row.status === 'cancelled') throw new Error('ORDER_CANCELLED');
 
   const embeddedItems = row.order_items || [];
   const productsById = new Map<string, Product>();

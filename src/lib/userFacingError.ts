@@ -390,6 +390,10 @@ const messages: Record<string, { ar: string; en: string }> = {
     ar: 'الطاولة المحددة لا تتبع الفرع الحالي.',
     en: 'The selected table does not belong to the current branch.',
   },
+  ORDER_NOT_FULLY_SENT: {
+    ar: 'لا يمكن التحصيل أو طباعة الحساب قبل إرسال جميع الأصناف للمطبخ أو حذف غير المرسل.',
+    en: 'Send all items to the kitchen or remove unsent items before payment or printing.',
+  },
   NO_SENT_ITEMS_TO_SETTLE: {
     ar: 'لا توجد أصناف مرسلة للمطبخ جاهزة للتحصيل في هذا الطلب.',
     en: 'There are no sent kitchen items ready to settle on this order.',

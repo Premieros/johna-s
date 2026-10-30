@@ -2,10 +2,10 @@
 
 ## Active work
 - Repository: `Premieros/johna-s`; production Supabase: `azzdesuowpdcoflmyezn`.
-- Baseline: `cfd5513409e14df8e4d84152c4e6336b85705eeb` (#548 released).
-- Branch: `fix/costing-monthly-summary-20261029`.
-- Mandatory active work log: `docs/COSTING_MONTHLY_SUMMARY_20261029.md`.
-- Owner directs fixing confirmed October summary57014 in both branches. Prepare single-pass cost-source aggregation plus a narrow partial index for the next-stage zero-cost raw issues; measure write overhead and preserve all monetary values, journal>kitchen>legacy precedence, RLS and operational writers. Benchmark actual monthly cardinality in isolation. Owner explicitly approved merge and production application in this conversation; لا Merge ولا Production migration before final exact-head checks. Do not ask again for the same release. #548 partial-display/date-range improvements remain intact.
+- Baseline: `5fbddf977955e569b71db283e07a5f9f47487f40` (#549 released; monthly supplemental timeout remains open).
+- Branch: `hotfix/order-unsent-checkout-20261030`.
+- Mandatory active work log: `docs/ORDER_UNSENT_CHECKOUT_EMERGENCY_20261030.md`.
+- Owner directs urgent diagnosis/repair of reopened-looking checks and explicitly requires rejection of payment/customer-check printing whenever an unsent item exists. Preserve paid-item Refund protection, row identity, stock accounting, installed printers, independent permissions and branch boundaries. No automatic cancellation/charge/reprint or mass data repair. Test one guarded candidate and keep exact rollback before release.
 
 ## Active usability polish — 2026-10-25
 Owner approved implementing the browser-review findings: compact reports with useful filters and in-page expansion, visible POS branch/dispatch/bill context, readable mobile table cards, safer cancellation presentation and compact dashboard welcome. Presentation only; retain business logic, permissions, queries and installed printers. No production log scans. Prepare one reviewed candidate; publication requires separate final approval.

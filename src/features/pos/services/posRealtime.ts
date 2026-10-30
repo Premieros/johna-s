@@ -149,7 +149,13 @@ function getSharedChannel(branchId: string, debounceMs: number): SharedChannel {
       { event: '*', schema: 'public', table: 'order_kitchen_sends', filter: `branch_id=eq.${branchId}` },
       (payload) => trigger(toEvent('order_kitchen_sends', payload)),
     )
-    .subscribe();
+    .subscribe((status) => {
+      // Realtime does not replay events missed during a disconnect. Reuse the
+      // existing bounded branch refresh after rejoining; never poll or replay writes.
+      if (status === 'SUBSCRIBED' && !(typeof document !== 'undefined' && document.hidden)) {
+        for (const listener of entry.listeners) listener.onEvent();
+      }
+    });
 
   sharedChannels.set(branchId, entry);
   return entry;

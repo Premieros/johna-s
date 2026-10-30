@@ -23,3 +23,8 @@ describe('ended order workspace feedback',()=>{
   expect(mocks.from).toHaveBeenCalledTimes(1);expect(mocks.select).not.toHaveBeenCalledWith('status');
  });
 });
+
+it.each([['completed','ORDER_CLOSED'],['cancelled','ORDER_CANCELLED']])('rejects %s that closes between access approval and hydration',async(status,code)=>{
+ mocks.rpc.mockResolvedValue({data:{success:true}});mocks.maybeSingle.mockResolvedValue({data:{id:'order-id',status,order_items:[]}});
+ await expect(fetchOrderForWorkspace('order-id')).rejects.toThrow(code);
+});

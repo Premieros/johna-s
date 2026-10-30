@@ -124,8 +124,14 @@ export function usePosOrder(input: UsePosOrderInput) {
       return false;
     }
 
-    const status = (currentOrder as { status?: 'open' | 'held' } | null)?.status;
+    const status = (currentOrder as { status?: 'open' | 'held' | 'completed' | 'cancelled' } | null)?.status;
     if (status !== 'open' && status !== 'held') {
+      if (status === 'completed' || status === 'cancelled') {
+        if (receiptWorkspaceRef.current === receiptWorkspace) {
+          clearSettlementPreview();
+          base.resetWorkspace();
+        }
+      }
       show(isAr ? 'الطلب لم يعد مفتوحًا للتحصيل' : 'The order is no longer open for settlement', 'error');
       return false;
     }
@@ -159,7 +165,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     }
 
     return true;
-  }, [base, input.branchId, isAr, perms.canEditOrder, show]);
+  }, [base, clearSettlementPreview, input.branchId, isAr, perms.canEditOrder, receiptWorkspace, show]);
 
   const loadSettlementPreview = useCallback(async (saveSnapshot: boolean): Promise<OrderSettlementPreview | null> => {
     if (!base.activeOrderId) return null;
@@ -169,12 +175,22 @@ export function usePosOrder(input: UsePosOrderInput) {
     // A superseded or closed checkout read must not open another order checkout.
     if (!preview && !error) return null;
     if (error || !preview?.has_payable_items) {
+      const code = diagnostic && typeof diagnostic === 'object' && 'error' in diagnostic ? diagnostic.error : null;
+      if (['ORDER_NOT_EDITABLE', 'ORDER_CLOSED', 'ORDER_CANCELLED'].includes(String(code)) && receiptWorkspaceRef.current === receiptWorkspace) {
+        clearSettlementPreview();
+        base.resetWorkspace();
+      }
       show(error || (isAr ? 'لا توجد أصناف مرسلة للمطبخ جاهزة للتحصيل' : 'No sent kitchen items are ready for settlement'), 'error', { source: diagnostic, action: 'pos_settlement_preview', branchId: input.branchId, entityType: 'order', entityId: base.activeOrderId });
       return null;
     }
 
+    if (preview.unsent_quantity > 0) {
+      show(isAr ? 'لا يمكن التحصيل أو طباعة الحساب قبل إرسال جميع الأصناف للمطبخ أو حذف غير المرسل.' : 'Send all items to the kitchen or remove unsent items before payment or printing.', 'error', { source: 'ORDER_NOT_FULLY_SENT', action: 'pos_settlement_preview', branchId: input.branchId, entityType: 'order', entityId: base.activeOrderId });
+      return null;
+    }
+
     return preview;
-  }, [base.activeOrderId, input.branchId, isAr, loadScopedSettlementPreview, saveOpenOrderSnapshot, show]);
+  }, [base, clearSettlementPreview, input.branchId, isAr, loadScopedSettlementPreview, receiptWorkspace, saveOpenOrderSnapshot, show]);
 
   const applyApprovedDiscount = useCallback(async (
     type: 'amount' | 'percent', amount: number, requestId: string,
@@ -288,18 +304,10 @@ export function usePosOrder(input: UsePosOrderInput) {
     void (async () => {
       const preview = await loadPaymentPreview();
       if (!preview) return;
-      if (preview.unsent_quantity > 0) {
-        show(
-          isAr
-            ? `تنبيه: يوجد ${preview.unsent_quantity} من الأصناف غير المرسلة. التحصيل الحالي سيغطي الأصناف المرسلة فقط ولن يغلق الطلب.`
-            : `Warning: ${preview.unsent_quantity} unsent item(s) remain. This payment will settle sent items only and will not close the order.`,
-          'warning',
-        );
-      }
       base.setPaidAmount(base.paymentMethod === 'credit' ? 0 : preview.total);
       base.setCheckoutOpen(true);
     })();
-  }, [base, clearSettlementPreview, isAr, loadPaymentPreview, show]);
+  }, [base, clearSettlementPreview, loadPaymentPreview]);
 
   const completeSale = useCallback(async (payments?: SplitTenderInput[]): Promise<boolean> => {
     const explicitlyOffline = typeof navigator !== 'undefined' && !navigator.onLine;

@@ -67,3 +67,10 @@ describe('customer open-check metadata readiness',()=>{
  });
 
 });
+
+it('never queues an open check while any item remains unsent',async()=>{
+  const value=ready();value.preview={...value.preview,unsent_quantity:1} as typeof value.preview;state.fetch.mockResolvedValue(value);
+  const {result}=renderHook(()=>usePosOrder(input));
+  await act(async()=>{await result.current.printReceipt();});
+  expect(state.enqueue).not.toHaveBeenCalled();
+});
