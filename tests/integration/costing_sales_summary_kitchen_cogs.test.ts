@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
 
@@ -198,7 +199,21 @@ describe.skipIf(skip)('costing sales summary kitchen COGS', () => {
     expect(def.match(/history_clamp_from/g) || []).toHaveLength(1);
     expect(def.match(/history_clamp_to/g) || []).toHaveLength(1);
     expect(def).toContain("je.reference_type IN ('sale','fifo_cogs_reconcile')");
-    expect(def).toContain('WHEN jc.sale_id IS NOT NULL');
-    expect(def).toContain('WHEN kc.sale_id IS NOT NULL');
   });
+  it('preserves complete mixed-source JSON and exact security through rollback/reapply', async () => {
+    const read = async () => (await client.query(`SELECT pg_get_functiondef(p.oid) definition,
+      p.prosecdef,p.proowner,p.proacl,p.proconfig,p.provolatile FROM pg_proc p
+      WHERE p.oid='public.get_costing_sales_summary(uuid,date,date)'::regprocedure`)).rows;
+    const summary = async () => (await client.query(`SELECT public.get_costing_sales_summary($1,NULL,NULL) result`, [branchId])).rows[0].result;
+    const candidate = await read(); const expected = await summary();
+    const script = (path: string) => readFileSync(path,'utf8').replace(/^BEGIN;$/gm,'').replace(/^COMMIT;$/gm,'');
+    await client.query('SAVEPOINT monthly_recovery');
+    try {
+      await client.query(script('scripts/rollback/costing_monthly_summary_linear_read_20261029.sql'));
+      expect(await summary()).toEqual(expected);
+      await client.query(script('supabase/migrations/20261029235331_costing_monthly_summary_linear_read.sql'));
+      expect(await read()).toEqual(candidate); expect(await summary()).toEqual(expected);
+    } finally { await client.query('ROLLBACK TO SAVEPOINT monthly_recovery'); }
+  });
+
 });
