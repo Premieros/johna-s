@@ -65,6 +65,12 @@ export function CostingCenterPage() {
   const [draftTo, setDraftTo] = useState(toDate);
   const [periodRows, setPeriodRows] = useState<RawConsumptionCostBreakdownRow[]>([]);
   const request = useRef(0);
+  const reportAbort = useRef<AbortController | null>(null);
+  const beginReportRead = useCallback(() => {
+    reportAbort.current?.abort();
+    reportAbort.current = new AbortController();
+    return reportAbort.current.signal;
+  }, []);
   const supplierRequest = useRef(0);
   const [rawMaterialUnits, setRawMaterialUnits] = useState<Record<string, MeasurementUnitDisplay>>({});
   const [detail, setDetail] = useState<ProductCostingDetail | null>(null);
@@ -98,7 +104,11 @@ export function CostingCenterPage() {
     setRequestedScope(JSON.stringify([permissionVersion, tab, effBranch, allowed.from, allowed.to, tab === 'supplier' ? supplierId : null, history.unlimited]));
     setRunVersion(value => value + 1);
   };
-  useLayoutEffect(() => { request.current += 1; setLoading(false); setError(null); setDetail(null); setRawHistoryTarget(null); }, [reportScope]);
+  useLayoutEffect(() => {
+    request.current += 1; reportAbort.current?.abort();
+    setLoading(false); setError(null); setDetail(null); setRawHistoryTarget(null);
+    return () => { request.current += 1; reportAbort.current?.abort(); };
+  }, [reportScope]);
 
   const loadSuppliers = useCallback(async () => {
     const requestId = ++supplierRequest.current;
@@ -116,6 +126,7 @@ export function CostingCenterPage() {
 
   const loadOverview = useCallback(async () => {
     const requestId = ++request.current;
+    const signal = beginReportRead();
     setLoading(true);
     setError(null);
     setOverviewScope(null); setOverview([]); setHistoricalEstimate(null);
@@ -123,16 +134,16 @@ export function CostingCenterPage() {
     try {
       // These reads scan overlapping costing/inventory sources. Serialize them
       // so a single screen does not run overlapping heavy reads on the small database.
-      const res = await api.costing.getOverview({ p_branch_id: effBranch });
+      const res = await api.costing.getOverview({ p_branch_id: effBranch }, signal);
       if (requestId !== request.current) return;
       if (res.error) throw res.error;
       setOverview(res.data || []); setOverviewScope(reportScope);
       stage = 'costing_sales_summary';
-      const summaryRes = await api.costing.getSalesSummary({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate });
+      const summaryRes = await api.costing.getSalesSummary({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate }, signal);
       if (requestId !== request.current) return;
       if (summaryRes.error) throw summaryRes.error;
       stage = 'costing_historical_estimate';
-      const historicalRes = await api.costing.getHistoricalSaleCostEstimates({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate });
+      const historicalRes = await api.costing.getHistoricalSaleCostEstimates({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate }, signal);
       if (requestId !== request.current) return;
       if (historicalRes.error) throw historicalRes.error;
       setHistoricalEstimate({ cost: (historicalRes.data || []).reduce((sum, row) => sum + Number(row.estimated_cost), 0), unpriced: (historicalRes.data || []).reduce((sum, row) => sum + Number(row.unpriced_movements), 0) });
@@ -156,23 +167,24 @@ export function CostingCenterPage() {
       setHistoricalEstimate(null); setError(message); setLoading(false);
       show(message, 'error', { source: error, action: stage, branchId: effBranch });
     }
-  }, [effBranch, show, fromDate, toDate, reportScope, isAr]);
+  }, [beginReportRead, effBranch, show, fromDate, toDate, reportScope, isAr]);
 
   const loadOrders = useCallback(async () => {
     const requestId = ++request.current;
+    const signal = beginReportRead();
     setLoading(true);
     setError(null);
     const params = { p_branch_id: effBranch, p_from: fromDate, p_to: toDate };
-    const res = await api.costing.getOrderMargin(params);
+    const res = await api.costing.getOrderMargin(params, signal);
     if (requestId !== request.current) return;
     if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
-    const historicalRes = await api.costing.getHistoricalSaleCostEstimates(params);
+    const historicalRes = await api.costing.getHistoricalSaleCostEstimates(params, signal);
     if (requestId !== request.current) return;
     if (historicalRes.error) { setOrders([]); setError(historicalRes.error.message); setLoading(false); show(historicalRes.error.message, 'error'); return; }
     setOrders(supplementHistoricalMargins(res.data || [], historicalRes.data || []));
     setLoadedScope(reportScope);
     setLoading(false);
-  }, [effBranch, fromDate, toDate, show, reportScope]);
+  }, [beginReportRead, effBranch, fromDate, toDate, show, reportScope]);
 
   const loadSupplierImpact = useCallback(async () => {
     if (!supplierId) { setSupplierImpact([]); return; }
@@ -302,7 +314,7 @@ export function CostingCenterPage() {
       if (current !== request.current) return;
       setError(failure instanceof Error ? failure.message : String(failure)); setLoading(false);
     });
-    return () => { request.current += 1; };
+    return () => { request.current += 1; reportAbort.current?.abort(); };
   }, [runVersion, requestedScope, reportScope, activeLoader]);
 
   const openDetail = async (productId: string) => {
