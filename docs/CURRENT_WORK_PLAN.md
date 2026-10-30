@@ -2,10 +2,10 @@
 
 ## Active work
 - Repository: `Premieros/johna-s`; production Supabase: `azzdesuowpdcoflmyezn`.
-- Baseline: `5fbddf977955e569b71db283e07a5f9f47487f40` (#549 released; monthly supplemental timeout remains open).
-- Branch: `hotfix/order-unsent-checkout-20261030`.
-- Mandatory active work log: `docs/ORDER_UNSENT_CHECKOUT_EMERGENCY_20261030.md`.
-- Owner directs urgent diagnosis/repair of reopened-looking checks and explicitly requires rejection of payment/customer-check printing whenever an unsent item exists. Preserve paid-item Refund protection, row identity, stock accounting, installed printers, independent permissions and branch boundaries. No automatic cancellation/charge/reprint or mass data repair. Test one guarded candidate and keep exact rollback before release.
+- Baseline: `4b6da2cae7e6d5c379fd80d9cedd8f0bb8be8cde` (#550 released).
+- Branch: `fix/report-read-budget-20261030`.
+- Mandatory active work log: `docs/REPORT_READ_BUDGET_20261030.md`.
+- Owner authorizes a software-only reduction in report load, with no paid upgrade. Serialize allowlisted report network reads per browser, skip abandoned queued reads and preserve shared consumers. Keep sales, payment, kitchen and printing outside the queue. No production business writes, SQL, RLS or accounting changes. Preserve the #550 emergency safeguards. Monthly historical-cost SQL timeout remains a separate unresolved root cause; do not claim this containment fixes it.
 
 ## Active usability polish — 2026-10-25
 Owner approved implementing the browser-review findings: compact reports with useful filters and in-page expansion, visible POS branch/dispatch/bill context, readable mobile table cards, safer cancellation presentation and compact dashboard welcome. Presentation only; retain business logic, permissions, queries and installed printers. No production log scans. Prepare one reviewed candidate; publication requires separate final approval.

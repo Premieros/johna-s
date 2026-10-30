@@ -54,6 +54,77 @@ describe('shared authoritative report requests', () => {
     finish(response()); expect(await (await second).json()).toEqual({ revenue: 12 });
     await cache.fetch(url, options()); expect(base).toHaveBeenCalledTimes(1);
   });
+  it('holds the report slot until its body drains while operational requests bypass it', async () => {
+    let drain!: () => void;
+    const body = new ReadableStream<Uint8Array>({ start(controller) {
+      drain = () => { controller.enqueue(new TextEncoder().encode('{"revenue":12}')); controller.close(); };
+    } });
+    const base = vi.fn().mockResolvedValueOnce(new Response(body, { headers: { 'content-type': 'application/json' } })).mockImplementation(async () => response());
+    const cache = createReportRequestCache(base);
+    const first = cache.fetch(url, options());
+    await vi.waitFor(() => expect(base).toHaveBeenCalledTimes(1));
+    const queued = cache.fetch(url, options('b'));
+    for (const name of ['process_sale_idempotent', 'send_to_kitchen', 'enqueue_cloud_open_order_print']) {
+      await cache.fetch('https://example.test/rest/v1/rpc/' + name, options());
+    }
+    expect(base).toHaveBeenCalledTimes(4);
+    drain(); await first; await queued;
+    expect(base).toHaveBeenCalledTimes(5);
+  });
+  it('drains a dispatched read after its last caller leaves before starting the next report', async () => {
+    let finish!: (value: Response) => void;
+    let dispatchedSignal: AbortSignal | undefined;
+    const base = vi.fn().mockImplementationOnce((input: Request) => {
+      dispatchedSignal = input.signal;
+      return new Promise<Response>(resolve => { finish = resolve; });
+    }).mockImplementation(async () => response());
+    const cache = createReportRequestCache(base); const controller = new AbortController();
+    const first = cache.fetch(url, options('a', 'Bearer reader', controller.signal));
+    await vi.waitFor(() => expect(base).toHaveBeenCalledTimes(1));
+    const rejected = expect(first).rejects.toMatchObject({ name: 'AbortError' }); controller.abort(); await rejected;
+    const next = cache.fetch(url, options('b'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(dispatchedSignal?.aborted).toBe(false); expect(base).toHaveBeenCalledTimes(1);
+    finish(response()); await next; expect(base).toHaveBeenCalledTimes(2);
+  });
+  it('skips abandoned queued reads and advances after failures', async () => {
+    let finish!: (value: Response) => void;
+    const base = vi.fn().mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve; }))
+      .mockRejectedValueOnce(new Error('network')).mockImplementation(async () => response());
+    const cache = createReportRequestCache(base);
+    const first = cache.fetch(url, options());
+    await vi.waitFor(() => expect(base).toHaveBeenCalledTimes(1));
+    const controller = new AbortController();
+    const abandoned = cache.fetch(url, options('b', 'Bearer reader', controller.signal));
+    const rejected = expect(abandoned).rejects.toMatchObject({ name: 'AbortError' });
+    // Let the body/key processing enqueue before cancellation.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    controller.abort(); await rejected;
+    const failure = cache.fetch(url, options('c'));
+    const failureCheck = expect(failure).rejects.toThrow('network');
+    const next = cache.fetch(url, options('d'));
+    finish(response()); await first; await failureCheck; await next;
+    expect(base).toHaveBeenCalledTimes(3);
+    // The skipped branch can still be explicitly requested later.
+    await cache.fetch(url, options('b')); expect(base).toHaveBeenCalledTimes(4);
+  });
+  it('keeps a queued shared read when one consumer leaves and serves cached reads without waiting', async () => {
+    let finish!: (value: Response) => void;
+    const base = vi.fn().mockResolvedValueOnce(response(7)).mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve; })).mockImplementation(async () => response());
+    const cache = createReportRequestCache(base);
+    await cache.fetch(url, options('cached'));
+    const first = cache.fetch(url, options());
+    await vi.waitFor(() => expect(base).toHaveBeenCalledTimes(2));
+    const controller = new AbortController();
+    const leaving = cache.fetch(url, options('b', 'Bearer reader', controller.signal));
+    const staying = cache.fetch(url, options('b'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const rejected = expect(leaving).rejects.toMatchObject({ name: 'AbortError' }); controller.abort(); await rejected;
+    expect(await (await cache.fetch(url, options('cached'))).json()).toEqual({ revenue: 7 });
+    expect(base).toHaveBeenCalledTimes(2);
+    finish(response()); await first; await staying;
+    expect(base).toHaveBeenCalledTimes(3);
+  });
   it('invalidates reuse on a table write and never caches operational RPCs', async () => {
     const base = vi.fn(async () => response()); const cache = createReportRequestCache(base);
     await cache.fetch(url, options());
@@ -82,7 +153,10 @@ describe('shared authoritative report requests', () => {
     const cache = createReportRequestCache(base); const old = cache.fetch(url, options());
     await vi.waitFor(() => expect(base).toHaveBeenCalledTimes(1));
     await cache.fetch('https://example.test/rest/v1/rpc/set_raw_material_price', options());
-    await cache.fetch(url, options()); finish(response(12)); await old;
+    const fresh = cache.fetch(url, options());
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(base).toHaveBeenCalledTimes(2); // The write bypassed the active report.
+    finish(response(12)); await old; await fresh;
     expect(await (await cache.fetch(url, options())).json()).toEqual({ revenue: 20 }); expect(base).toHaveBeenCalledTimes(3);
   });
 });
