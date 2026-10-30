@@ -231,6 +231,8 @@ describe.skipIf(!dbUrl)('action-specific POS permissions across operator ownersh
 
     const tableId = await newTable();
     const orderId = await createOwnedOrder(tableId);
+    const sent = await rpc(ids.users.cashier, `SELECT public.send_to_kitchen($1) AS r`, [orderId]);
+    expect(sent.success, JSON.stringify(sent)).toBe(true);
     await setActorPermissions(['pos.receipt.print']);
 
     const initialState = await rpc(
