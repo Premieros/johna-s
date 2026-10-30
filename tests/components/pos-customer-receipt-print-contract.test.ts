@@ -11,7 +11,8 @@ const printing = fs.readFileSync(path.join(root, 'src/features/pos/utils/printin
 describe('POS customer receipt print contract', () => {
   it('routes sale-screen print actions to the customer receipt, not the kitchen ticket', () => {
     expect(workspace).not.toContain('onPrint={pos.printKitchenTicket}');
-    expect(workspace).toContain('onPrint={() => void pos.printReceipt()}');
+    expect(workspace).toContain('onPrint={printCustomerReceipt}');
+    expect(workspace).toContain('if (pos.activeOrderId && hasUnsentItems)');
     expect(workspace).toContain('perms.canPrint && pos.lastReceipt && pos.cart.length === 0');
   });
 

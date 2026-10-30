@@ -208,8 +208,20 @@ export function PosWorkspacePage() {
     });
   }, [pos.cart, kitchenSendsForActive, orderItemsForActive]);
 
+  const printCustomerReceipt = useCallback(() => {
+    if (pos.activeOrderId && hasUnsentItems) {
+      show(isAr ? 'أرسل جميع الأصناف للمطبخ أو احذف غير المرسل قبل طباعة الحساب.' : 'Send all items or remove unsent items before printing the check.', 'error');
+      return;
+    }
+    void pos.printReceipt();
+  }, [pos, hasUnsentItems, isAr, show]);
+
   const handlePay = useCallback(() => {
     if (!perms.canPay || !shiftChecked || pos.cart.length === 0) return;
+    if (pos.activeOrderId && hasUnsentItems) {
+      show(isAr ? 'أرسل جميع الأصناف للمطبخ أو احذف غير المرسل قبل الدفع.' : 'Send all items or remove unsent items before payment.', 'error');
+      return;
+    }
     const allowed = guardPos({
       productsCount: products.length,
       activeShiftId: activeShift?.id || null,
@@ -220,7 +232,7 @@ export function PosWorkspacePage() {
     pos.setPaidAmount(pos.total);
     pos.setCheckoutOpen(true);
     setMobileOrderOpen(true);
-  }, [perms.canPay, shiftChecked, pos, guardPos, products.length, activeShift?.id]);
+  }, [perms.canPay, shiftChecked, pos, guardPos, products.length, activeShift?.id, hasUnsentItems, isAr, show]);
 
   // Keyboard Shortcuts Hook
   usePosKeyboard({
@@ -701,7 +713,7 @@ export function PosWorkspacePage() {
       onSetItemDiscount={pos.setItemDiscount}
       onHold={() => void pos.holdOrder()}
       onSendKitchen={() => void pos.sendToKitchen()}
-      onPrint={() => void pos.printReceipt()}
+      onPrint={printCustomerReceipt}
       onPay={handlePay}
       onAddItem={() => barcodeRef.current?.focus()}
       onConfigureItem={(item) => setConfigItem(item)}
@@ -877,7 +889,7 @@ export function PosWorkspacePage() {
             onOpenCustomer={() => setCustomerModalOpen(true)}
             onHoldOrder={() => void pos.holdOrder()}
             onSendKitchen={() => void pos.sendToKitchen()}
-            onPrint={() => void pos.printReceipt()}
+            onPrint={printCustomerReceipt}
             onPay={handlePay}
           />
 
@@ -1230,7 +1242,7 @@ export function PosWorkspacePage() {
             {perms.canPrint && (
               <button
                 data-testid="pos-receipt-print"
-                onClick={() => void pos.printReceipt()}
+                onClick={printCustomerReceipt}
                 className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-ui-primary hover:bg-ui-primary-hover text-ui-primary-fg font-bold transition-colors"
               >
                 <Printer className="w-5 h-5" /> {t('printReceipt')}
