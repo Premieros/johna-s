@@ -23,6 +23,7 @@ import { useActiveOrders } from '../hooks/useActiveOrders';
 import { usePosPermissions } from '../hooks/usePosPermissions';
 import { usePosKeyboard } from '../hooks/usePosKeyboard';
 import { cartConfigurationKey, cartLineKey, orderItemLineKey } from '../utils/cart';
+import { confirmedSessionSendQuantity } from '../utils/orderSendState';
 import { OrderStartWizard, type StartStep, type StartOrderOptions } from '../components/start/OrderStartWizard';
 import { ProductBrowser } from '../components/catalog/ProductBrowser';
 import { ProductConfigModal } from '../components/catalog/ProductConfigModal';
@@ -202,11 +203,16 @@ export function PosWorkspacePage() {
       const orderItem = cItem.order_item_id
         ? orderItemsForActive.find((oi) => oi.id === cItem.order_item_id)
         : orderItemsForActive.find((oi) => orderItemLineKey(oi) === lineKey);
-      if (!orderItem) return true;
+      if (!orderItem) {
+        // The send RPC can finish before Realtime publishes the new item row.
+        // Trust only one exact, server-confirmed line; a later local addition
+        // still exceeds that confirmed delta and must remain blocked.
+        return confirmedSessionSendQuantity(cItem, pos.kitchenSentItems) < cItem.quantity;
+      }
       const send = kitchenSendsForActive.find((row) => row.order_item_id === orderItem.id);
       return Number(send?.sent_quantity || 0) < cItem.quantity;
     });
-  }, [pos.cart, kitchenSendsForActive, orderItemsForActive]);
+  }, [pos.cart, pos.kitchenSentItems, kitchenSendsForActive, orderItemsForActive]);
 
   const printCustomerReceipt = useCallback(() => {
     if (pos.activeOrderId && hasUnsentItems) {

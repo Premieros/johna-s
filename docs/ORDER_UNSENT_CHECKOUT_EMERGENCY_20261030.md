@@ -33,3 +33,5 @@ Next: finish tests, review exact diff/security/rollback, publish candidate, appl
 
 ## Mandatory update protocol
 السجل هو المرجع الإجباري للعمل. CI يجب أن يفشل for branch/log divergence. Record release evidence in the PR ledger; no repeated healthy full test runs.
+
+Native run41130966015 passed1168 DB checks and1987 frontend checks. Browser caught a real first-send/Realtime hydration gap in the new local gate before release. Use only one exact server-confirmed session line as a conservative delta fallback while the canonical item row is missing; never infer that an incremental delta covers an older cumulative quantity. Five focused identity/quantity/configuration tests added,16 focused checks and both typechecks passed. SQL is unchanged; no production candidate applied yet. Final exact-head browser/native gates remain required.
