@@ -68,13 +68,13 @@ describe.skipIf(!dbUrl)('discount checkout failures and split invoice proof', ()
     expect((await client.query('SELECT count(*)::int AS n FROM public.sale_payments WHERE sale_id=$1',[r.sale_id])).rows[0].n).toBe(2);
     expect((await client.query("SELECT details->>'invoice_number' AS invoice FROM public.audit_log WHERE entity_id=$1 AND action='APPROVAL_CONSUMED'",[approval])).rows[0].invoice).toBe(invoice);
   });
-  it('reports genuine partial settlement when unsent quantity remains', async () => {
+  it('rejects split settlement when unsent quantity remains without consuming approval', async () => {
     await client.query('UPDATE public.order_items SET quantity=2,total=40 WHERE order_id=$1',[ids.rows.orders.own]);
     await client.query('UPDATE public.orders SET subtotal=40,total=35 WHERE id=$1',[ids.rows.orders.own]);
     const r=await split('SPLIT-PARTIAL-'+approval,15);
-    expect(r.success,JSON.stringify(r)).toBe(true);
-    expect(r.order_completed).toBe(false);
-    expect(Number(r.remaining_unsent_quantity)).toBe(1);
+    expect(r).toMatchObject({success:false,error:'ORDER_NOT_FULLY_SENT'});
+    expect((await approvalState()).consumed_at).toBeNull();
+    expect((await client.query('SELECT count(*)::int n FROM public.sales WHERE source_order_id=$1',[ids.rows.orders.own])).rows[0].n).toBe(0);
     expect((await client.query('SELECT status FROM public.orders WHERE id=$1',[ids.rows.orders.own])).rows[0].status).toBe('open');
   });
   it('accepts a percentage approval persisted as an exact monetary order discount', async () => {

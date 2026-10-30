@@ -112,8 +112,8 @@ describe.skipIf(skip)('paid-order reopen guard', () => {
       `UPDATE public.roles
        SET permissions = CASE
          WHEN jsonb_typeof(COALESCE(permissions,'[]'::jsonb))='array'
-           THEN COALESCE(permissions,'[]'::jsonb) || '["pos.void"]'::jsonb
-         ELSE COALESCE(permissions,'{}'::jsonb) || '{"pos.void":true}'::jsonb
+           THEN COALESCE(permissions,'[]'::jsonb) || '["pos.void","pos.receipt.print"]'::jsonb
+         ELSE COALESCE(permissions,'{}'::jsonb) || '{"pos.void":true,"pos.receipt.print":true}'::jsonb
        END
        WHERE role='cashier'`,
     );
@@ -173,6 +173,22 @@ describe.skipIf(skip)('paid-order reopen guard', () => {
     await client.query(`SELECT public.ensure_chart_of_accounts($1)`, [branchId]);
     await client.query(`SELECT public.seed_account_mappings($1)`, [branchId]);
 
+    const blockedPayment = await asUser(async () => client.query(
+      `SELECT public.process_sale($1,$2,$3,NULL,NULL,$4,0,'amount',0,0,$4,$4,'cash','completed',$5::jsonb,NULL,'dine_in',$6,$7,2) AS r`,
+      [`INV-UNSENT-${orderId}`,branchId,warehouseId,Number(preview.total),JSON.stringify(preview.items),tableId,orderId],
+    ));
+    expect(blockedPayment.rows[0].r).toMatchObject({success:false,error:'ORDER_NOT_FULLY_SENT'});
+    const blockedPrint = await asUser(async () => client.query(
+      `SELECT public.enqueue_cloud_open_order_print($1,'{"text":"must not print"}'::jsonb,$2) AS r`, [orderId,`open-check:${orderId}:test`],
+    ));
+    expect(blockedPrint.rows[0].r).toMatchObject({success:false,error:'ORDER_NOT_FULLY_SENT'});
+    expect((await client.query(`SELECT count(*)::int n FROM public.sales WHERE source_order_id=$1`,[orderId])).rows[0].n).toBe(0);
+    expect((await client.query(`SELECT count(*)::int n FROM public.cloud_print_jobs WHERE idempotency_key=$1`,[`open-check:${orderId}:test`])).rows[0].n).toBe(0);
+
+    const legacyAddition = (await client.query(
+      `DELETE FROM public.order_items WHERE order_id=$1 AND product_id=$2 RETURNING *`, [orderId, productB],
+    )).rows[0];
+
     const saleQuery = await asUser(async () => client.query(
       `SELECT public.process_sale(
          $1,$2,$3,NULL,NULL,
@@ -199,8 +215,12 @@ describe.skipIf(skip)('paid-order reopen guard', () => {
       order_completed?: boolean;
     };
     expect(sale.success).toBe(true);
-    expect(sale.order_completed).toBe(false);
+    expect(sale.order_completed).toBe(true);
     expect(sale.sale_id).toBeTruthy();
+
+    // Historical partial-settlement compatibility only; new payments reject unsent additions.
+    await client.query(`UPDATE public.orders SET status='open',payment_status='partial' WHERE id=$1`, [orderId]);
+    await client.query(`INSERT INTO public.order_items SELECT * FROM jsonb_populate_record(NULL::public.order_items,$1::jsonb)`, [JSON.stringify(legacyAddition)]);
 
     const lines = await client.query<{ id: string; product_id: string }>(
       `SELECT id,product_id FROM public.order_items WHERE order_id=$1`,

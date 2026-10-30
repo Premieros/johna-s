@@ -201,3 +201,20 @@ it('persists an explicit confirmation of the same saved discount amount',async()
  await act(async()=>{await result.current.completeSale();});
  expect(mocks.discount).toHaveBeenCalledWith({p_order_id:'a',p_discount_amount:5,p_approval_request_id:null});
 });
+
+it('rejects checkout and payment when a previously sent order contains an unsent addition', async () => {
+  const value=preview('a','branch-a','warehouse-a');value.preview.unsent_quantity=1;
+  mocks.fetch.mockResolvedValue(value);
+  const {result}=renderHook(()=>usePosOrder(input));
+  await act(async()=>{result.current.setCheckoutOpen(true);});
+  expect(mocks.base.setCheckoutOpen).not.toHaveBeenCalledWith(true);
+  await act(async()=>{expect(await result.current.completeSale()).toBe(false);});
+  expect(mocks.pay).not.toHaveBeenCalled();expect(mocks.invoice).not.toHaveBeenCalled();
+});
+
+it('clears a terminal server order instead of leaving its closed cart available for checkout',async()=>{
+ mocks.fetch.mockResolvedValue({preview:null,error:'ORDER_NOT_EDITABLE',diagnostic:{success:false,error:'ORDER_NOT_EDITABLE'}});
+ const {result}=renderHook(()=>usePosOrder(input));
+ await act(async()=>{expect(await result.current.completeSale()).toBe(false);});
+ expect(mocks.base.resetWorkspace).toHaveBeenCalledOnce();expect(mocks.pay).not.toHaveBeenCalled();
+});
