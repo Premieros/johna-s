@@ -22,7 +22,7 @@ Existing cache shares identical reads but permits unrelated expensive reports co
 Serialize allowlisted read-only report network requests until response body drains. Cache hits and shared reads stay immediate. Skip queued requests with no consumers; never abort a dispatched shared read. Operational traffic bypasses queue. Wire costing overview/order read cancellation to scope changes and unmount. Existing cache keys, mutation invalidation and authoritative data sources remain intact.
 
 ## Verification ledger
-37 focused behavioral/contract tests passed across report transport, costing lifecycle and worklog gates. Application + test TypeScript checks passed. Focused ESLint and diff whitespace checks passed. No production load probes or business writes. Required exact-head CI remains pending; final release evidence will be recorded in the PR ledger.
+43 focused behavioral/contract tests passed across report transport, costing lifecycle and worklog gates. Application + test TypeScript checks passed. Focused ESLint and diff whitespace checks passed. No production load probes or business writes. Initial CI passed 1168 database and 136 browser tests; one frontend assertion expected the former two-argument RPC call. Update the assertion for optional cancellation and verify all four costing methods forward the signal. Required exact-head CI remains pending; final release evidence will be recorded in the PR ledger.
 
 ## Production gate
 No merge until focused checks and required exact-head CI pass. No database migration required. Rollback is a frontend commit revert; no business data rollback.
