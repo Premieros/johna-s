@@ -2,6 +2,14 @@
 BEGIN;
 SET LOCAL lock_timeout='2s';
 SET LOCAL statement_timeout='15s';
+-- Restrict supplemental pricing to actual zero-cost raw issues before row checks.
+-- Priced movements never enter this small index.
+CREATE INDEX idx_inventory_ledger_zero_raw_issue_ref
+  ON public.inventory_ledger(reference_type,reference_id,branch_id)
+  WHERE raw_material_id IS NOT NULL AND quantity<0
+    AND COALESCE(unit_cost,0)=0 AND COALESCE(total_cost,0)=0
+    AND entry_type IN ('kitchen_send','sale')
+    AND reference_type IN ('kitchen_send','sale');
 DO $costing_monthly_fold$
 DECLARE v_def text;v_old text;v_new text;
 BEGIN

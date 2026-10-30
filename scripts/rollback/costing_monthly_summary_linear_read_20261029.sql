@@ -2,6 +2,7 @@
 BEGIN;
 SET LOCAL lock_timeout='2s';
 SET LOCAL statement_timeout='15s';
+DROP INDEX public.idx_inventory_ledger_zero_raw_issue_ref;
 DO $costing_monthly_fold$
 DECLARE v_def text;v_old text;v_new text;
 BEGIN

@@ -76,6 +76,61 @@ describe.skipIf(!url)('monthly costing source aggregation at production-sized ca
     } finally { await db.query('ROLLBACK TO SAVEPOINT monthly_scale_read'); }
   });
 
+  it('skips priced raw issues through the partial index without changing supplemental costs',async()=>{
+    await db.query('SAVEPOINT zero_issue_index_proof');
+    try {
+      const raw=randomUUID();
+      const unit=(await db.query(`SELECT id FROM public.measurement_units WHERE code='KG' LIMIT 1`)).rows[0].id;
+      await db.query(`INSERT INTO public.raw_materials(id,code,name,unit_id,branch_id,default_cost,is_active) VALUES($1,$2,'Index raw',$3,$4,5,true)`,[raw,`IDX-${raw}`,unit,branch]);
+      await db.query(`INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,priced_at,reference_number) VALUES($1,$2,5,'pricing',now(),'ZERO-ISSUE-INDEX')`,[raw,branch]);
+      const event=(await db.query(`SELECT md5($1::text||':event:1')::uuid id`,[branch])).rows[0].id;
+      await db.query(`INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id)
+        SELECT $1::uuid,$2::uuid,$3::uuid,-1,CASE WHEN i%10<3 THEN 0 ELSE 5 END,-CASE WHEN i%10<3 THEN 0 ELSE 5 END,
+          'kitchen_send','kitchen_send',$4::uuid FROM generate_series(1,1000) i`,[raw,branch,warehouse,event]);
+      const ddl=(await db.query(`SELECT pg_get_indexdef('public.idx_inventory_ledger_zero_raw_issue_ref'::regclass) ddl`)).rows[0].ddl as string;
+      await db.query('DROP INDEX public.idx_inventory_ledger_zero_raw_issue_ref');
+      const movementSql=`SELECT il.id FROM public.inventory_ledger il
+        WHERE il.reference_type='kitchen_send' AND il.reference_id=$1 AND il.branch_id=$2
+          AND il.entry_type='kitchen_send' AND il.raw_material_id IS NOT NULL AND il.quantity<0
+          AND COALESCE(il.unit_cost,0)=0 AND COALESCE(il.total_cost,0)=0
+          AND private.financial_reference_visible(il.reference_type,il.reference_id,(md5(il.id::text))::uuid,il.branch_id,il.created_at)`;
+      const read=async()=>{
+        await db.query(`SELECT set_config('app.user_id',$1,true),set_config('request.jwt.claim.sub',$1,true)`,[actor]);
+        await db.query('SET LOCAL ROLE authenticated');
+        const rows=(await db.query(movementSql+' ORDER BY il.id',[event,branch])).rows;
+        const plan=(await db.query('EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) '+movementSql,[event,branch])).rows;
+        const historical=(await db.query(`SELECT public.get_historical_sale_cost_estimates($1,CURRENT_DATE-1,CURRENT_DATE+1) result`,[branch])).rows[0].result;
+        await db.query('RESET ROLE');
+        await db.query(`SELECT set_config('app.user_id','',true),set_config('request.jwt.claim.sub','',true)`);
+        return {rows,plan,historical};
+      };
+      const before=await read(); await db.query(ddl); const after=await read();
+      expect(after.rows).toHaveLength(300);expect(after.rows).toEqual(before.rows);
+      expect(after.historical).toEqual(before.historical);
+      expect(after.historical).toHaveLength(1);
+      expect(Number(after.historical[0].estimated_cost)).toBe(750);
+      expect(JSON.stringify(after.plan)).toContain('idx_inventory_ledger_zero_raw_issue_ref');
+      const root=(value:{[key:string]:unknown}[]) => (value[0]['QUERY PLAN'] as {Plan:Record<string,unknown>}[])[0].Plan;
+      expect(Number(root(after.plan)['Shared Hit Blocks'])).toBeLessThan(Number(root(before.plan)['Shared Hit Blocks']));
+      // Priced inserts still evaluate the predicate, but add no entries/WAL to this index.
+      // Compare rollback-only inserts of the same unpriced/priced fixture with/without it.
+      const insertCost=async(cost:number)=>{
+        await db.query('SAVEPOINT index_write_probe');
+        try {
+          const plan=(await db.query(`EXPLAIN (ANALYZE, WAL, FORMAT JSON) INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id)
+            SELECT $1::uuid,$2::uuid,$3::uuid,-1,$5::numeric,-$5::numeric,'kitchen_send','kitchen_send',$4::uuid FROM generate_series(1,50)`,[raw,branch,warehouse,event,cost])).rows;
+          const p=(plan[0]['QUERY PLAN'] as {Plan:Record<string,unknown>;'Execution Time':number}[])[0];
+          return {ms:p['Execution Time'],walBytes:p.Plan['WAL Bytes'],sharedHits:p.Plan['Shared Hit Blocks']};
+        } finally {await db.query('ROLLBACK TO SAVEPOINT index_write_probe');}
+      };
+      const pricedWith=await insertCost(5),unpricedWith=await insertCost(0);
+      await db.query('DROP INDEX public.idx_inventory_ledger_zero_raw_issue_ref');
+      const pricedWithout=await insertCost(5),unpricedWithout=await insertCost(0);
+      console.log('ZERO_ISSUE_PARTIAL_INDEX',JSON.stringify({source:'owned localhost only',rows:300,
+        beforeHits:root(before.plan)['Shared Hit Blocks'],afterHits:root(after.plan)['Shared Hit Blocks'],writes:{pricedWith,pricedWithout,unpricedWith,unpricedWithout}}));
+    } finally { await db.query('ROLLBACK TO SAVEPOINT zero_issue_index_proof'); }
+  });
+
   it('retains an invoker function and refuses anonymous execution',async()=>{
     const row=(await db.query(`SELECT p.prosecdef,has_function_privilege('anon',p.oid,'EXECUTE') anon_access FROM pg_proc p WHERE p.oid='public.get_costing_sales_summary(uuid,date,date)'::regprocedure`)).rows[0];
     expect(row).toEqual({prosecdef:false,anon_access:false});
