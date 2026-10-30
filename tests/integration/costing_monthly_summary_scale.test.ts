@@ -10,6 +10,8 @@ describe.skipIf(!url)('monthly costing source aggregation at production-sized ca
   const product = randomUUID(), actor = randomUUID();
   beforeAll(async () => {
     db = openDb(url!); await db.connect(); await db.query('BEGIN');
+    await db.query("SET LOCAL statement_timeout='8s'");
+    await db.query("SET LOCAL lock_timeout='2s'");
     await db.query('ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard');
     await db.query(`INSERT INTO public.organizations(id,name,slug) VALUES($1,'Month scale',$2)`,[org,`month-${org}`]);
     await db.query(`INSERT INTO public.branches(id,name,organization_id) VALUES($1,'Monthly scale',$2)`,[branch,org]);
@@ -87,46 +89,62 @@ describe.skipIf(!url)('monthly costing source aggregation at production-sized ca
       await db.query(`INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id)
         SELECT $1::uuid,$2::uuid,$3::uuid,-1,CASE WHEN i%10<3 THEN 0 ELSE 5 END,-CASE WHEN i%10<3 THEN 0 ELSE 5 END,
           'kitchen_send','kitchen_send',$4::uuid FROM generate_series(1,1000) i`,[raw,branch,warehouse,event]);
-      const ddl=(await db.query(`SELECT pg_get_indexdef('public.idx_inventory_ledger_zero_raw_issue_ref'::regclass) ddl`)).rows[0].ddl as string;
-      await db.query('DROP INDEX public.idx_inventory_ledger_zero_raw_issue_ref');
       const movementSql=`SELECT il.id FROM public.inventory_ledger il
         WHERE il.reference_type='kitchen_send' AND il.reference_id=$1 AND il.branch_id=$2
           AND il.entry_type='kitchen_send' AND il.raw_material_id IS NOT NULL AND il.quantity<0
           AND COALESCE(il.unit_cost,0)=0 AND COALESCE(il.total_cost,0)=0
           AND private.financial_reference_visible(il.reference_type,il.reference_id,(md5(il.id::text))::uuid,il.branch_id,il.created_at)`;
-      const read=async()=>{
+      const definition=(await db.query(`SELECT pg_get_functiondef('public.get_historical_sale_cost_estimates(uuid,date,date)'::regprocedure) definition`)).rows[0].definition as string;
+      const historicalBody=definition.slice(definition.indexOf('  WITH history_bounds'),definition.indexOf('  RETURN result;'))
+        .replace(/\bINTO result\b/,'').trim().replace(/;$/,'')
+        .replace(/\bp_branch_id\b/g,'$1::uuid').replace(/\bp_from\b/g,'$2::date').replace(/\bp_to\b/g,'$3::date');
+      const dates=(await db.query(`SELECT (CURRENT_DATE-1)::text a,(CURRENT_DATE+1)::text b`)).rows[0];
+      // Numeric +0 preserves the zero predicate but prevents use of the partial
+      // index in the baseline plan. Never DROP an index on a shared fixture table.
+      const withoutPartial=(sql:string)=>sql.replace(/COALESCE\(il\.unit_cost,\s*0\)\s*=\s*0/g,'(COALESCE(il.unit_cost,0)+0)=0');
+      expect(withoutPartial(historicalBody)).toContain('+0');
+      const read=async(baseline:boolean)=>{
         await db.query(`SELECT set_config('app.user_id',$1,true),set_config('request.jwt.claim.sub',$1,true)`,[actor]);
         await db.query('SET LOCAL ROLE authenticated');
-        const rows=(await db.query(movementSql+' ORDER BY il.id',[event,branch])).rows;
-        const plan=(await db.query('EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) '+movementSql,[event,branch])).rows;
-        const historical=(await db.query(`SELECT public.get_historical_sale_cost_estimates($1,CURRENT_DATE-1,CURRENT_DATE+1) result`,[branch])).rows[0].result;
+        const sql=baseline?withoutPartial(movementSql):movementSql;
+        const rows=(await db.query(sql+' ORDER BY il.id',[event,branch])).rows;
+        const plan=(await db.query('EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) '+sql,[event,branch])).rows;
+        const historical=(await db.query(baseline?`WITH report(result) AS MATERIALIZED (${withoutPartial(historicalBody)}) SELECT result FROM report`:
+          `SELECT public.get_historical_sale_cost_estimates($1,$2,$3) result`,[branch,dates.a,dates.b])).rows[0].result;
         await db.query('RESET ROLE');
         await db.query(`SELECT set_config('app.user_id','',true),set_config('request.jwt.claim.sub','',true)`);
         return {rows,plan,historical};
       };
-      const before=await read(); await db.query(ddl); const after=await read();
+      const before=await read(true),after=await read(false);
       expect(after.rows).toHaveLength(300);expect(after.rows).toEqual(before.rows);
-      expect(after.historical).toEqual(before.historical);
-      expect(after.historical).toHaveLength(1);
+      expect(after.historical).toEqual(before.historical);expect(after.historical).toHaveLength(1);
       expect(Number(after.historical[0].estimated_cost)).toBe(750);
+      expect(JSON.stringify(before.plan)).not.toContain('idx_inventory_ledger_zero_raw_issue_ref');
       expect(JSON.stringify(after.plan)).toContain('idx_inventory_ledger_zero_raw_issue_ref');
       const root=(value:{[key:string]:unknown}[]) => (value[0]['QUERY PLAN'] as {Plan:Record<string,unknown>}[])[0].Plan;
       expect(Number(root(after.plan)['Shared Hit Blocks'])).toBeLessThan(Number(root(before.plan)['Shared Hit Blocks']));
-      // Priced inserts still evaluate the predicate, but add no entries/WAL to this index.
-      // Compare rollback-only inserts of the same unpriced/priced fixture with/without it.
+      // Measure incremental index WAL on a private, trigger-free clone with the
+      // real column/index definitions. This is not whole operational-write latency.
+      await db.query('CREATE TABLE public.qa_costing_issue_write_probe (LIKE public.inventory_ledger INCLUDING ALL)');
+      await db.query('ALTER TABLE public.qa_costing_issue_write_probe ENABLE ROW LEVEL SECURITY');
+      await db.query('REVOKE ALL ON public.qa_costing_issue_write_probe FROM PUBLIC,anon,authenticated');
+      await db.query('INSERT INTO public.qa_costing_issue_write_probe SELECT * FROM public.inventory_ledger WHERE raw_material_id=$1',[raw]);
+      const cloned=(await db.query(`SELECT c.relname FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid
+        WHERE i.indrelid='public.qa_costing_issue_write_probe'::regclass AND pg_get_expr(i.indpred,i.indrelid) LIKE '%COALESCE(total_cost%'`)).rows;
+      expect(cloned).toHaveLength(1);
       const insertCost=async(cost:number)=>{
         await db.query('SAVEPOINT index_write_probe');
         try {
-          const plan=(await db.query(`EXPLAIN (ANALYZE, WAL, FORMAT JSON) INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id)
-            SELECT $1::uuid,$2::uuid,$3::uuid,-1,$5::numeric,-$5::numeric,'kitchen_send','kitchen_send',$4::uuid FROM generate_series(1,50)`,[raw,branch,warehouse,event,cost])).rows;
+          const plan=(await db.query(`EXPLAIN (ANALYZE, WAL, FORMAT JSON) INSERT INTO public.qa_costing_issue_write_probe(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id)
+            SELECT $1::uuid,$2::uuid,$3::uuid,-1,$5::numeric,-$5::numeric,'kitchen_send','kitchen_send',$4::uuid FROM generate_series(1,10)`,[raw,branch,warehouse,event,cost])).rows;
           const p=(plan[0]['QUERY PLAN'] as {Plan:Record<string,unknown>;'Execution Time':number}[])[0];
           return {ms:p['Execution Time'],walBytes:p.Plan['WAL Bytes'],sharedHits:p.Plan['Shared Hit Blocks']};
         } finally {await db.query('ROLLBACK TO SAVEPOINT index_write_probe');}
       };
       const pricedWith=await insertCost(5),unpricedWith=await insertCost(0);
-      await db.query('DROP INDEX public.idx_inventory_ledger_zero_raw_issue_ref');
+      await db.query('DROP INDEX public."'+String(cloned[0].relname).replace(/"/g,'""')+'"');
       const pricedWithout=await insertCost(5),unpricedWithout=await insertCost(0);
-      console.log('ZERO_ISSUE_PARTIAL_INDEX',JSON.stringify({source:'owned localhost only',rows:300,
+      console.log('ZERO_ISSUE_PARTIAL_INDEX',JSON.stringify({source:'owned localhost; isolated clone WAL, not whole-writer latency',rows:300,
         beforeHits:root(before.plan)['Shared Hit Blocks'],afterHits:root(after.plan)['Shared Hit Blocks'],writes:{pricedWith,pricedWithout,unpricedWith,unpricedWithout}}));
     } finally { await db.query('ROLLBACK TO SAVEPOINT zero_issue_index_proof'); }
   });

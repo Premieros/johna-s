@@ -7,7 +7,7 @@ Last updated: 2026-10-29
 
 ## Work status
 State: **BLOCKED**
-Owner authorizes repair preparation. Production release not yet authorized for this new candidate.
+Owner authorizes repair preparation. Owner explicitly approved merge and production apply for this candidate in the active conversation; finish technical gates, then release without asking again.
 
 ## Guardrails
 Single writer, johnas only. No production order/stock/printing test, RLS/permission/role changes, SECURITY DEFINER, new source or persistent cache. Preserve #548 date bounds, fallback fence, completed-product rendering, all stock and accounting writers, online-primary architecture and installed printers. No timeout increase, polling or background jobs. A narrow partial index for zero-cost raw issues is included after the full-flow read exposed supplemental-pricing latency; its write overhead must be measured in owned CI. Minimal PostgreSQL fixture validates partial-index SQL, unchanged historical JSON and all rollback/reapply scripts; full-schema native index proof remains pending.
@@ -25,10 +25,12 @@ Only get_costing_sales_summary changes. Materialize the existing three cost aggr
 Local complete SQL parity across finite/empty/unbounded/infinite ranges passed on30 mixed invoices, including overlaps and zero sources. Synthetic WASM PostgreSQL:30 sales before39.2ms/max aggregate loops900 versus after0.9ms/loops1;2500 invoices42ms with independently calculated count/net/cost. This is a local minimal schema without production RLS, not live latency proof. New native isolated CI fixture has2500 invoices, actual canonical schema/authenticated RLS, mixed/zero source priorities and runtime aggregate-loop proof. Existing mixed-source full-JSON rollback/reapply/security proof extended; history/date/branch tests retained. Local app/test typechecks, changed-test ESLint, API contract and4 worklog checks passed. The new2500-invoice fixture SQL/bindings and exact guarded migration/rollback were also executed locally against a minimal PostgreSQL schema. Native canonical/RLS execution and final exact-head four-job CI pending. No production candidate applied. First exact-head CI40977157455 passed1166 DB tests/210 files, including2500 canonical invoices under authenticated RLS; source aggregate loops[1,1,1,1], execution3208ms on that runner. Read-only candidate SQL (no function replacement) returned the real October summaries for both branches in2029/2071ms. A first3s cold-read budget canceled; the successful normal8s-budget reads are not peak-load guarantees. The existing next-stage historical-price RPC still hit8s on Smouha, so release is blocked pending the supplemental-index proof.
 
 ## Production gate
-لا Merge ولا Production migration before owner approval of the tested concrete candidate. Recheck original body/security before guarded one-function plus partial-index migration, lock2s/statement15s; verify exact new body and unchanged metadata. Separate post-release read-only October UI proof required in both branches; green synthetic/CI checks alone are insufficient. Rollback restores only summary function; no business history rewritten.
+لا Merge ولا Production migration before successful final exact-head gates. Owner approval is already present for this candidate. Recheck original body/security before guarded one-function plus partial-index migration, lock2s/statement15s; verify exact new body and unchanged metadata. Separate post-release read-only October UI proof required in both branches; green synthetic/CI checks alone are insufficient. Rollback restores only summary function; no business history rewritten.
+
+Second CI40978877063: frontend/browser/continuity passed; the new index proof timed out and left the shared fixture transaction waiting, cascading to later suites. Do not increase timeouts. Replace shared-index DDL with an equivalent numeric+0 baseline read and a trigger-free private table clone for incremental WAL; cap all fixture statements8s/locks2s. Keep canonical authenticated/RLS historical JSON equality and index/read-buffer checks. No production changes.
 
 ## Next action
-Finish focused proof/typechecks/lint, publish one candidate and require exact-head Verify; present concrete release scope after success.
+Finish focused proof/typechecks/lint, publish one candidate and require exact-head Verify; apply the already-approved exact candidate after success and verify real October UI completion in both branches.
 
 ## Mandatory update protocol
 السجل هو المرجع الإجباري للعمل. CI يجب أن يفشل for branch/log divergence. Keep plan/log and PR ledger current; do not restart healthy CI without changed source. Never count skipped DB tests as passed.
