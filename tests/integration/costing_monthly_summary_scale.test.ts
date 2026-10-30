@@ -8,6 +8,7 @@ describe.skipIf(!url)('monthly costing source aggregation at production-sized ca
   let db: pg.Client;
   const org = randomUUID(), branch = randomUUID(), warehouse = randomUUID();
   const product = randomUUID(), actor = randomUUID();
+  const readerRole = `month_reader_${org.slice(0,8)}`;
   beforeAll(async () => {
     db = openDb(url!); await db.connect(); await db.query('BEGIN');
     await db.query("SET LOCAL statement_timeout='8s'");
@@ -16,7 +17,8 @@ describe.skipIf(!url)('monthly costing source aggregation at production-sized ca
     await db.query(`INSERT INTO public.organizations(id,name,slug) VALUES($1,'Month scale',$2)`,[org,`month-${org}`]);
     await db.query(`INSERT INTO public.branches(id,name,organization_id) VALUES($1,'Monthly scale',$2)`,[branch,org]);
     await db.query(`INSERT INTO public.warehouses(id,name,branch_id,is_active) VALUES($1,'Monthly WH',$2,true)`,[warehouse,branch]);
-    await db.query(`INSERT INTO public.users(id,email,full_name,role,branch_id,is_active) VALUES($1,$2,'Monthly actor','super_admin',$3,true)`,[actor,`${actor}@test.local`,branch]);
+    await db.query(`INSERT INTO public.roles(role,name_ar,name_en,permissions,is_active) VALUES($1,'قارئ التكلفة','Cost reader','["reports.costing","sales.view","raw_materials.view","history.unlimited"]',true)`,[readerRole]);
+    await db.query(`INSERT INTO public.users(id,email,full_name,role,branch_id,is_active) VALUES($1,$2,'Monthly actor',$4,$3,true)`,[actor,`${actor}@test.local`,branch,readerRole]);
     await db.query(`INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active) VALUES($1,'Month product',$2,100,30,true)`,[product,branch]);
     await db.query('SELECT public.ensure_chart_of_accounts($1)',[branch]);
     await db.query('SELECT public.seed_account_mappings($1)',[branch]);
@@ -55,6 +57,7 @@ describe.skipIf(!url)('monthly costing source aggregation at production-sized ca
     try {
       await db.query(`SELECT set_config('app.user_id',$1,true),set_config('request.jwt.claim.sub',$1,true)`,[actor]);
       await db.query('SET LOCAL ROLE authenticated');
+      expect((await db.query(`SELECT public.can_permission('history.unlimited') allowed`)).rows[0].allowed).toBe(true);
       const result = (await db.query(`SELECT public.get_costing_sales_summary($1,CURRENT_DATE-1,CURRENT_DATE+1) result`,[branch])).rows[0].result;
       expect(result).toEqual({sales_count:2500,net_sales:250000,cogs:28130,ratio:11.25});
       // Explain the exact body with only its three argument identifiers bound;
@@ -81,6 +84,9 @@ describe.skipIf(!url)('monthly costing source aggregation at production-sized ca
   it('skips priced raw issues through the partial index without changing supplemental costs',async()=>{
     await db.query('SAVEPOINT zero_issue_index_proof');
     try {
+      // The2500-invoice cardinality is covered above. Isolate this index proof
+      // to its one target sale; unrelated parents add no coverage of index reads.
+      await db.query(`UPDATE public.sales SET created_at=now()-interval '10 days' WHERE branch_id=$1 AND id<>md5($1::text||':sale:1')::uuid`,[branch]);
       const raw=randomUUID();
       const unit=(await db.query(`SELECT id FROM public.measurement_units WHERE code='KG' LIMIT 1`)).rows[0].id;
       await db.query(`INSERT INTO public.raw_materials(id,code,name,unit_id,branch_id,default_cost,is_active) VALUES($1,$2,'Index raw',$3,$4,5,true)`,[raw,`IDX-${raw}`,unit,branch]);

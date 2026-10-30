@@ -29,6 +29,8 @@ Local complete SQL parity across finite/empty/unbounded/infinite ranges passed o
 
 Second CI40978877063: frontend/browser/continuity passed; the new index proof timed out and left the shared fixture transaction waiting, cascading to later suites. Do not increase timeouts. Replace shared-index DDL with an equivalent numeric+0 baseline read and a trigger-free private table clone for incremental WAL; cap all fixture statements8s/locks2s. Keep canonical authenticated/RLS historical JSON equality and index/read-buffer checks. No production changes.
 
+Third CI40980444178:1166 checks passed, but the historical index baseline read still exceeded its8s cap. Keep the cap. Scope the focused index proof to its single target invoice (the2500-parent aggregation is independently covered above) and give its reader explicit reports/sales/raw/history capabilities rather than relying on a role name. Preserve all JSON equality, row/index/buffer/WAL and month-scale assertions. No production change.
+
 ## Next action
 Finish focused proof/typechecks/lint, publish one candidate and require exact-head Verify; apply the already-approved exact candidate after success and verify real October UI completion in both branches.
 
