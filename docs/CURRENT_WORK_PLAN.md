@@ -2,10 +2,10 @@
 
 ## Active work
 - Repository: `Premieros/johna-s`; production Supabase: `azzdesuowpdcoflmyezn`.
-- Baseline: `8e82a059e1270353f3a4d2550942c1d03557b202` (#547 released).
-- Branch: `fix/costing-read-timeouts-20261029`.
-- Mandatory active work log: `docs/COSTING_READ_TIMEOUTS_20261029.md`.
-- Owner reports slow Costing Center and other page timeouts. Prepare a narrow read optimization and independent completed recipe rendering; preserve figures, RLS and all operational writers. No production migration or release during preparation. لا Merge ولا Production migration before final exact-head checks and separate release approval. Prior speculative POS issues remain deferred.
+- Baseline: `cfd5513409e14df8e4d84152c4e6336b85705eeb` (#548 released).
+- Branch: `fix/costing-monthly-summary-20261029`.
+- Mandatory active work log: `docs/COSTING_MONTHLY_SUMMARY_20261029.md`.
+- Owner directs fixing confirmed October summary57014 in both branches. Prepare only single-pass cost-source aggregation, preserve all monetary values, journal>kitchen>legacy precedence, RLS and operational writers. Benchmark actual monthly cardinality in isolation. لا Merge ولا Production migration before exact-head checks and separate concrete release approval. #548 partial-display/date-range improvements remain intact.
 
 ## Active usability polish — 2026-10-25
 Owner approved implementing the browser-review findings: compact reports with useful filters and in-page expansion, visible POS branch/dispatch/bill context, readable mobile table cards, safer cancellation presentation and compact dashboard welcome. Presentation only; retain business logic, permissions, queries and installed printers. No production log scans. Prepare one reviewed candidate; publication requires separate final approval.
