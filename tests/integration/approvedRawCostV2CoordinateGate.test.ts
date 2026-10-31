@@ -69,19 +69,26 @@ describe.skipIf(!disposable)('explicit v2 warehouse cost cutover is default OFF'
     expect(b.n).toBe(1);expect(Number(b.qty)).toBe(-1);
 
     const rejected=(await db.query<{v:{success:boolean,error:string}}>(
-      "SELECT public._raw_add($1,$2,$3,1,1400,'LOT-REQUIRES-TRACKING',NULL,NULL,'purchase','purchase_receipt',$4,'REJECTED-LOT',NULL) v",
+      "SELECT public._raw_add($1,$2,$3,1,1400,'BAD-LOT','2026-10-30'::date,'2026-10-01'::date,'purchase','purchase_receipt',$4,'INVALID-DATES',NULL) v",
       [raw,branch,warehouse,randomUUID()])).rows[0].v;
-    expect(rejected).toMatchObject({success:false,error:'V2_RECEIPT_LOT_METADATA_NOT_SUPPORTED'});
+    expect(rejected).toMatchObject({success:false,error:'INVALID_LOT_DATES'});
     const before=(await db.query<{qty:string}>(
       'SELECT sum(quantity)::text qty FROM public.raw_material_batches WHERE raw_material_id=$1',[raw])).rows[0].qty;
     expect(Number(before)).toBe(-1);
 
-    const added=(await db.query<{v:{success:boolean,approved_shortage_absorbed:number,approved_price_variance_posted:number}}>(
-      "SELECT public._raw_add($1,$2,$3,1,1400,NULL,NULL,NULL,'purchase','purchase_receipt',$4,'QA-RECEIPT',NULL) v",
+    const added=(await db.query<{v:{success:boolean,approved_shortage_absorbed:number,approved_price_variance_posted:number,batch_number:string}}>(
+      "SELECT public._raw_add($1,$2,$3,1,1400,'VALID-LOT','2026-10-01'::date,'2026-12-01'::date,'purchase','purchase_receipt',$4,'QA-RECEIPT',NULL) v",
       [raw,branch,warehouse,randomUUID()])).rows[0].v;
     expect(added.success).toBe(true);
     expect(Number(added.approved_shortage_absorbed)).toBe(1);
     expect(Number(added.approved_price_variance_posted)).toBe(200);
+    expect(added.batch_number).toBe('VALID-LOT');
+    const receiptLot=(await db.query<{batch_number:string,production_date:string,expiry_date:string}>(
+      "SELECT batch_number,production_date::text,expiry_date::text FROM public.raw_material_batches WHERE raw_material_id=$1 AND batch_number='VALID-LOT'",
+      [raw])).rows[0];
+    expect(receiptLot).toEqual({
+      batch_number:'VALID-LOT',production_date:'2026-10-01',expiry_date:'2026-12-01'
+    });
     const after=(await db.query<{qty:string}>(
       'SELECT sum(quantity)::text qty FROM public.raw_material_batches WHERE raw_material_id=$1',[raw])).rows[0].qty;
     expect(Number(after)).toBe(0);
