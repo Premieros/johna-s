@@ -26,3 +26,8 @@ Preserve the 2026-10-31 count sheet and exact cutoff per warehouse. It may be en
 
 ## Release controls
 No automatic merge or production deployment. Separate acceptance and rollback required.
+
+## Additional implementation review, 31 October
+Live read-only schema inspection confirms `inventory_ledger` and `stock_transactions` have timestamps and movement quantities, but the raw movement projection is not itself proof of an immutable, complete physical event journal. Merely checking `systemAtCutoff + netMovements = live` misses offsetting omissions (e.g. an unrecorded +5 receipt and -5 issue). For this reason the pure helper is diagnostic only and must never authorize posting by itself.
+
+The current database `apply_stock_count` still calculates a live-balance delta. A SQL cutover must include a source-completeness certificate and a transactionally locked FIFO-aware adjustment + journal posting before enabling historical dates. None of that has been released in this PR. This is intentionally fail-closed for operational use.
