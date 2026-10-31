@@ -1,6 +1,10 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
+- Active root-design branch: `architecture/raw-cost-engine-approved-price-no-replay-20261031`. Owner authorized a correct low-storage cost-engine implementation, but no unverified rollout.
+- Mandatory active work log: `docs/RAW_COST_ENGINE_V2_APPROVED_PRICE_20261031.md`.
+- Stage: guarded schema-only candidate plus TWO internal/private, **unwired** approved-cost prototypes, with a five-movement rollback-only disposable CI fixture. Replace per-issue FIFO debts with one aggregated shortage per material/warehouse, freeze approved price in `inventory_ledger`, and use one receipt-period balanced price-variance journal. Legacy debt audit/cutover, full writer adaptation and reversals are BLOCKERS for production.
+- Owner cost requirement: no additional 717-debt synthetic fixtures. CI postgres:16 is temporary; never run sample data on Supabase production. Historical source records preserved.
 - Active integration branch: `integrate/transfer-negative-preview-20261031`; PR #556 (draft).
 - Mandatory active work log: `docs/TRANSFER_COMBINED_20261031.md`.
 - Scope: one review/release for PRs #554 and #555: negative raw FIFO outbound, live source warehouse balance matching Inventory, preapproval line review/edit/delete and same-transaction snapshot check. Preserve product stock policy, permissions, FIFO/accounting, and business history. No production stock tests. Release only after full integration and approval.
