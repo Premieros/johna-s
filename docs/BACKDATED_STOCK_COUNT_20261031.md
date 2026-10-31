@@ -31,3 +31,10 @@ No automatic merge or production deployment. Separate acceptance and rollback re
 Live read-only schema inspection confirms `inventory_ledger` and `stock_transactions` have timestamps and movement quantities, but the raw movement projection is not itself proof of an immutable, complete physical event journal. Merely checking `systemAtCutoff + netMovements = live` misses offsetting omissions (e.g. an unrecorded +5 receipt and -5 issue). For this reason the pure helper is diagnostic only and must never authorize posting by itself.
 
 The current database `apply_stock_count` still calculates a live-balance delta. A SQL cutover must include a source-completeness certificate and a transactionally locked FIFO-aware adjustment + journal posting before enabling historical dates. None of that has been released in this PR. This is intentionally fail-closed for operational use.
+
+## New database fail-closed gate
+`20261031191000_guard_backdated_stock_count_posting.sql` adds an insert/update trigger:
+- Reject future physical cutoff timestamps.
+- Reject edits to a cutoff after draft status.
+- Reject any transition/insert to `applied` with a non-null `counted_at`, preserving existing legacy sessions with null cutoff.
+This is deliberate staging protection, not functional historical application. The guard requires isolated database tests before merge. The legacy writer must not be enabled for backdated records even if marked approved.
