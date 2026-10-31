@@ -249,6 +249,10 @@ export function TransfersPage() {
         DESTINATION_ITEM_BRANCH_MISMATCH: 'الخامة المطابقة لا تنتمي إلى فرع الوجهة أو تعريفها غير صحيح.',
       };
       const code = String(result?.error || '');
+      if (code === 'INSUFFICIENT_RAW_STOCK' || code === 'INSUFFICIENT_STOCK') {
+        show(transferApprovalFailureMessage(result), 'error');
+        return;
+      }
       const handled = interceptDbError(result?.detail || result?.error, 'transfer_create', 'التحويل المخزني', 'Warehouse Transfer', { form, lines });
       if (!handled) show(lang === 'ar' && messageMap[code] ? messageMap[code] : (result?.detail || result?.error || t('error')), 'error');
       return;
