@@ -19,6 +19,71 @@ CREATE TABLE IF NOT EXISTS private.raw_cost_v2_activated_coordinates (
 );
 REVOKE ALL ON private.raw_cost_v2_activated_coordinates FROM PUBLIC,anon,authenticated,service_role;
 
+-- Retain source physical lot identity; original v2 helper already
+-- inserts one receipt ledger and one physical batch under a canonical lock.
+-- This adapter writes expiry/production metadata to THAT new batch only,
+-- never to historical stock or invoices.
+CREATE OR REPLACE FUNCTION private.raw_receive_approved_v2_lot(
+  p_raw_material_id uuid,p_branch_id uuid,p_warehouse_id uuid,p_qty numeric,
+  p_receipt_unit_cost numeric,p_entry_type text,p_reference_type text,p_reference_id uuid,
+  p_reference_number text,p_created_by uuid,
+  p_batch_number text,p_production_date date,p_expiry_date date
+) RETURNS jsonb
+LANGUAGE plpgsql
+SET search_path TO 'public','pg_temp'
+AS $lot$
+DECLARE
+  v_result jsonb;
+  v_ledger_id bigint;
+  v_batch_no text;
+  v_adjusted_batches integer;
+BEGIN
+  IF p_production_date IS NOT NULL AND p_expiry_date IS NOT NULL
+     AND p_expiry_date<p_production_date THEN
+    RETURN jsonb_build_object('success',false,'error','INVALID_LOT_DATES');
+  END IF;
+  v_result:=private.raw_receive_approved_v2(
+    p_raw_material_id,p_branch_id,p_warehouse_id,p_qty,p_receipt_unit_cost,
+    p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by
+  );
+  IF COALESCE((v_result->>'success')::boolean,false) IS NOT TRUE THEN
+    RETURN v_result;
+  END IF;
+  v_ledger_id:=(v_result->>'receipt_ledger_id')::bigint;
+  SELECT l.batch_number INTO STRICT v_batch_no
+  FROM public.inventory_ledger l WHERE l.id=v_ledger_id
+    AND l.raw_material_id=p_raw_material_id
+    AND l.branch_id=p_branch_id AND l.warehouse_id=p_warehouse_id;
+  IF p_batch_number IS NOT NULL AND btrim(p_batch_number)='' THEN
+    RETURN jsonb_build_object('success',false,'error','EMPTY_LOT_NUMBER');
+  END IF;
+  IF p_batch_number IS NOT NULL THEN
+    v_batch_no:=btrim(p_batch_number);
+  END IF;
+  UPDATE public.raw_material_batches b
+  SET batch_number=v_batch_no,
+      production_date=p_production_date,expiry_date=p_expiry_date
+  WHERE b.batch_number=(SELECT l.batch_number FROM public.inventory_ledger l WHERE l.id=v_ledger_id)
+    AND b.raw_material_id=p_raw_material_id AND b.branch_id=p_branch_id
+    AND b.warehouse_id=p_warehouse_id
+    AND b.source_type=COALESCE(p_reference_type,p_entry_type)
+    AND b.source_id IS NOT DISTINCT FROM p_reference_id;
+  GET DIAGNOSTICS v_adjusted_batches=ROW_COUNT;
+  IF v_adjusted_batches<>1 THEN
+    RAISE EXCEPTION 'V2_RECEIPT_BATCH_IDENTIFICATION_NOT_UNIQUE ledger=% rows=%',
+      v_ledger_id,v_adjusted_batches;
+  END IF;
+  UPDATE public.inventory_ledger SET batch_number=v_batch_no WHERE id=v_ledger_id;
+  RETURN v_result||jsonb_build_object(
+    'batch_number',v_batch_no,'avg_cost',p_receipt_unit_cost,
+    'fifo_settled_quantity',0,'fifo_settled_value',0
+  );
+END;
+$lot$;
+REVOKE ALL ON FUNCTION private.raw_receive_approved_v2_lot(
+  uuid,uuid,uuid,numeric,numeric,text,text,uuid,text,uuid,text,date,date
+) FROM PUBLIC,anon,authenticated,service_role;
+
 -- The old SQL functions continue to exist unchanged for all default-OFF
 -- coordinates. Route only explicitly activated coordinates under the *same*
 -- branch+material transaction advisory lock used by legacy operations.
@@ -87,13 +152,10 @@ BEGIN
     WHERE a.branch_id=p_branch_id AND a.warehouse_id=p_warehouse_id
       AND a.raw_material_id=p_raw_material_id
   ) THEN
-    IF p_batch_number IS NOT NULL OR p_production_date IS NOT NULL
-       OR p_expiry_date IS NOT NULL THEN
-      RETURN jsonb_build_object('success',false,'error','V2_RECEIPT_LOT_METADATA_NOT_SUPPORTED');
-    END IF;
-    RETURN private.raw_receive_approved_v2(
+    RETURN private.raw_receive_approved_v2_lot(
       p_raw_material_id,p_branch_id,p_warehouse_id,p_qty,p_unit_cost,
-      p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by
+      p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,
+      p_batch_number,p_production_date,p_expiry_date
     );
   END IF;$new$;
   IF (length(s)-length(replace(s,old,'')))/length(old)<>1 THEN
