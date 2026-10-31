@@ -68,6 +68,45 @@ describe.skipIf(!local)('combined preview approval with negative warehouse FIFO'
   expect(await stock(ids.whA)).toBeCloseTo(-2.86,4);
   expect(await stock(receivingWh)).toBeCloseTo(2.86,4);
  });
+ it('supports cross-branch negative source and settles receiver FIFO debt',async()=>{
+  const src=(await client.query<{id:string}>(
+   "INSERT INTO public.raw_materials (code,name,branch_id,is_active) VALUES ($1,'Cross negative source',$2,true) RETURNING id",
+   [uniq('src-cross'),ids.branchA])).rows[0].id;
+  const dst=(await client.query<{id:string}>(
+   "INSERT INTO public.raw_materials (code,name,branch_id,is_active) VALUES ($1,'Cross negative source',$2,true) RETURNING id",
+   [uniq('dst-cross'),ids.branchB])).rows[0].id;
+  const prior=(await client.query<{r:{success:boolean}}>(
+   "SELECT public._raw_remove_fifo($1,$2,$3,1.25,'kitchen_send','kitchen_send',$4,$5,$6,true) r",
+   [dst,ids.branchB,ids.whB,ids.saleB,uniq('CI-DEBT'),ids.users.super_admin])).rows[0].r;
+  expect(prior).toMatchObject({success:true});
+  const tx=(await client.query<{id:string}>(
+   "INSERT INTO public.warehouse_transfers (transfer_number,branch_id,to_branch_id,from_warehouse_id,to_warehouse_id,requested_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id",
+   [uniq('cross-transfer'),ids.branchA,ids.branchB,ids.whA,ids.whB,ids.users.super_admin])).rows[0].id;
+  const item=(await client.query<{id:string}>(
+   "INSERT INTO public.warehouse_transfer_items (transfer_id,raw_material_id,destination_raw_material_id,quantity,unit_cost) VALUES ($1,$2,$3,2.86,0) RETURNING id",
+   [tx,src,dst])).rows[0].id;
+  const reviewed=[{id:item,raw_material_id:src,destination_raw_material_id:dst,product_id:null,quantity:2.86}];
+  const approved=(await client.query<{r:{success:boolean,error?:string,detail?:string}}>(
+   'SELECT public.approve_previewed_warehouse_transfer($1,$2::jsonb) r',
+   [tx,JSON.stringify(reviewed)])).rows[0].r;
+  expect(approved).toMatchObject({success:true});
+  const sender=Number((await client.query(
+   'SELECT COALESCE(quantity,0) q FROM public.raw_material_warehouse_inventory WHERE branch_id=$1 AND warehouse_id=$2 AND raw_material_id=$3',
+   [ids.branchA,ids.whA,src])).rows[0]?.q??0);
+  const receiver=Number((await client.query(
+   'SELECT COALESCE(quantity,0) q FROM public.raw_material_warehouse_inventory WHERE branch_id=$1 AND warehouse_id=$2 AND raw_material_id=$3',
+   [ids.branchB,ids.whB,dst])).rows[0]?.q??0);
+  expect(sender).toBeCloseTo(-2.86,4);
+  expect(receiver).toBeCloseTo(1.61,4);
+  const debt=(await client.query<{debt_quantity:string,settled_quantity:string}>(
+   "SELECT debt_quantity,settled_quantity FROM public.raw_fifo_debts WHERE raw_material_id=$1 AND branch_id=$2 AND warehouse_id=$3",
+   [dst,ids.branchB,ids.whB])).rows;
+  expect(debt).toHaveLength(1);
+  expect(Number(debt[0].settled_quantity)).toBeCloseTo(1.25,4);
+  expect(Number((await client.query(
+   "SELECT COUNT(*)::int n FROM private.raw_transfer_receipt_prices WHERE transfer_id=$1",
+   [tx])).rows[0].n)).toBe(1);
+ });
  it('never permits revision of approved line and keeps accounting balanced',async()=>{
   const response=(await client.query<{r:{success:boolean,error?:string}}>(
    'SELECT public.revise_pending_warehouse_transfer($1,$2::jsonb,$3::jsonb) r',
