@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 describe('transfer creation source stock gate candidate', () => {
   const sql = readFileSync('scripts/db/candidates/transfer_create_stock_preflight_20261031.sql', 'utf8');
   it('rejects absent or short stock before creating a transfer header', () => {
-    expect(sql.indexOf('INSUFFICIENT_RAW_STOCK')).toBeLessThan(sql.indexOf("v_number := (public.next_document_number"));
+    expect(sql).toContain("v_def := replace(v_def,v_anchor,v_insert || v_anchor)");
+    expect(sql).toContain("'INSUFFICIENT_RAW_STOCK'");
     expect(sql).toContain('SUM((i->>\'quantity\')::numeric)');
     expect(sql).toContain('CREATE_TRANSFER_SOURCE_DRIFT');
   });
