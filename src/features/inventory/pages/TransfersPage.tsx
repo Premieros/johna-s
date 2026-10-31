@@ -257,7 +257,8 @@ export function TransfersPage() {
       if (!handled) show(lang === 'ar' && messageMap[code] ? messageMap[code] : (result?.detail || result?.error || t('error')), 'error');
       return;
     }
-    await logAudit('create', 'warehouse_transfers', result.transfer_id, { number: result.transfer_number, source_branch_id: form.source_branch_id, destination_branch_id: form.destination_branch_id }, form.source_branch_id);
+    try { await logAudit('create', 'warehouse_transfers', result.transfer_id, { number: result.transfer_number, source_branch_id: form.source_branch_id, destination_branch_id: form.destination_branch_id }, form.source_branch_id); }
+    catch { /* Creation succeeded; audit reporting cannot invalidate the result. */ }
     show(t('saveSuccess'), 'success');
     setModalOpen(false);
     reloadTransfers();
@@ -299,7 +300,10 @@ export function TransfersPage() {
     if (error) { show(error.message, 'error'); return; }
     const result = data as RpcResult | null;
     if (!result?.success) { show(transferApprovalFailureMessage(result), 'error'); void reloadTransfers(); return; }
-    await logAudit('update', 'warehouse_transfers', tr.id, { action: 'approve' }, tr.branch_id);
+    // Approval has already succeeded at the database boundary. Audit telemetry
+    // must not turn that success into an ambiguous operation failure.
+    try { await logAudit('update', 'warehouse_transfers', tr.id, { action: 'approve' }, tr.branch_id); }
+    catch { /* The committed transfer remains approved; no automatic retry. */ }
     show(t('saveSuccess'), 'success');
     reloadTransfers();
     } catch { show(uncertainMessage, 'error'); void reloadTransfers(); }
