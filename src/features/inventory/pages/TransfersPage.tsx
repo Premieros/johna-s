@@ -316,6 +316,7 @@ export function TransfersPage() {
         : `Cannot approve transfer: insufficient ${name || 'item'} stock. ${quantity} Check source balance or change transfer quantity.`;
     }
     const known: Record<string, [string, string]> = {
+      TRANSFER_ITEMS_CHANGED: ['تغيرت بنود التحويل بعد المعاينة، أعد تحميلها قبل الاعتماد.', 'Transfer lines changed since preview. Reload before approving.'],
       TRANSFER_UNIT_MISMATCH: ['وحدة الخامة مختلفة بين المصدر والوجهة.', 'Raw material units differ between branches.'],
       INVALID_STATUS: ['تم تغيير حالة التحويل. حدّث القائمة قبل إعادة المحاولة.', 'Transfer status changed. Refresh before retrying.'],
       NOT_ALLOWED: ['ليست لديك صلاحية اعتماد التحويل.', 'You do not have permission to approve transfers.'],
@@ -398,7 +399,14 @@ export function TransfersPage() {
     }
     await loadTransferSourceBalances(tr.branch_id, tr.from_warehouse_id,
       latest.map(x => x.raw_material_id || ''));
-    const { data, error } = await api.inventory.approveTransfer({ p_transfer_id: tr.id });
+    const { data, error } = await api.inventory.approvePreviewedTransfer({
+      p_transfer_id: tr.id,
+      p_expected_items: approvalOriginal.map(item => ({
+        id: item.id, raw_material_id: item.raw_material_id,
+        destination_raw_material_id: item.destination_raw_material_id,
+        product_id: item.product_id, quantity: item.quantity,
+      })),
+    });
     if (error) { show(error.message, 'error'); return; }
     const result = data as RpcResult | null;
     if (!result?.success) { show(transferApprovalFailureMessage(result), 'error'); void reloadTransfers(); return; }
