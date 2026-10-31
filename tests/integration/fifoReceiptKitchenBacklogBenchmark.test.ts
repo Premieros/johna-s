@@ -15,7 +15,7 @@ const patch=script.slice(script.indexOf('DO $patch_fifo_receipt_writes$'),script
 describe.skipIf(!local)('receipt settlement, 717 kitchen FIFO debts benchmark',()=>{
   let db:pg.Client;
   const branch=randomUUID(),wh=randomUUID(),raw=randomUUID();
-  const order=randomUUID(),orderItem=randomUUID();
+  const order=randomUUID(),orderItem=randomUUID(),product=randomUUID();
   const saleIds=Array.from({length:473},()=>randomUUID());
   let seeded=0;
   beforeAll(async()=>{
@@ -26,7 +26,8 @@ describe.skipIf(!local)('receipt settlement, 717 kitchen FIFO debts benchmark',(
     await db.query('SELECT public.seed_account_mappings($1)',[branch]);
     await db.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active) VALUES($1,$2,'Kitchen load raw',$3,0,true)",[raw,'RAW-'+raw,branch]);
     await db.query("INSERT INTO public.orders(id,order_number,branch_id,status) VALUES ($1,$2,$3,'completed')",[order,'ORD-'+order,branch]);
-    await db.query('INSERT INTO public.order_items(id,order_id,quantity,unit_price) VALUES ($1,$2,1,1)',[orderItem,order]);
+    await db.query("INSERT INTO public.products(id,name,branch_id,product_type,sale_price,cost_price,is_active) VALUES($1,'FIFO kitchen synthetic item',$2,'ready',1,0,true)",[product,branch]);
+    await db.query('INSERT INTO public.order_items(id,order_id,product_id,quantity,unit_price) VALUES ($1,$2,$3,1,1)',[orderItem,order,product]);
     for(let i=0;i<saleIds.length;i++){
       await db.query("INSERT INTO public.sales(id,invoice_number,branch_id,warehouse_id,subtotal,total,paid_amount,payment_method,status,order_type) VALUES($1,$2,$3,$4,100,100,100,'cash','completed','takeaway')",[saleIds[i],'K-'+saleIds[i],branch,wh]);
     }
