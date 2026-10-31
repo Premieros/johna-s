@@ -77,6 +77,25 @@ describe.skipIf(!local)('combined preview approval with negative warehouse FIFO'
   expect(await stock(ids.whA)).toBeCloseTo(-2.86,4);
   expect(await stock(receivingWh)).toBeCloseTo(2.86,4);
  });
+ it('settles source FIFO debt on later positive receipt and adjusts same-branch destination cost',async()=>{
+  const receipt=(await client.query<{r:{success:boolean,error?:string,detail?:string}}>(
+   "SELECT public._raw_add($1,$2,$3,2.86,75,NULL,NULL,NULL,'purchase','purchase',$4,$5,$6) r",
+   [rawId,ids.branchA,ids.whA,ids.purchA,uniq('CI-RECEIPT'),ids.users.super_admin])).rows[0].r;
+  expect(receipt).toMatchObject({success:true});
+  const debtor=(await client.query<{debt_quantity:string,settled_quantity:string}>(
+   "SELECT debt_quantity,settled_quantity FROM public.raw_fifo_debts WHERE reference_id=$1",[transfer])).rows[0];
+  expect(Number(debtor.settled_quantity)).toBeCloseTo(Number(debtor.debt_quantity),4);
+  expect(await stock(ids.whA)).toBeCloseTo(0,4);
+  expect(await stock(receivingWh)).toBeCloseTo(2.86,4);
+  const outbound=(await client.query<{unit_cost:string,total_cost:string}>(
+   "SELECT unit_cost,total_cost FROM public.inventory_ledger WHERE reference_type='warehouse_transfer' AND reference_id=$1 AND raw_material_id=$2 AND warehouse_id=$3 AND quantity<0 ORDER BY id DESC LIMIT 1",
+   [transfer,rawId,ids.whA])).rows[0];
+  const inbound=(await client.query<{unit_cost:string,total_cost:string}>(
+   "SELECT unit_cost,total_cost FROM public.inventory_ledger WHERE reference_type='warehouse_transfer' AND reference_id=$1 AND raw_material_id=$2 AND warehouse_id=$3 AND quantity>0 ORDER BY id DESC LIMIT 1",
+   [transfer,rawId,receivingWh])).rows[0];
+  expect(Number(outbound.total_cost)).toBeCloseTo(-214.5,2);
+  expect(Number(inbound.total_cost)).toBeCloseTo(214.5,2);
+ });
  it('supports cross-branch negative source and settles receiver FIFO debt',async()=>{
   const src=(await client.query<{id:string}>(
    "INSERT INTO public.raw_materials (code,name,branch_id,is_active) VALUES ($1,'Cross negative source',$2,true) RETURNING id",
