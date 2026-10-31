@@ -18,6 +18,11 @@ describe('warehouse transfer approval error presentation', () => {
     expect(page).not.toContain('api.inventory.adjustRawStock(');
   });
 
+  it('does not let audit telemetry failure misreport a successful stock transfer', () => {
+    expect(page).toContain("try { await logAudit('update', 'warehouse_transfers', tr.id");
+    expect(page).toContain('The committed transfer remains approved; no automatic retry.');
+    expect(page).toContain("try { await logAudit('create', 'warehouse_transfers'");
+  });
   it('does not expose arbitrary database details as an approval failure', () => {
     expect(page).toContain('return uncertainMessage;');
   });
