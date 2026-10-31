@@ -73,6 +73,13 @@
       ]
     },
     {
+      "name": "approve_previewed_warehouse_transfer",
+      "params": [
+        "expected_items",
+        "transfer_id"
+      ]
+    },
+    {
       "name": "approve_stock_count",
       "params": [
         "stock_count_id"
@@ -1310,6 +1317,14 @@
       ]
     },
     {
+      "name": "revise_pending_warehouse_transfer",
+      "params": [
+        "items",
+        "original_items",
+        "transfer_id"
+      ]
+    },
+    {
       "name": "save_cashier_area_settings",
       "params": [
         "area_ids",
@@ -1576,6 +1591,7 @@
     "treasury_accounts",
     "units",
     "users",
+    "warehouse_transfer_items",
     "warehouses",
     "waste_categories",
     "waste_entries"
