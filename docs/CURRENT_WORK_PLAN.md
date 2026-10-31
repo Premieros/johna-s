@@ -1,6 +1,9 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
+- Active branch: `feat/raw-cost-v2-coordinate-gate-20261031`; PR #561 (candidate-only).
+- Mandatory active work log: `docs/RAW_COST_V2_COORDINATE_GATE_20261031.md`.
+- Owner directs completion of low-storage approved-price costing and safeguards. This PR stages an **OFF-by-default private per-coordinate gate**, guarded core _raw_add/_raw_remove_fifo routing and a tiny 2-material fixture. No production migration or activation, no 717-debt test. Never change customer stock or retroactive accounting before reversals, full writer parity and converted 20,263 open debts are reconciled; transfer #00008 still unapproved.
 - Active root-design branch: `architecture/raw-cost-engine-approved-price-no-replay-20261031`. Owner authorized a correct low-storage cost-engine implementation, but no unverified rollout.
 - Mandatory active work log: `docs/RAW_COST_ENGINE_V2_APPROVED_PRICE_20261031.md`.
 - Stage: guarded schema-only candidate plus TWO internal/private, **unwired** approved-cost prototypes, with a five-movement rollback-only disposable CI fixture. Replace per-issue FIFO debts with one aggregated shortage per material/warehouse, freeze approved price in `inventory_ledger`, and use one receipt-period balanced price-variance journal. Legacy debt audit/cutover, full writer adaptation and reversals are BLOCKERS for production.
