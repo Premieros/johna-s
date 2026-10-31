@@ -407,7 +407,7 @@ export function TransfersPage() {
     try { await logAudit('update', 'warehouse_transfers', tr.id, { action: 'approve' }, tr.branch_id); }
     catch { /* The committed transfer remains approved; no automatic retry. */ }
     show(t('saveSuccess'), 'success');
-    closeApprovalPreview();
+    approvalReadVersion.current++; setApprovalTarget(null);
     reloadTransfers();
     } catch { setApprovalUnconfirmed(true); show(uncertainMessage, 'error'); void reloadTransfers(); }
     finally { writing.current = false; setSaving(false); }
@@ -467,15 +467,55 @@ export function TransfersPage() {
             {form.source_branch_id !== form.destination_branch_id && <p role="note" className="mb-2 text-sm text-ui-subtle">{lang==='ar'?'سعر التحويل هو آخر سعر معتمد للخامة في الفرع المستلم. السعر المعروض تقديري ويُحدّث ويُثبت عند الموافقة؛ الخامة بلا سعر تُحسب بصفر.':'Transfers use the receiving branch’s latest approved raw price. The preview is refreshed and fixed at approval; an unpriced raw material is valued at zero.'}</p>}
             <div className="flex items-center justify-between mb-2"><div><p className="text-sm font-bold text-ui-muted">{t('transferItems')}</p><p className="text-xs text-ui-subtle">{lang === 'ar' ? 'اختر الخامة والكمية فقط. عند التحويل بين الفروع يحدد النظام الخامة المطابقة تلقائيًا بالاسم والوحدة.' : 'Choose the raw material and quantity only. Cross-branch transfers resolve the matching raw material automatically by name and unit.'}</p></div><Button variant="outline" size="sm" onClick={addLine}><Plus className="w-4 h-4" /> {t('add')}</Button></div>
             <div className="space-y-2">{lines.map((l, idx) => <div key={idx} className="grid grid-cols-1 sm:grid-cols-[1fr_130px_130px_36px] gap-2 items-end">
-              <Select aria-label={`${t('rawMaterial')} ${idx + 1}`} value={l.item_id} onChange={(e) => void updateLineItem(idx, e.target.value)}><option value="">{lang === 'ar' ? 'اختر الخامة' : 'Select raw material'}</option>{sourceRawMaterials.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>
+              <div>
+                <Select aria-label={`${t('rawMaterial')} ${idx + 1}`} value={l.item_id} onChange={(e) => void updateLineItem(idx, e.target.value)}><option value="">{lang === 'ar' ? 'اختر الخامة' : 'Select raw material'}</option>{sourceRawMaterials.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>
+                {l.item_id && <p className="mt-1 text-xs text-ui-subtle" role="status">
+                  {lang === 'ar' ? 'رصيد المخزن الحالي: ' : 'Current warehouse stock: '}
+                  {createBalanceLoading ? t('loading') : createBalanceError ? (lang === 'ar' ? 'تعذر قراءة الرصيد' : 'Balance unavailable') : balanceText(createBalances[l.item_id])}
+                  {!createBalanceLoading && !createBalanceError && createBalances[l.item_id] < 0 && <span className="ms-1 text-ui-danger">{lang === 'ar' ? '(سالب — التحويل مسموح)' : '(negative — permitted)'}</span>}
+                </p>}
+              </div>
               <Input aria-label={`${t('quantity')} ${idx + 1}`} type="number" step="0.0001" value={l.quantity} onChange={(e) => updateLine(idx, 'quantity', parseFloat(e.target.value) || 0)} placeholder={t('quantity')} />
               <Input aria-label={`${t('unitCost')} ${idx + 1}`} type="number" step="0.000001" readOnly={form.source_branch_id !== form.destination_branch_id} value={l.unit_cost} onChange={(e) => updateLine(idx, 'unit_cost', parseFloat(e.target.value) || 0)} placeholder={t('unitCost')} />
               <button disabled={costPending.length > 0} onClick={() => removeLine(idx)} className="p-2 rounded-lg text-ui-danger hover:bg-ui-danger-soft" title={t('delete')}><Trash2 className="w-4 h-4" /></button>
             </div>)}</div>
           </div>
           <Input label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-          <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => { invalidateCosts(); setModalOpen(false); }}>{t('cancel')}</Button><Button disabled={saving || unconfirmed || costPending.length > 0 || costErrors.length > 0} onClick={createTransfer}>{saving ? t('loading') : t('save')}</Button></div>
+          <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => { invalidateCosts(); setModalOpen(false); }}>{t('cancel')}</Button><Button disabled={saving || unconfirmed || createBalanceLoading || createBalanceError || costPending.length > 0 || costErrors.length > 0} onClick={createTransfer}>{saving ? t('loading') : t('save')}</Button></div>
         </fieldset>
+      </Modal>
+      <Modal open={!!approvalTarget} onClose={closeApprovalPreview} title={lang === 'ar' ? 'معاينة التحويل قبل الاعتماد' : 'Transfer approval preview'} size="lg">
+        {approvalTarget && <div className="space-y-4">
+          <p className="font-semibold">{approvalTarget.transfer_number}</p>
+          <p className="text-sm text-ui-subtle">{approvalTarget.from_warehouse?.name} ← {approvalTarget.to_warehouse?.name}</p>
+          <p className="text-xs text-ui-subtle">{lang === 'ar' ? 'الأرصدة مأخوذة من شاشة المخزون لنفس مخزن المصدر. السالب مسموح، وقد يتغير الرصيد قبل الاعتماد الفعلي.' : 'Balances use the inventory screen source warehouse. Negative stock is allowed. Values may change before approval.'}</p>
+          {approvalUnconfirmed && <p role="alert">{uncertainMessage}</p>}
+          {approvalLoading ? <p role="status">{t('loading')}</p>
+            : approvalError ? <div role="alert">{readError}</div>
+            : <div className="space-y-3">
+              {approvalItems.map((item) => <div key={item.id} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_130px_42px] gap-3 items-end rounded-lg border border-ui-border p-3">
+                <div>
+                  <p className="font-semibold text-ui-text">{rawMaterials.find(raw => raw.id === item.raw_material_id)?.name || item.raw_material_id || (lang === 'ar' ? 'منتج' : 'Product')}</p>
+                  {item.raw_material_id && <p className="text-sm text-ui-muted">{lang === 'ar' ? 'رصيد المصدر: ' : 'Source stock: '}{balanceText(approvalBalances[item.raw_material_id])}</p>}
+                </div>
+                <Input aria-label={lang === 'ar' ? 'الكمية' : 'Quantity'} type="number" min="0.0001" step="0.0001" value={item.quantity}
+                  disabled={saving || !item.raw_material_id}
+                  onChange={e => setApprovalItems(previous => previous.map(row => row.id === item.id ? { ...row, quantity: Number(e.target.value) } : row))} />
+                <button className="p-2 text-ui-danger disabled:opacity-40" disabled={saving || !item.raw_material_id}
+                  onClick={() => setApprovalItems(previous => previous.filter(row => row.id !== item.id))}
+                  title={t('delete')} aria-label={t('delete')}><Trash2 className="w-4 h-4" /></button>
+              </div>)}
+              {approvalItems.length === 0 && <p role="alert" className="text-ui-danger">{lang === 'ar' ? 'لا يمكن اعتماد تحويل دون بنود.' : 'A transfer must contain items.'}</p>}
+              {approvalItems.some(item => !item.raw_material_id) && <p className="text-xs text-ui-subtle">{lang === 'ar' ? 'بنود المنتجات القديمة للعرض والاعتماد فقط.' : 'Legacy product lines are preview-only.'}</p>}
+              {pendingEdits && <p role="status" className="text-ui-warning">{lang === 'ar' ? 'توجد تعديلات غير محفوظة. احفظها قبل الاعتماد.' : 'Unsaved changes. Save before approval.'}</p>}
+            </div>}
+          <div className="flex justify-end gap-2 flex-wrap">
+            <Button variant="secondary" disabled={saving} onClick={closeApprovalPreview}>{t('cancel')}</Button>
+            <Button variant="outline" disabled={saving || approvalLoading} onClick={() => void loadApprovalPreview(approvalTarget)}>{lang === 'ar' ? 'تحديث المعاينة' : 'Refresh preview'}</Button>
+            {pendingEdits && <Button variant="secondary" disabled={saving || approvalLoading || approvalError || approvalUnconfirmed || approvalItems.length === 0 || approvalItems.some(item => !item.raw_material_id || !Number.isFinite(item.quantity) || item.quantity <= 0 || !Number.isInteger(item.quantity * 10000))} onClick={() => void saveApprovalEdits()}>{lang === 'ar' ? 'حفظ التعديلات' : 'Save changes'}</Button>}
+            <Button disabled={saving || approvalLoading || approvalError || approvalUnconfirmed || pendingEdits || approvalItems.length === 0} onClick={() => void approve(approvalTarget)}>{t('approveTransfer')}</Button>
+          </div>
+        </div>}
       </Modal>
       <Modal open={!!rejectTarget} onClose={() => setRejectTarget(null)} title={t('rejectTransfer')} size="sm">{rejectTarget && <div className="space-y-4"><p className="text-sm text-ui-muted">{t('transferNumber')}: <b>{rejectTarget.transfer_number}</b></p><Input label={t('rejectReason')} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} /><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setRejectTarget(null)}>{t('cancel')}</Button><Button variant="danger" disabled={saving} onClick={doReject}>{t('rejectTransfer')}</Button></div></div>}</Modal>
     </DesignSurface>
