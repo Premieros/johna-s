@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 
 const sql = readFileSync('supabase/migrations/20261031205500_transfer_allow_negative_raw_fifo.sql', 'utf8');
 
+const rollback = readFileSync('scripts/rollback/transfer_allow_negative_raw_fifo_20261031.sql', 'utf8');
+
 describe('negative raw warehouse transfers use canonical FIFO debt', () => {
   it('does not block raw transfers based on availability', () => {
     expect(sql).toContain('TRANSFER_ALLOW_NEGATIVE_RAW_V1');
@@ -16,6 +18,12 @@ describe('negative raw warehouse transfers use canonical FIFO debt', () => {
     expect(calls.every(call => call.includes('v_transfer.from_warehouse_id'))).toBe(true);
     expect(sql).toContain('TRANSFER_NEGATIVE_RAW_SAME_BRANCH_DRIFT');
     expect(sql).toContain('TRANSFER_NEGATIVE_RAW_CROSS_BRANCH_DRIFT');
+  });
+  it('includes a guarded function-only rollback without rewriting history', () => {
+    expect(rollback).toContain('TRANSFER_NEGATIVE_RAW_ROLLBACK_GUARD_DRIFT');
+    expect(rollback).toContain("'INSUFFICIENT_RAW_STOCK'");
+    expect(rollback).not.toMatch(/DELETE FROM public\./i);
+    expect(rollback).not.toMatch(/UPDATE public\./i);
   });
   it('preserves product stock checks, transfer approval locks and FIFO cost writers', () => {
     expect(sql).not.toMatch(/_product_inv_remove_fifo\(/);
