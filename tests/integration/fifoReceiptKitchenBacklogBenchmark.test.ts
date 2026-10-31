@@ -8,7 +8,7 @@ import { getDbUrl,openDb } from './db';
 const url=getDbUrl();
 let local=false;
 try { const u=new URL(url);local=['127.0.0.1','localhost','[::1]'].includes(u.hostname) && ['postgres:','postgresql:'].includes(u.protocol); }
-catch {}
+catch { /* No disposable local database configured. */ }
 const script=readFileSync('scripts/db/candidates/fifo_receipt_reduce_batch_writes_20261031.sql','utf8');
 const patch=script.slice(script.indexOf('DO $patch_fifo_receipt_writes$'),script.lastIndexOf('COMMIT;')).trim();
 
