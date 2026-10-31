@@ -61,6 +61,7 @@ No main merge, no production migration or approval of Johna's-00008 should be re
 ## Verification ledger
 - Read-only actual database: `inventory_ledger` ~27 MB, `raw_fifo_debts` ~10 MB, kitchen events ~17 MB, kitchen effects ~16 MB (including indexes); these are **real operational tables**, not CI tests.
 - Real Smouha espresso: 717 open FIFO debts, of which 94 carry provisional estimated price 1200 and 623 have no estimate.
+- Read-only global cutover sizing: **20,263 open FIFO debts, 4,982 fully settled, 146 open branch+warehouse+material positions, 572 open debts with price estimates and 19,691 open debts without estimates**. A v2 opening-state conversion must be idempotent, financially reconciled, and run only on approved cutover scope; none of these rows have been changed.
 - Previous PR #559 exact-head CI #4564 all green, 717 synthetic/473 sales parity and 953→852 ms (~11%) only; insufficient production guarantee.
 - No schema writes to production; pending transfer #00008 was last confirmed pending with no posted ledger rows.
 - Five-movement disposable prototype's CI run/result to be recorded after PR creation; this document intentionally does not claim success before verification.
