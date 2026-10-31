@@ -327,9 +327,77 @@ export function TransfersPage() {
     return uncertainMessage;
   };
 
-  const approve = async (tr: TransferRow) => {
-    if (writing.current) return; writing.current = true; setSaving(true);
+
+  const loadApprovalPreview = async (tr: TransferRow) => {
+    const version = ++approvalReadVersion.current;
+    setApprovalLoading(true); setApprovalError(false);
     try {
+      const items = await loadTransferPendingItems(tr.id);
+      const balances = await loadTransferSourceBalances(tr.branch_id, tr.from_warehouse_id,
+        items.map(item => item.raw_material_id || ''));
+      if (version !== approvalReadVersion.current) return;
+      setApprovalItems(items); setApprovalOriginal(items.map(item => ({ ...item })));
+      setApprovalBalances(balances);
+    } catch {
+      if (version === approvalReadVersion.current) setApprovalError(true);
+    } finally {
+      if (version === approvalReadVersion.current) setApprovalLoading(false);
+    }
+  };
+  const openApprovalPreview = (tr: TransferRow) => {
+    if (writing.current || tr.status !== 'pending') return;
+    setApprovalTarget(tr); setApprovalOriginal([]); setApprovalItems([]);
+    setApprovalBalances({}); setApprovalUnconfirmed(false);
+    void loadApprovalPreview(tr);
+  };
+  const closeApprovalPreview = () => {
+    if (writing.current) return;
+    approvalReadVersion.current++; setApprovalTarget(null); setApprovalItems([]);
+    setApprovalOriginal([]); setApprovalError(false);
+  };
+  const saveApprovalEdits = async () => {
+    if (!approvalTarget || writing.current || approvalLoading || approvalError || approvalUnconfirmed
+        || !pendingEdits || !approvalItems.length || approvalItems.some(item =>
+          !item.raw_material_id || !Number.isFinite(item.quantity)
+          || item.quantity <= 0 || !Number.isInteger(item.quantity * 10000))) return;
+    writing.current = true; setSaving(true);
+    try {
+      const original = approvalOriginal.map(item => ({ id: item.id, quantity: item.quantity }));
+      const next = approvalItems.map(item => ({ id: item.id, quantity: item.quantity }));
+      const { data, error } = await api.inventory.revisePendingTransfer({
+        p_transfer_id: approvalTarget.id, p_original_items: original, p_items: next,
+      });
+      if (error || !data) throw error || new Error('TRANSFER_REVISION_UNCONFIRMED');
+      const result = data as RpcResult | null;
+      if (!result?.success) {
+        show(lang === 'ar'
+          ? 'تعذر حفظ التعديلات؛ ربما تغير التحويل. أعد تحميل المعاينة.'
+          : 'Cannot save changes. The transfer may have changed. Reload the preview.', 'error');
+        void loadApprovalPreview(approvalTarget);
+        return;
+      }
+      show(lang === 'ar' ? 'تم حفظ البنود. راجعها ثم اعتمد التحويل.' : 'Items saved. Review before approving.', 'success');
+      void reloadTransfers();
+      await loadApprovalPreview(approvalTarget);
+    } catch {
+      setApprovalUnconfirmed(true); show(uncertainMessage, 'error'); void reloadTransfers();
+    } finally { writing.current = false; setSaving(false); }
+  };
+
+  const approve = async (tr: TransferRow) => {
+    if (writing.current || approvalLoading || approvalError || pendingEdits || approvalUnconfirmed
+      || !approvalTarget || approvalTarget.id !== tr.id || !approvalOriginal.length) return;
+    writing.current = true; setSaving(true);
+    try {
+    const latest = await loadTransferPendingItems(tr.id);
+    if (JSON.stringify(latest.map(x => [x.id, x.quantity])) !==
+        JSON.stringify(approvalOriginal.map(x => [x.id, x.quantity]))) {
+      show(lang === 'ar' ? 'تغيرت البنود؛ حدّث المعاينة قبل الاعتماد.' : 'Items changed. Refresh the preview before approving.', 'error');
+      await loadApprovalPreview(tr);
+      return;
+    }
+    await loadTransferSourceBalances(tr.branch_id, tr.from_warehouse_id,
+      latest.map(x => x.raw_material_id || ''));
     const { data, error } = await api.inventory.approveTransfer({ p_transfer_id: tr.id });
     if (error) { show(error.message, 'error'); return; }
     const result = data as RpcResult | null;
@@ -339,8 +407,9 @@ export function TransfersPage() {
     try { await logAudit('update', 'warehouse_transfers', tr.id, { action: 'approve' }, tr.branch_id); }
     catch { /* The committed transfer remains approved; no automatic retry. */ }
     show(t('saveSuccess'), 'success');
+    closeApprovalPreview();
     reloadTransfers();
-    } catch { show(uncertainMessage, 'error'); void reloadTransfers(); }
+    } catch { setApprovalUnconfirmed(true); show(uncertainMessage, 'error'); void reloadTransfers(); }
     finally { writing.current = false; setSaving(false); }
   };
   const openReject = (tr: TransferRow) => { setRejectTarget(tr); setRejectReason(''); };
@@ -372,7 +441,7 @@ export function TransfersPage() {
     { key: 'to', header: t('toWarehouse'), render: (tr) => <div>{tr.to_warehouse?.name || '-'}<div className="mt-1"><BranchBadge name={destinationBranchName(tr)} /></div></div> },
     { key: 'status', header: t('status'), render: (tr) => statusPill(tr.status) },
     { key: 'requested_at', header: t('requestedAt'), render: (tr) => formatDateTime(tr.requested_at, lang) },
-    { key: 'actions', header: t('actions'), render: (tr) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>{can('inventory.transfer.approve') && tr.status === 'pending' && <><button disabled={saving} onClick={() => approve(tr)} className="p-1.5 rounded-md hover:bg-ui-success-soft text-ui-success" title={t('approveTransfer')}><CheckCircle2 className="w-4 h-4" /></button><button disabled={saving} onClick={() => openReject(tr)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={t('rejectTransfer')}><XCircle className="w-4 h-4" /></button></>}</div> },
+    { key: 'actions', header: t('actions'), render: (tr) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>{can('inventory.transfer.approve') && tr.status === 'pending' && <><button disabled={saving} onClick={() => openApprovalPreview(tr)} className="p-1.5 rounded-md hover:bg-ui-success-soft text-ui-success" title={t('approveTransfer')}><CheckCircle2 className="w-4 h-4" /></button><button disabled={saving} onClick={() => openReject(tr)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={t('rejectTransfer')}><XCircle className="w-4 h-4" /></button></>}</div> },
   ];
 
   return (
