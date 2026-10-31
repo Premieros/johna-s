@@ -73,7 +73,7 @@ describe.skipIf(!local)('approved issue pricing pilot: frozen historical cost, t
       'SELECT difference_amount,journal_status FROM private.raw_approved_cost_variances WHERE source_ledger_id=$1',[debt.source_ledger_id])).rows;
     expect(variance).toHaveLength(1);
     expect(Number(variance[0].difference_amount)).toBe(0);
-    expect(variance[0].journal_status).toBe('unposted');
+    expect(variance[0].journal_status).toBe('posted');
     expect(Number((await db.query('SELECT settled_quantity FROM public.raw_fifo_debts WHERE id=$1',[debt.id])).rows[0].settled_quantity)).toBeCloseTo(2.86,4);
   });
   it('preserves frozen issue price when the receipt price differs, recording every unposted variance',async()=>{
@@ -86,12 +86,37 @@ describe.skipIf(!local)('approved issue pricing pilot: frozen historical cost, t
       'SELECT unit_cost,total_cost FROM public.inventory_ledger WHERE id=$1',[debt.source_ledger_id])).rows[0];
     expect(Number(after.unit_cost)).toBeCloseTo(Number(ledger.unit_cost),4);
     expect(Number(after.total_cost)).toBeCloseTo(Number(ledger.total_cost),4);
-    const variance=(await db.query<{difference_amount:string,quantity:string,approved_unit_cost:string,receipt_unit_cost:string}>(
+    const variance=(await db.query<{difference_amount:string,quantity:string,approved_unit_cost:string,receipt_unit_cost:string,journal_status:string,journal_entry_id:string}>(
       'SELECT * FROM private.raw_approved_cost_variances WHERE source_ledger_id=$1',[debt.source_ledger_id])).rows[0];
     expect(Number(variance.quantity)).toBeCloseTo(1.5,4);
     expect(Number(variance.approved_unit_cost)).toBeCloseTo(1200,4);
     expect(Number(variance.receipt_unit_cost)).toBeCloseTo(1350,4);
     expect(Number(variance.difference_amount)).toBeCloseTo(225,4);
+    expect(variance.journal_status).toBe('posted');
+    expect(variance.journal_entry_id).toBeTruthy();
+    const journal=(await db.query<{account_id:string,debit:string,credit:string}>(
+      'SELECT account_id,debit,credit FROM public.journal_entry_lines WHERE journal_entry_id=$1',
+      [variance.journal_entry_id])).rows;
+    expect(journal).toHaveLength(2);
+    expect(journal.reduce((sum,row)=>sum+Number(row.debit),0)).toBeCloseTo(225,2);
+    expect(journal.reduce((sum,row)=>sum+Number(row.credit),0)).toBeCloseTo(225,2);
+    const varianceAccount=(await db.query(
+      "SELECT account_id FROM public.account_mappings WHERE branch_id=$1 AND semantic_key='stock_variance'",
+      [ids.branchA])).rows[0].account_id;
+    expect(Number(journal.find(row=>row.account_id===varianceAccount)?.debit)).toBeCloseTo(225,2);
+    const before=(await db.query<{n:string}>(
+      "SELECT COUNT(*)::text n FROM public.journal_entries WHERE reference_type='raw_approved_receipt_variance'"
+    )).rows[0].n;
+    // A repeated receipt cannot post another journal.
+    const settlement=(await db.query<{receipt_ledger_id:string,receipt_batch_id:string}>(
+      'SELECT receipt_ledger_id,receipt_batch_id FROM public.raw_fifo_settlements WHERE debt_id=$1',[debt.id])).rows[0];
+    const repeated=(await db.query<{r:{success:boolean,settled_quantity:number}}>(
+      'SELECT public._raw_fifo_settle_receipt($1,$2,NULL) r',[settlement.receipt_ledger_id,settlement.receipt_batch_id])).rows[0].r;
+    expect(repeated).toMatchObject({success:true});
+    expect(Number(repeated.settled_quantity)).toBe(0);
+    expect(Number((await db.query(
+      "SELECT COUNT(*)::int n FROM public.journal_entries WHERE reference_type='raw_approved_receipt_variance'"
+    )).rows[0].n)).toBe(Number(before));
   });
   it('retains legacy unpriced debt treatment without falsely claiming an approved price',async()=>{
     const {debt,ledger}=await issue(noPriceRaw,1.25);
