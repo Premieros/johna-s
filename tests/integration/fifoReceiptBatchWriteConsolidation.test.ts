@@ -18,7 +18,8 @@ const patch = candidate.slice(candidate.indexOf('DO $patch_fifo_receipt_writes$'
 describe.skipIf(!local)('canonical receipt batch-write consolidation, rollback-only', () => {
   let db: pg.Client;
   const branch = randomUUID(), wh = randomUUID();
-  let raw = '', sale = '', receipt = randomUUID();
+  let raw = '', sale = '';
+  const receipt = randomUUID();
 
   beforeAll(async () => {
     db = openDb(url);
