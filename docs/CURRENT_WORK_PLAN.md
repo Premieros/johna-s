@@ -1,9 +1,9 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Active emergency branch: `hotfix/transfer-insufficient-stock-message-20261031`; PR #553.
-- Mandatory active work log: `docs/TRANSFER_APPROVAL_HOTFIX_20261031.md`.
-- Scope: transfer UI error accuracy, audit-success separation and candidate-only creation stock preflight. No production stock writes, merge or deployment without final approval. Preserve all FIFO, access rules and existing operation behavior.
+- Active integration branch: `integrate/transfer-negative-preview-20261031`; PR #556 (draft).
+- Mandatory active work log: `docs/TRANSFER_COMBINED_20261031.md`.
+- Scope: one review/release for PRs #554 and #555: negative raw FIFO outbound, live source warehouse balance matching Inventory, preapproval line review/edit/delete and same-transaction snapshot check. Preserve product stock policy, permissions, FIFO/accounting, and business history. No production stock tests. Release only after full integration and approval.
 - Repository: `Premieros/johna-s`; production Supabase: `azzdesuowpdcoflmyezn`.
 - Baseline: `4b6da2cae7e6d5c379fd80d9cedd8f0bb8be8cde` (#550 released).
 - Branch: `fix/report-read-budget-20261030`.

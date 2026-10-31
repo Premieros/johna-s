@@ -13,7 +13,8 @@ describe('warehouse transfer approval error presentation', () => {
   });
 
   it('retains the existing single approve RPC without modifying inventory', () => {
-    expect(page).toContain('api.inventory.approveTransfer({ p_transfer_id: tr.id })');
+    expect(page).toContain('api.inventory.approvePreviewedTransfer({');
+    expect(page).toContain('p_expected_items: approvalOriginal.map');
     expect(page).toContain('void reloadTransfers()');
     expect(page).not.toContain('api.inventory.adjustRawStock(');
   });
