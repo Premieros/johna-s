@@ -36,6 +36,11 @@ This is NOT moving-average costing and NOT abandoning traceability. Incoming pur
 - Named NOT VALID future-only safety checks. No new table, RPC, trigger, permission, migration, or business-data update.
 - Intentionally stored under `scripts/db/candidates/`, not `supabase/migrations/`. The SQL must remain unused until writer/reader/rollback release gates are met.
 
+## Unwired first implementation (2026-10-31)
+- `scripts/db/candidates/approved_raw_cost_engine_v2_helpers_20261031.sql`: two internal, SECURITY INVOKER / private-schema helpers for approved cost issue + receipt on a warehouse that has **zero open legacy debts**. Both maintain raw stock, freeze approved price in the original movement ledger, and use one negative shortage aggregate per material/warehouse. Receipts only journal the variance (existing account mappings) rather than rewriting historical kitchen/sale references. Explicit branch/warehouse preflights and canonical advisory transaction lock.
+- `tests/integration/approvedRawCostV2TinyPrototype.test.ts`: at most 3 issues and 2 receipts; runs inside rolled-back disposable CI PostgreSQL with source-price checks, shortage aggregation, frozen-price ledger snapshots, receipts and balanced journal. **No new 717-debt fixture.**
+- **Strict limit:** helpers are unprivileged and **not called by any existing business RPC or web app**; no production migration exists. The same old-debt restriction prevents falsely claiming the Smouha #00008 transfer has been fixed. Full historical consolidation and compatibility release gates still mandatory.
+
 ## Implementation order
 A. **Engine in isolated SQL**: implement new `private` helpers consuming / receiving without legacy side effects, plus source snapshots and idempotent variance journal; keep old entry points unchanged. Ensure no unexpected public SECURITY DEFINER grants.
 B. **Small correctness suite only**: one 2–5-row disposable-Postgres test covering positive, negative, partial receive, price mismatch, missing price, same/cross branch, reversing source snapshots, concurrent source lock and journal balance. Reuse existing tests; **do not generate repetitive 717-debt performance fixtures**. CI DB container is ephemeral GitHub Actions Postgres 16; never use production Supabase for test writes.
@@ -50,7 +55,7 @@ E. **Release**: exact head CI green; run stock/cost reconciliation read-only pre
 - Preserve existing regulated/auditable financial history; don't `DELETE` legacy records to save disk. Retention policy, if required, must have explicit business/legal approvals.
 
 ## Guard and release status
-**BLOCKED / unimplemented writer + legacy conversion.**
+**BLOCKED / internal v2 prototype exists, but complete production writer + legacy conversion not implemented.**
 No main merge, no production migration or approval of Johna's-00008 should be represented as complete until the transactional v2 functions, legacy conversion, writers, reversals, cost reports and CI are proven.
 
 ## Verification ledger
@@ -58,3 +63,4 @@ No main merge, no production migration or approval of Johna's-00008 should be re
 - Real Smouha espresso: 717 open FIFO debts, of which 94 carry provisional estimated price 1200 and 623 have no estimate.
 - Previous PR #559 exact-head CI #4564 all green, 717 synthetic/473 sales parity and 953→852 ms (~11%) only; insufficient production guarantee.
 - No schema writes to production; pending transfer #00008 was last confirmed pending with no posted ledger rows.
+- Five-movement disposable prototype's CI run/result to be recorded after PR creation; this document intentionally does not claim success before verification.
