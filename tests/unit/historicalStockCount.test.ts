@@ -42,4 +42,18 @@ describe('historical stock count quantity reconciliation (pure, no posting)', ()
     ] })).toThrow('MOVEMENT_NOT_AFTER_CUTOFF');
     expect(() => reconcileHistoricalStockCount({ ...params, countedQuantity: -1, movementsAfterCutoff: [] })).toThrow('NEGATIVE_COUNTED_QUANTITY');
   });
+  it('requires an explicit timezone for count and transaction timestamps', () => {
+    const base = { cutoff, systemAtCutoff: 1, countedQuantity: 1, currentQuantity: 1, movementsAfterCutoff: [] };
+    expect(() => reconcileHistoricalStockCount({ ...base, cutoff: '2026-10-31T20:00:00' })).toThrow('CUTOFF_TIMEZONE_REQUIRED');
+    expect(() => reconcileHistoricalStockCount({ ...base, movementsAfterCutoff: [
+      { id: 'sale', occurredAt: '2026-11-01T10:00:00', signedQuantity: 0 },
+    ] })).toThrow('MOVEMENT_TIMEZONE_REQUIRED');
+  });
+  it('rejects overflow rather than returning an infinite projected inventory', () => {
+    expect(() => reconcileHistoricalStockCount({
+      cutoff, systemAtCutoff: -1e308, countedQuantity: 1e308,
+      currentQuantity: -1e308, movementsAfterCutoff: [],
+    })).toThrow('INVALID_EXPECTED_CURRENT');
+  });
+
 });
