@@ -20,6 +20,7 @@ import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useOperationalGuard, PrerequisiteAlertBanner, PREREQUISITE_STEPS } from '@/core/guard';
 import type { WarehouseTransfer, Warehouse, Branch, RpcResult } from '@/lib/types';
 import { loadTransferAverageCost, loadTransferDestinationPrices, loadTransferMeta, type TransferRawMaterialChoice } from '../services/transferPageData';
+import { loadTransferSourceBalances, loadTransferPendingItems, type PendingTransferItem } from '../services/transferPreviewData';
 
 interface TransferLine { item_type: 'raw_material'; item_id: string; destination_item_id: string; quantity: number; unit_cost: number; }
 interface TransferRow extends WarehouseTransfer { to_branch_id?: string | null; }
@@ -68,6 +69,23 @@ export function TransfersPage() {
   const [lines, setLines] = useState<TransferLine[]>([{ ...EMPTY_LINE }]);
   const [rejectTarget, setRejectTarget] = useState<TransferRow | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [createBalances, setCreateBalances] = useState<Record<string, number>>({});
+  const [createBalanceLoading, setCreateBalanceLoading] = useState(false);
+  const [createBalanceError, setCreateBalanceError] = useState(false);
+  const [approvalTarget, setApprovalTarget] = useState<TransferRow | null>(null);
+  const [approvalItems, setApprovalItems] = useState<PendingTransferItem[]>([]);
+  const [approvalOriginal, setApprovalOriginal] = useState<PendingTransferItem[]>([]);
+  const [approvalBalances, setApprovalBalances] = useState<Record<string, number>>({});
+  const [approvalLoading, setApprovalLoading] = useState(false);
+  const [approvalError, setApprovalError] = useState(false);
+  const [approvalUnconfirmed, setApprovalUnconfirmed] = useState(false);
+  const approvalReadVersion = useRef(0);
+  const selectedCreateRawIds = [...new Set(lines.map(l => l.item_id).filter(Boolean))].sort().join(',');
+  const balanceText = (value: number | undefined) => value === undefined ? '—'
+    : new Intl.NumberFormat(lang === 'ar' ? 'ar-EG' : 'en-US', { maximumFractionDigits: 4 }).format(value);
+  const pendingEdits = approvalItems.length !== approvalOriginal.length
+    || approvalItems.some((item, index) => item.id !== approvalOriginal[index]?.id
+      || item.quantity !== approvalOriginal[index]?.quantity);
 
   const metaVersion = useRef(0);
   async function loadMeta() {
@@ -101,6 +119,22 @@ export function TransfersPage() {
       setModalOpen(true);
     }
   }, [location.state]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCreateBalances({});
+    setCreateBalanceError(false);
+    if (!modalOpen || !form.source_branch_id || !form.from_warehouse_id || !selectedCreateRawIds) {
+      setCreateBalanceLoading(false);
+      return () => { cancelled = true; };
+    }
+    setCreateBalanceLoading(true);
+    void loadTransferSourceBalances(form.source_branch_id, form.from_warehouse_id, selectedCreateRawIds.split(','))
+      .then(data => { if (!cancelled) setCreateBalances(data); })
+      .catch(() => { if (!cancelled) setCreateBalanceError(true); })
+      .finally(() => { if (!cancelled) setCreateBalanceLoading(false); });
+    return () => { cancelled = true; };
+  }, [modalOpen, form.source_branch_id, form.from_warehouse_id, selectedCreateRawIds]);
 
   const sourceWarehouses = useMemo(() => warehouses.filter((w) => w.branch_id === form.source_branch_id), [warehouses, form.source_branch_id]);
   const destinationWarehouses = useMemo(() => warehouses.filter((w) => w.branch_id === form.destination_branch_id), [warehouses, form.destination_branch_id]);
@@ -282,6 +316,7 @@ export function TransfersPage() {
         : `Cannot approve transfer: insufficient ${name || 'item'} stock. ${quantity} Check source balance or change transfer quantity.`;
     }
     const known: Record<string, [string, string]> = {
+      TRANSFER_ITEMS_CHANGED: ['تغيرت بنود التحويل بعد المعاينة، أعد تحميلها قبل الاعتماد.', 'Transfer lines changed since preview. Reload before approving.'],
       TRANSFER_UNIT_MISMATCH: ['وحدة الخامة مختلفة بين المصدر والوجهة.', 'Raw material units differ between branches.'],
       INVALID_STATUS: ['تم تغيير حالة التحويل. حدّث القائمة قبل إعادة المحاولة.', 'Transfer status changed. Refresh before retrying.'],
       NOT_ALLOWED: ['ليست لديك صلاحية اعتماد التحويل.', 'You do not have permission to approve transfers.'],
@@ -293,10 +328,85 @@ export function TransfersPage() {
     return uncertainMessage;
   };
 
-  const approve = async (tr: TransferRow) => {
-    if (writing.current) return; writing.current = true; setSaving(true);
+
+  const loadApprovalPreview = async (tr: TransferRow) => {
+    const version = ++approvalReadVersion.current;
+    setApprovalLoading(true); setApprovalError(false);
     try {
-    const { data, error } = await api.inventory.approveTransfer({ p_transfer_id: tr.id });
+      const items = await loadTransferPendingItems(tr.id);
+      const balances = await loadTransferSourceBalances(tr.branch_id, tr.from_warehouse_id,
+        items.map(item => item.raw_material_id || ''));
+      if (version !== approvalReadVersion.current) return;
+      setApprovalItems(items); setApprovalOriginal(items.map(item => ({ ...item })));
+      setApprovalBalances(balances);
+    } catch {
+      if (version === approvalReadVersion.current) setApprovalError(true);
+    } finally {
+      if (version === approvalReadVersion.current) setApprovalLoading(false);
+    }
+  };
+  const openApprovalPreview = (tr: TransferRow) => {
+    if (writing.current || tr.status !== 'pending') return;
+    setApprovalTarget(tr); setApprovalOriginal([]); setApprovalItems([]);
+    setApprovalBalances({}); setApprovalUnconfirmed(false);
+    void loadApprovalPreview(tr);
+  };
+  const closeApprovalPreview = () => {
+    if (writing.current) return;
+    approvalReadVersion.current++; setApprovalTarget(null); setApprovalItems([]);
+    setApprovalOriginal([]); setApprovalError(false);
+  };
+  const saveApprovalEdits = async () => {
+    if (!approvalTarget || writing.current || approvalLoading || approvalError || approvalUnconfirmed
+        || !pendingEdits || !approvalItems.length || approvalItems.some(item =>
+          !item.raw_material_id || !Number.isFinite(item.quantity)
+          || item.quantity <= 0 || !Number.isInteger(item.quantity * 10000))) return;
+    writing.current = true; setSaving(true);
+    try {
+      const original = approvalOriginal.map(item => ({ id: item.id, quantity: item.quantity }));
+      const next = approvalItems.map(item => ({ id: item.id, quantity: item.quantity }));
+      const { data, error } = await api.inventory.revisePendingTransfer({
+        p_transfer_id: approvalTarget.id, p_original_items: original, p_items: next,
+      });
+      if (error || !data) throw error || new Error('TRANSFER_REVISION_UNCONFIRMED');
+      const result = data as RpcResult | null;
+      if (!result?.success) {
+        show(lang === 'ar'
+          ? 'تعذر حفظ التعديلات؛ ربما تغير التحويل. أعد تحميل المعاينة.'
+          : 'Cannot save changes. The transfer may have changed. Reload the preview.', 'error');
+        void loadApprovalPreview(approvalTarget);
+        return;
+      }
+      show(lang === 'ar' ? 'تم حفظ البنود. راجعها ثم اعتمد التحويل.' : 'Items saved. Review before approving.', 'success');
+      void reloadTransfers();
+      await loadApprovalPreview(approvalTarget);
+    } catch {
+      setApprovalUnconfirmed(true); show(uncertainMessage, 'error'); void reloadTransfers();
+    } finally { writing.current = false; setSaving(false); }
+  };
+
+  const approve = async (tr: TransferRow) => {
+    if (writing.current || approvalLoading || approvalError || pendingEdits || approvalUnconfirmed
+      || !approvalTarget || approvalTarget.id !== tr.id || !approvalOriginal.length) return;
+    writing.current = true; setSaving(true);
+    try {
+    const latest = await loadTransferPendingItems(tr.id);
+    if (JSON.stringify(latest.map(x => [x.id, x.quantity])) !==
+        JSON.stringify(approvalOriginal.map(x => [x.id, x.quantity]))) {
+      show(lang === 'ar' ? 'تغيرت البنود؛ حدّث المعاينة قبل الاعتماد.' : 'Items changed. Refresh the preview before approving.', 'error');
+      await loadApprovalPreview(tr);
+      return;
+    }
+    await loadTransferSourceBalances(tr.branch_id, tr.from_warehouse_id,
+      latest.map(x => x.raw_material_id || ''));
+    const { data, error } = await api.inventory.approvePreviewedTransfer({
+      p_transfer_id: tr.id,
+      p_expected_items: approvalOriginal.map(item => ({
+        id: item.id, raw_material_id: item.raw_material_id,
+        destination_raw_material_id: item.destination_raw_material_id,
+        product_id: item.product_id, quantity: item.quantity,
+      })),
+    });
     if (error) { show(error.message, 'error'); return; }
     const result = data as RpcResult | null;
     if (!result?.success) { show(transferApprovalFailureMessage(result), 'error'); void reloadTransfers(); return; }
@@ -305,8 +415,9 @@ export function TransfersPage() {
     try { await logAudit('update', 'warehouse_transfers', tr.id, { action: 'approve' }, tr.branch_id); }
     catch { /* The committed transfer remains approved; no automatic retry. */ }
     show(t('saveSuccess'), 'success');
+    approvalReadVersion.current++; setApprovalTarget(null);
     reloadTransfers();
-    } catch { show(uncertainMessage, 'error'); void reloadTransfers(); }
+    } catch { setApprovalUnconfirmed(true); show(uncertainMessage, 'error'); void reloadTransfers(); }
     finally { writing.current = false; setSaving(false); }
   };
   const openReject = (tr: TransferRow) => { setRejectTarget(tr); setRejectReason(''); };
@@ -338,7 +449,7 @@ export function TransfersPage() {
     { key: 'to', header: t('toWarehouse'), render: (tr) => <div>{tr.to_warehouse?.name || '-'}<div className="mt-1"><BranchBadge name={destinationBranchName(tr)} /></div></div> },
     { key: 'status', header: t('status'), render: (tr) => statusPill(tr.status) },
     { key: 'requested_at', header: t('requestedAt'), render: (tr) => formatDateTime(tr.requested_at, lang) },
-    { key: 'actions', header: t('actions'), render: (tr) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>{can('inventory.transfer.approve') && tr.status === 'pending' && <><button disabled={saving} onClick={() => approve(tr)} className="p-1.5 rounded-md hover:bg-ui-success-soft text-ui-success" title={t('approveTransfer')}><CheckCircle2 className="w-4 h-4" /></button><button disabled={saving} onClick={() => openReject(tr)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={t('rejectTransfer')}><XCircle className="w-4 h-4" /></button></>}</div> },
+    { key: 'actions', header: t('actions'), render: (tr) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>{can('inventory.transfer.approve') && tr.status === 'pending' && <><button disabled={saving} onClick={() => openApprovalPreview(tr)} className="p-1.5 rounded-md hover:bg-ui-success-soft text-ui-success" title={t('approveTransfer')}><CheckCircle2 className="w-4 h-4" /></button><button disabled={saving} onClick={() => openReject(tr)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={t('rejectTransfer')}><XCircle className="w-4 h-4" /></button></>}</div> },
   ];
 
   return (
@@ -364,15 +475,55 @@ export function TransfersPage() {
             {form.source_branch_id !== form.destination_branch_id && <p role="note" className="mb-2 text-sm text-ui-subtle">{lang==='ar'?'سعر التحويل هو آخر سعر معتمد للخامة في الفرع المستلم. السعر المعروض تقديري ويُحدّث ويُثبت عند الموافقة؛ الخامة بلا سعر تُحسب بصفر.':'Transfers use the receiving branch’s latest approved raw price. The preview is refreshed and fixed at approval; an unpriced raw material is valued at zero.'}</p>}
             <div className="flex items-center justify-between mb-2"><div><p className="text-sm font-bold text-ui-muted">{t('transferItems')}</p><p className="text-xs text-ui-subtle">{lang === 'ar' ? 'اختر الخامة والكمية فقط. عند التحويل بين الفروع يحدد النظام الخامة المطابقة تلقائيًا بالاسم والوحدة.' : 'Choose the raw material and quantity only. Cross-branch transfers resolve the matching raw material automatically by name and unit.'}</p></div><Button variant="outline" size="sm" onClick={addLine}><Plus className="w-4 h-4" /> {t('add')}</Button></div>
             <div className="space-y-2">{lines.map((l, idx) => <div key={idx} className="grid grid-cols-1 sm:grid-cols-[1fr_130px_130px_36px] gap-2 items-end">
-              <Select aria-label={`${t('rawMaterial')} ${idx + 1}`} value={l.item_id} onChange={(e) => void updateLineItem(idx, e.target.value)}><option value="">{lang === 'ar' ? 'اختر الخامة' : 'Select raw material'}</option>{sourceRawMaterials.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>
+              <div>
+                <Select aria-label={`${t('rawMaterial')} ${idx + 1}`} value={l.item_id} onChange={(e) => void updateLineItem(idx, e.target.value)}><option value="">{lang === 'ar' ? 'اختر الخامة' : 'Select raw material'}</option>{sourceRawMaterials.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select>
+                {l.item_id && <p className="mt-1 text-xs text-ui-subtle" role="status">
+                  {lang === 'ar' ? 'رصيد المخزن الحالي: ' : 'Current warehouse stock: '}
+                  {createBalanceLoading ? t('loading') : createBalanceError ? (lang === 'ar' ? 'تعذر قراءة الرصيد' : 'Balance unavailable') : balanceText(createBalances[l.item_id])}
+                  {!createBalanceLoading && !createBalanceError && createBalances[l.item_id] < 0 && <span className="ms-1 text-ui-danger">{lang === 'ar' ? '(سالب — التحويل مسموح)' : '(negative — permitted)'}</span>}
+                </p>}
+              </div>
               <Input aria-label={`${t('quantity')} ${idx + 1}`} type="number" step="0.0001" value={l.quantity} onChange={(e) => updateLine(idx, 'quantity', parseFloat(e.target.value) || 0)} placeholder={t('quantity')} />
               <Input aria-label={`${t('unitCost')} ${idx + 1}`} type="number" step="0.000001" readOnly={form.source_branch_id !== form.destination_branch_id} value={l.unit_cost} onChange={(e) => updateLine(idx, 'unit_cost', parseFloat(e.target.value) || 0)} placeholder={t('unitCost')} />
               <button disabled={costPending.length > 0} onClick={() => removeLine(idx)} className="p-2 rounded-lg text-ui-danger hover:bg-ui-danger-soft" title={t('delete')}><Trash2 className="w-4 h-4" /></button>
             </div>)}</div>
           </div>
           <Input label={t('notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-          <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => { invalidateCosts(); setModalOpen(false); }}>{t('cancel')}</Button><Button disabled={saving || unconfirmed || costPending.length > 0 || costErrors.length > 0} onClick={createTransfer}>{saving ? t('loading') : t('save')}</Button></div>
+          <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => { invalidateCosts(); setModalOpen(false); }}>{t('cancel')}</Button><Button disabled={saving || unconfirmed || createBalanceLoading || createBalanceError || costPending.length > 0 || costErrors.length > 0} onClick={createTransfer}>{saving ? t('loading') : t('save')}</Button></div>
         </fieldset>
+      </Modal>
+      <Modal open={!!approvalTarget} onClose={closeApprovalPreview} title={lang === 'ar' ? 'معاينة التحويل قبل الاعتماد' : 'Transfer approval preview'} size="lg">
+        {approvalTarget && <div className="space-y-4">
+          <p className="font-semibold">{approvalTarget.transfer_number}</p>
+          <p className="text-sm text-ui-subtle">{approvalTarget.from_warehouse?.name} ← {approvalTarget.to_warehouse?.name}</p>
+          <p className="text-xs text-ui-subtle">{lang === 'ar' ? 'الأرصدة مأخوذة من شاشة المخزون لنفس مخزن المصدر. السالب مسموح، وقد يتغير الرصيد قبل الاعتماد الفعلي.' : 'Balances use the inventory screen source warehouse. Negative stock is allowed. Values may change before approval.'}</p>
+          {approvalUnconfirmed && <p role="alert">{uncertainMessage}</p>}
+          {approvalLoading ? <p role="status">{t('loading')}</p>
+            : approvalError ? <div role="alert">{readError}</div>
+            : <div className="space-y-3">
+              {approvalItems.map((item) => <div key={item.id} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_130px_42px] gap-3 items-end rounded-lg border border-ui-border p-3">
+                <div>
+                  <p className="font-semibold text-ui-text">{rawMaterials.find(raw => raw.id === item.raw_material_id)?.name || item.raw_material_id || (lang === 'ar' ? 'منتج' : 'Product')}</p>
+                  {item.raw_material_id && <p className="text-sm text-ui-muted">{lang === 'ar' ? 'رصيد المصدر: ' : 'Source stock: '}{balanceText(approvalBalances[item.raw_material_id])}</p>}
+                </div>
+                <Input aria-label={lang === 'ar' ? 'الكمية' : 'Quantity'} type="number" min="0.0001" step="0.0001" value={item.quantity}
+                  disabled={saving || !item.raw_material_id}
+                  onChange={e => setApprovalItems(previous => previous.map(row => row.id === item.id ? { ...row, quantity: Number(e.target.value) } : row))} />
+                <button className="p-2 text-ui-danger disabled:opacity-40" disabled={saving || !item.raw_material_id}
+                  onClick={() => setApprovalItems(previous => previous.filter(row => row.id !== item.id))}
+                  title={t('delete')} aria-label={t('delete')}><Trash2 className="w-4 h-4" /></button>
+              </div>)}
+              {approvalItems.length === 0 && <p role="alert" className="text-ui-danger">{lang === 'ar' ? 'لا يمكن اعتماد تحويل دون بنود.' : 'A transfer must contain items.'}</p>}
+              {approvalItems.some(item => !item.raw_material_id) && <p className="text-xs text-ui-subtle">{lang === 'ar' ? 'بنود المنتجات القديمة للعرض والاعتماد فقط.' : 'Legacy product lines are preview-only.'}</p>}
+              {pendingEdits && <p role="status" className="text-ui-warning">{lang === 'ar' ? 'توجد تعديلات غير محفوظة. احفظها قبل الاعتماد.' : 'Unsaved changes. Save before approval.'}</p>}
+            </div>}
+          <div className="flex justify-end gap-2 flex-wrap">
+            <Button variant="secondary" disabled={saving} onClick={closeApprovalPreview}>{t('cancel')}</Button>
+            <Button variant="outline" disabled={saving || approvalLoading} onClick={() => void loadApprovalPreview(approvalTarget)}>{lang === 'ar' ? 'تحديث المعاينة' : 'Refresh preview'}</Button>
+            {pendingEdits && <Button variant="secondary" disabled={saving || approvalLoading || approvalError || approvalUnconfirmed || approvalItems.length === 0 || approvalItems.some(item => !item.raw_material_id || !Number.isFinite(item.quantity) || item.quantity <= 0 || !Number.isInteger(item.quantity * 10000))} onClick={() => void saveApprovalEdits()}>{lang === 'ar' ? 'حفظ التعديلات' : 'Save changes'}</Button>}
+            <Button disabled={saving || approvalLoading || approvalError || approvalUnconfirmed || pendingEdits || approvalItems.length === 0} onClick={() => void approve(approvalTarget)}>{t('approveTransfer')}</Button>
+          </div>
+        </div>}
       </Modal>
       <Modal open={!!rejectTarget} onClose={() => setRejectTarget(null)} title={t('rejectTransfer')} size="sm">{rejectTarget && <div className="space-y-4"><p className="text-sm text-ui-muted">{t('transferNumber')}: <b>{rejectTarget.transfer_number}</b></p><Input label={t('rejectReason')} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} /><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setRejectTarget(null)}>{t('cancel')}</Button><Button variant="danger" disabled={saving} onClick={doReject}>{t('rejectTransfer')}</Button></div></div>}</Modal>
     </DesignSurface>
