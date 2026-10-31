@@ -20,6 +20,7 @@ import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useOperationalGuard, PrerequisiteAlertBanner, PREREQUISITE_STEPS } from '@/core/guard';
 import type { WarehouseTransfer, Warehouse, Branch, RpcResult } from '@/lib/types';
 import { loadTransferAverageCost, loadTransferDestinationPrices, loadTransferMeta, type TransferRawMaterialChoice } from '../services/transferPageData';
+import { loadTransferSourceBalances, loadTransferPendingItems, type PendingTransferItem } from '../services/transferPreviewData';
 
 interface TransferLine { item_type: 'raw_material'; item_id: string; destination_item_id: string; quantity: number; unit_cost: number; }
 interface TransferRow extends WarehouseTransfer { to_branch_id?: string | null; }
@@ -68,6 +69,23 @@ export function TransfersPage() {
   const [lines, setLines] = useState<TransferLine[]>([{ ...EMPTY_LINE }]);
   const [rejectTarget, setRejectTarget] = useState<TransferRow | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [createBalances, setCreateBalances] = useState<Record<string, number>>({});
+  const [createBalanceLoading, setCreateBalanceLoading] = useState(false);
+  const [createBalanceError, setCreateBalanceError] = useState(false);
+  const [approvalTarget, setApprovalTarget] = useState<TransferRow | null>(null);
+  const [approvalItems, setApprovalItems] = useState<PendingTransferItem[]>([]);
+  const [approvalOriginal, setApprovalOriginal] = useState<PendingTransferItem[]>([]);
+  const [approvalBalances, setApprovalBalances] = useState<Record<string, number>>({});
+  const [approvalLoading, setApprovalLoading] = useState(false);
+  const [approvalError, setApprovalError] = useState(false);
+  const [approvalUnconfirmed, setApprovalUnconfirmed] = useState(false);
+  const approvalReadVersion = useRef(0);
+  const selectedCreateRawIds = [...new Set(lines.map(l => l.item_id).filter(Boolean))].sort().join(',');
+  const balanceText = (value: number | undefined) => value === undefined ? '—'
+    : new Intl.NumberFormat(lang === 'ar' ? 'ar-EG' : 'en-US', { maximumFractionDigits: 4 }).format(value);
+  const pendingEdits = approvalItems.length !== approvalOriginal.length
+    || approvalItems.some((item, index) => item.id !== approvalOriginal[index]?.id
+      || item.quantity !== approvalOriginal[index]?.quantity);
 
   const metaVersion = useRef(0);
   async function loadMeta() {
@@ -101,6 +119,22 @@ export function TransfersPage() {
       setModalOpen(true);
     }
   }, [location.state]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCreateBalances({});
+    setCreateBalanceError(false);
+    if (!modalOpen || !form.source_branch_id || !form.from_warehouse_id || !selectedCreateRawIds) {
+      setCreateBalanceLoading(false);
+      return () => { cancelled = true; };
+    }
+    setCreateBalanceLoading(true);
+    void loadTransferSourceBalances(form.source_branch_id, form.from_warehouse_id, selectedCreateRawIds.split(','))
+      .then(data => { if (!cancelled) setCreateBalances(data); })
+      .catch(() => { if (!cancelled) setCreateBalanceError(true); })
+      .finally(() => { if (!cancelled) setCreateBalanceLoading(false); });
+    return () => { cancelled = true; };
+  }, [modalOpen, form.source_branch_id, form.from_warehouse_id, selectedCreateRawIds]);
 
   const sourceWarehouses = useMemo(() => warehouses.filter((w) => w.branch_id === form.source_branch_id), [warehouses, form.source_branch_id]);
   const destinationWarehouses = useMemo(() => warehouses.filter((w) => w.branch_id === form.destination_branch_id), [warehouses, form.destination_branch_id]);
