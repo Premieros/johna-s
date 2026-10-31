@@ -9,7 +9,8 @@ WITH legacy_debts AS (
     count(*) FILTER (WHERE e.debt_id IS NULL)::bigint AS unpriced_debts,
     COALESCE(sum(e.remaining_estimated_quantity*e.estimated_unit_cost),0)::numeric(20,4)
        AS remaining_estimated_value,
-    count(*) FILTER (WHERE il.unit_cost=0)::bigint AS historical_zero_price_ledgers
+    count(*) FILTER (WHERE il.unit_cost=0)::bigint AS historical_zero_price_ledgers,
+    MIN(d.source_created_at) AS oldest_open_debt_at
   FROM public.raw_fifo_debts d
   LEFT JOIN public.raw_fifo_debt_price_estimates e ON e.debt_id=d.id
   JOIN public.inventory_ledger il ON il.id=d.source_ledger_id
@@ -34,6 +35,10 @@ SELECT
   d.remaining_estimated_value,
   p.unit_cost AS current_approved_unit_price,
   p.price_source AS current_approved_source,
+  d.oldest_open_debt_at,
+  past.unit_cost AS approved_price_at_oldest_open_debt,
+  past.price_source AS approved_source_at_oldest_open_debt,
+  (past.unit_cost>0 AND past.priced_at IS NOT NULL) AS oldest_open_debt_has_approved_price,
   -- An as-of-TODAY price does not establish the historic source price!
   (p.unit_cost>0 AND p.priced_at IS NOT NULL) AS today_approved_price_exists,
   -- Never claim finance conversion ready while ANY historical debts remain.
@@ -44,4 +49,7 @@ LEFT JOIN negative_lots n
     AND n.raw_material_id=d.raw_material_id
 LEFT JOIN approved_prices p
   ON p.branch_id=d.branch_id AND p.raw_material_id=d.raw_material_id
+LEFT JOIN LATERAL private.latest_approved_raw_prices(
+  d.branch_id,ARRAY[d.raw_material_id],d.oldest_open_debt_at
+) past ON true
 ORDER BY d.debt_rows DESC,d.branch_id,d.warehouse_id,d.raw_material_id;
