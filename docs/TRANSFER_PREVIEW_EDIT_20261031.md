@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `feat/transfer-live-balance-approval-preview-20261031`
-Current PR: pending
+Current PR: #555
 Last updated: 2026-10-31
 State: **BLOCKED**
 
