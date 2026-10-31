@@ -29,6 +29,12 @@ describe('historical stock count quantity reconciliation (pure, no posting)', ()
       { id: 'same', occurredAt: '2026-11-01T10:01:00+02:00', signedQuantity: -3 },
     ] })).toThrow('DUPLICATE_OR_MISSING_MOVEMENT');
   });
+  it('rejects future physical count dates', () => {
+    expect(() => reconcileHistoricalStockCount({
+      cutoff: '2999-01-01T00:00:00Z', systemAtCutoff: 0,
+      countedQuantity: 0, currentQuantity: 0, movementsAfterCutoff: [],
+    })).toThrow('FUTURE_CUTOFF_NOT_ALLOWED');
+  });
   it('rejects movements on/before cutoff and invalid amounts', () => {
     const params = { cutoff, systemAtCutoff: 1, countedQuantity: 1, currentQuantity: 1 };
     expect(() => reconcileHistoricalStockCount({ ...params, movementsAfterCutoff: [
