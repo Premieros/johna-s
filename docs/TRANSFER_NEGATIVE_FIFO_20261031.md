@@ -22,7 +22,7 @@ Verified live procedure `approve_warehouse_transfer`: raw-material preflight ret
 A guarded forward-only migration removes the raw shortage preflight from the transfer approval RPC; retains item-unit/warehouse/branch/status checks; uses canonical warehouse-aware FIFO with `p_allow_negative=true` in both same-branch and cross-branch raw paths. Removes obsolete candidate SQL that would have forbidden creating short-stock transfers, and its obsolete test. No data update is performed by installing this migration.
 
 ## Verification ledger
-Static regression contract test added. Full database integration and concurrency tests, latest exact-head CI, downstream FIFO cost settlement and closed accounting behavior are not yet verified. Migration remains release-blocked. Especially test source already negative, source partially available, destination negative debt, no double deduction, repeated approve, concurrent kitchen, future source debt settlement, and rollback.
+Static regression contract tests and a read-only disposable PostgreSQL installed-function integration test added. A guarded function-only rollback is staged at `scripts/rollback/transfer_allow_negative_raw_fifo_20261031.sql`. Read-only production SQL confirmed each of the three exact migration replacement anchors occurs once (1/1/1). Full runtime FIFO/concurrency tests, latest exact-head CI, downstream FIFO cost settlement and closed accounting behavior are not yet verified. Migration remains release-blocked. Especially test source already negative, source partially available, destination negative debt, no double deduction, repeated approve, concurrent kitchen, future source debt settlement, and rollback.
 
 ## Production gate
 State: **BLOCKED**
