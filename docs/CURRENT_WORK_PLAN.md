@@ -1,6 +1,10 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
+- Active branch: `feat/transfer-live-balance-approval-preview-20261031`; PR draft pending.
+- Mandatory active work log: `docs/TRANSFER_PREVIEW_EDIT_20261031.md`.
+- Scope: show canonical per-warehouse source stock in creation and approval preview, edit/delete PENDING raw lines with atomic optimistic lock, compare snapshot and approve in one DB transaction; negative balances display unchanged and are permitted by policy. Depends on separate negative-FIFO transfer hotfix PR #554 for accepting short stock.
+- No production stock mutation or deploy in this workstream; full verify and explicit release authorization required.
 - Active emergency branch: `hotfix/transfer-insufficient-stock-message-20261031`; PR #553.
 - Mandatory active work log: `docs/TRANSFER_APPROVAL_HOTFIX_20261031.md`.
 - Scope: transfer UI error accuracy, audit-success separation and candidate-only creation stock preflight. No production stock writes, merge or deployment without final approval. Preserve all FIFO, access rules and existing operation behavior.
