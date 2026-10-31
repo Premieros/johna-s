@@ -106,4 +106,58 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.revise_pending_warehouse_transfer(uuid,jsonb,jsonb) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.revise_pending_warehouse_transfer(uuid,jsonb,jsonb) TO authenticated,service_role;
+
+-- Approval with the exact preview snapshot verified under the transfer lock,
+-- preventing a different pending line/quantity being approved after review.
+CREATE OR REPLACE FUNCTION public.approve_previewed_warehouse_transfer(
+  p_transfer_id uuid,
+  p_expected_items jsonb
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_transfer public.warehouse_transfers%ROWTYPE;
+  v_current jsonb;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RETURN jsonb_build_object('success',false,'error','AUTH_REQUIRED');
+  END IF;
+  IF NOT public.is_pos_admin() AND NOT public.can_permission('inventory.transfer.approve') THEN
+    RETURN jsonb_build_object('success',false,'error','NOT_ALLOWED');
+  END IF;
+  IF p_transfer_id IS NULL OR jsonb_typeof(p_expected_items) IS DISTINCT FROM 'array'
+    OR jsonb_array_length(p_expected_items)=0 OR jsonb_array_length(p_expected_items)>100 THEN
+    RETURN jsonb_build_object('success',false,'error','INVALID_TRANSFER_ITEMS');
+  END IF;
+  SELECT * INTO v_transfer
+  FROM public.warehouse_transfers
+  WHERE id=p_transfer_id
+  FOR UPDATE;
+  IF v_transfer.id IS NULL THEN
+    RETURN jsonb_build_object('success',false,'error','TRANSFER_NOT_FOUND');
+  END IF;
+  IF NOT public.user_may_access_branch(v_transfer.branch_id)
+    OR NOT public.user_may_access_branch(COALESCE(v_transfer.to_branch_id,v_transfer.branch_id)) THEN
+    RETURN jsonb_build_object('success',false,'error','BRANCH_MISMATCH');
+  END IF;
+  IF v_transfer.status<>'pending' THEN
+    RETURN jsonb_build_object('success',false,'error','INVALID_STATUS');
+  END IF;
+  PERFORM 1 FROM public.warehouse_transfer_items WHERE transfer_id=p_transfer_id FOR UPDATE;
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'id',id,'raw_material_id',raw_material_id,
+    'destination_raw_material_id',destination_raw_material_id,
+    'product_id',product_id,'quantity',quantity
+  ) ORDER BY id),'[]'::jsonb)
+  INTO v_current
+  FROM public.warehouse_transfer_items WHERE transfer_id=p_transfer_id;
+  IF v_current IS DISTINCT FROM p_expected_items THEN
+    RETURN jsonb_build_object('success',false,'error','TRANSFER_ITEMS_CHANGED');
+  END IF;
+  RETURN public.approve_warehouse_transfer(p_transfer_id);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.approve_previewed_warehouse_transfer(uuid,jsonb) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.approve_previewed_warehouse_transfer(uuid,jsonb) TO authenticated,service_role;
 COMMIT;
