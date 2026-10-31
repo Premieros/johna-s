@@ -31,10 +31,14 @@ export function reconcileHistoricalStockCount(params: {
 }): HistoricalCountReconciliation {
   const cutoffTime = Date.parse(params.cutoff);
   if (!Number.isFinite(cutoffTime)) throw new Error('INVALID_CUTOFF');
+  if (cutoffTime > Date.now()) throw new Error('FUTURE_CUTOFF_NOT_ALLOWED');
   const counted = finite(params.countedQuantity, 'COUNTED_QUANTITY');
   if (counted < 0) throw new Error('NEGATIVE_COUNTED_QUANTITY');
   const historical = finite(params.systemAtCutoff, 'SYSTEM_AT_CUTOFF');
   const current = finite(params.currentQuantity, 'CURRENT_QUANTITY');
+  // Reconciliation is a consistency check, NOT proof of movement completeness:
+  // omitted offsetting movements can still net to zero. The database must
+  // separately certify full source coverage and transaction ordering.
   const seen = new Set<string>();
   let subsequent = 0;
   for (const movement of params.movementsAfterCutoff) {
