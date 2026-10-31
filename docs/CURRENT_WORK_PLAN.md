@@ -1,9 +1,10 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Active integration branch: `integrate/transfer-negative-preview-20261031`; PR #556 (draft).
-- Mandatory active work log: `docs/TRANSFER_COMBINED_20261031.md`.
-- Scope: one review/release for PRs #554 and #555: negative raw FIFO outbound, live source warehouse balance matching Inventory, preapproval line review/edit/delete and same-transaction snapshot check. Preserve product stock policy, permissions, FIFO/accounting, and business history. No production stock tests. Release only after full integration and approval.
+- Active branch: `feat/raw-approved-price-issue-cutover-20261031`; PR #558 (draft target).
+- Mandatory active work log: `docs/RAW_APPROVED_ISSUE_CUTOVER_20261031.md`.
+- Scope: owner approved extending canonical last-known approved raw prices into transaction costing; start with UNWIRED rollback-only negative-issue pilot and receipt-variance proof, preserve all previous FIFO/debts/journals and do not deploy candidate. Production changes require complete source, accounting, backlog and load tests and explicit approval.
+- Previous completed transfer integration: PR #556 merged in main with current inventory preview and negative-stock allowance.
 - Repository: `Premieros/johna-s`; production Supabase: `azzdesuowpdcoflmyezn`.
 - Baseline: `4b6da2cae7e6d5c379fd80d9cedd8f0bb8be8cde` (#550 released).
 - Branch: `fix/report-read-budget-20261030`.
