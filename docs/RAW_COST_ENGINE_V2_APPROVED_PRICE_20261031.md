@@ -1,8 +1,30 @@
 # Johna's raw cost engine v2 — owner-approved architecture, low-storage cutover
+Repository: `Premieros/johna-s`
+Production Supabase: `azzdesuowpdcoflmyezn`
+Branch: `architecture/raw-cost-engine-approved-price-no-replay-20261031`
+Current PR: `#560`
+Last updated: 2026-10-31
+State: **BLOCKED**
 Date: 2026-10-31 | Branch: `architecture/raw-cost-engine-approved-price-no-replay-20261031`
+
 Status: **DESIGN / GUARDED CANDIDATE; NOT ACTIVE**
 Owner authorization: proceed with implementation, merge and deploy **when validated**. Never skip inventory/accounting integrity gates.
 Related historical attempts: #558 (new negative issue only), #559 (11% synthetic performance improvement), production incident #557.
+
+## Work status
+An internal, non-exposed raw-cost v2 issue/receipt prototype, minimal-storage schema proposal and five-movement rollback-only CI fixture are created on the PR branch. All existing business paths remain unchanged; no production database migration has been applied.
+
+## Guardrails
+Do not modify or discard historical FIFO debts, source-ledger entries, kitchen/sale documents or balanced journals. Do not enable v2 for any material/warehouse still carrying legacy open FIFO debts. No fake business test rows in Supabase production, no per-issue shadow debt tables, no merge/deploy before exact-head CI plus functional, reversal, and legacy-cutover gates.
+
+## Baseline
+PR #559 real-shaped synthetic benchmark: original 953 ms vs 852 ms candidate, ~11% gain only. Actual production Smouha espresso has 717 open debts with 94 estimated/623 unpriced. Inventory stock and accounting are intertwined through existing legacy writer, so a small UPDATE reduction is not a root solution.
+
+## Root-cause ledger
+Upon receipt, `public._raw_fifo_settle_receipt` loops legacy FIFO debts and adjusts individual kitchen events, sales COGS, and historical journals; in production this exceeded the 30-second request budget. The old source issue creates one OV batch and one FIFO debt ledger per negative movement, growing storage without bounded work per receipt.
+
+## Change ledger
+The new candidate uses nullable price-source fields in existing movement ledgers and one shortage aggregate batch per warehouse/material. The internal `private.raw_issue_approved_v2` and `private.raw_receive_approved_v2` functions demonstrate direct approved-price costing and one balanced receipt variance journal, but are deliberately unwired. A five-movement disposable test exercises the prototype. Existing data and application functions are untouched.
 
 ## Executive decision
 Replace **accounting FIFO replay** with **approved-last-known cost frozen at source**, while retaining FEFO/FIFO for **physical lot depletion and expiry control**. Never recalculate 473 historical sales in a warehouse transfer transaction. Store each movement's original approved price, source and timestamp in the existing `inventory_ledger`. Do not create an `OV-*` batch and `raw_fifo_debts` row for every new oversold issue.
@@ -65,3 +87,12 @@ No main merge, no production migration or approval of Johna's-00008 should be re
 - Previous PR #559 exact-head CI #4564 all green, 717 synthetic/473 sales parity and 953→852 ms (~11%) only; insufficient production guarantee.
 - No schema writes to production; pending transfer #00008 was last confirmed pending with no posted ledger rows.
 - Five-movement disposable prototype's CI run/result to be recorded after PR creation; this document intentionally does not claim success before verification.
+
+## Production gate
+**BLOCKED** until the v2 helper test passes CI, all production writers and reversals adopt snapshots, and legacy open FIFO debts are converted with a read-only preflight, accounting reconciliation, safe rollback, closed-period policy and no user-stock testing. Any merge of these inactive candidate files is only a source-code milestone, not a production rollout.
+
+## Next action
+Run PR #560 exact-head CI and correct prototype failures. Finish reversal/idempotency, authorization and old-debt conversion for a tiny synthetic fixture without another 717-row CI test. Then release gated writer changes and audit activation, never auto-approve transfer #00008.
+
+## Mandatory update protocol
+Update this worklog after each CI result, proposed schema release, accounting verification and rollout decision. CI must block on absent/inaccurate active worklog; never imply production changes when code is a candidate. No Merge or Production migration until the relevant release gate passes.
