@@ -53,7 +53,7 @@ describe('historical stock count quantity reconciliation (pure, no posting)', ()
     expect(() => reconcileHistoricalStockCount({
       cutoff, systemAtCutoff: -1e308, countedQuantity: 1e308,
       currentQuantity: -1e308, movementsAfterCutoff: [],
-    })).toThrow('INVALID_EXPECTED_CURRENT');
+    })).toThrow('INVALID_VARIANCE');
   });
 
 });
