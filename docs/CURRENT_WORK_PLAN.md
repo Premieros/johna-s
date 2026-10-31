@@ -1,6 +1,9 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
+- Active emergency performance branch: `fix/fifo-receipt-write-amplification-20261031`; PR #559 (draft).
+- Mandatory active work log: `docs/FIFO_RECEIPT_PERFORMANCE_20261031.md`.
+- Scope: reversible performance-only hot-path optimization for existing FIFO receipt batch writes; preserve all debt, stock, kitchen, sales and journal settlement semantics. Candidate-only: do not deploy or test transfers against production until full 717-debt performance and accounting proof.
 - Active integration branch: `integrate/transfer-negative-preview-20261031`; PR #556 (draft).
 - Mandatory active work log: `docs/TRANSFER_COMBINED_20261031.md`.
 - Scope: one review/release for PRs #554 and #555: negative raw FIFO outbound, live source warehouse balance matching Inventory, preapproval line review/edit/delete and same-transaction snapshot check. Preserve product stock policy, permissions, FIFO/accounting, and business history. No production stock tests. Release only after full integration and approval.
