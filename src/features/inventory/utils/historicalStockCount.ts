@@ -29,7 +29,7 @@ export function reconcileHistoricalStockCount(params: {
   currentQuantity: number;
   movementsAfterCutoff: readonly HistoricalCountMovement[];
 }): HistoricalCountReconciliation {
-  const cutoffTime = Date.parse(params.cutoff);
+  // Require an explicit offset; a browser-local date string is ambiguous across branches.\n  if (!/(Z|[+-]\\d{2}:\\d{2})$/i.test(params.cutoff)) throw new Error('CUTOFF_TIMEZONE_REQUIRED');\n  const cutoffTime = Date.parse(params.cutoff);
   if (!Number.isFinite(cutoffTime)) throw new Error('INVALID_CUTOFF');
   if (cutoffTime > Date.now()) throw new Error('FUTURE_CUTOFF_NOT_ALLOWED');
   const counted = finite(params.countedQuantity, 'COUNTED_QUANTITY');
@@ -44,19 +44,19 @@ export function reconcileHistoricalStockCount(params: {
   for (const movement of params.movementsAfterCutoff) {
     if (!movement.id || seen.has(movement.id)) throw new Error('DUPLICATE_OR_MISSING_MOVEMENT');
     seen.add(movement.id);
-    const at = Date.parse(movement.occurredAt);
+    if (!/(Z|[+-]\\d{2}:\\d{2})$/i.test(movement.occurredAt)) throw new Error('MOVEMENT_TIMEZONE_REQUIRED');\n    const at = Date.parse(movement.occurredAt);
     if (!Number.isFinite(at) || at <= cutoffTime) throw new Error('MOVEMENT_NOT_AFTER_CUTOFF');
     subsequent += finite(movement.signedQuantity, 'MOVEMENT_QUANTITY');
   }
-  const expected = historical + subsequent;
+  finite(subsequent, 'MOVEMENT_TOTAL');\n  const expected = finite(historical + subsequent, 'EXPECTED_CURRENT');
   // Fail closed when the supplied movement trail does not reconcile to live stock.
   if (Math.abs(expected - current) > 0.0001) throw new Error('INCOMPLETE_MOVEMENT_HISTORY');
-  const variance = counted - historical;
+  const variance = finite(counted - historical, 'VARIANCE');\n  const projected = finite(current + variance, 'PROJECTED_CURRENT');
   return {
     systemAtCutoff: historical,
     varianceAtCutoff: variance,
     movementsAfterCutoff: subsequent,
     expectedCurrentBeforeAdjustment: expected,
-    expectedCurrentAfterAdjustment: current + variance,
+    expectedCurrentAfterAdjustment: projected,
   };
 }
