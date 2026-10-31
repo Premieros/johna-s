@@ -261,13 +261,40 @@ export function TransfersPage() {
     finally { writing.current = false; setSaving(false); }
   };
 
+  const transferApprovalFailureMessage = (result: RpcResult | null): string => {
+    const code = String(result?.error || '');
+    if (code === 'INSUFFICIENT_RAW_STOCK' || code === 'INSUFFICIENT_STOCK') {
+      const rawId = String((result as (RpcResult & { raw_material_id?: string }) | null)?.raw_material_id || '');
+      const name = rawMaterials.find(raw => raw.id === rawId)?.name;
+      const details = result as (RpcResult & { required?: number; available?: number }) | null;
+      const required = Number(details?.required);
+      const available = Number(details?.available);
+      const quantity = Number.isFinite(required) && Number.isFinite(available)
+        ? (lang === 'ar' ? `المطلوب ${required}، المتاح ${available}.` : `Required ${required}, available ${available}.`)
+        : '';
+      return lang === 'ar'
+        ? `لا يمكن اعتماد التحويل: رصيد ${name || 'الخامة'} غير كافٍ. ${quantity} راجع رصيد المصدر أو عدّل كمية التحويل.`
+        : `Cannot approve transfer: insufficient ${name || 'item'} stock. ${quantity} Check source balance or change transfer quantity.`;
+    }
+    const known: Record<string, [string, string]> = {
+      TRANSFER_UNIT_MISMATCH: ['وحدة الخامة مختلفة بين المصدر والوجهة.', 'Raw material units differ between branches.'],
+      INVALID_STATUS: ['تم تغيير حالة التحويل. حدّث القائمة قبل إعادة المحاولة.', 'Transfer status changed. Refresh before retrying.'],
+      NOT_ALLOWED: ['ليست لديك صلاحية اعتماد التحويل.', 'You do not have permission to approve transfers.'],
+      AUTH_REQUIRED: ['انتهت الجلسة. سجل الدخول مجددًا.', 'Sign in again before approving.'],
+      TRANSFER_NOT_FOUND: ['التحويل غير متاح. حدّث القائمة.', 'Transfer not found. Refresh the list.'],
+    };
+    if (known[code]) return known[code][lang === 'ar' ? 0 : 1];
+    // Do not expose arbitrary server details; they may contain internal SQL.
+    return uncertainMessage;
+  };
+
   const approve = async (tr: TransferRow) => {
     if (writing.current) return; writing.current = true; setSaving(true);
     try {
     const { data, error } = await api.inventory.approveTransfer({ p_transfer_id: tr.id });
     if (error) { show(error.message, 'error'); return; }
     const result = data as RpcResult | null;
-    if (!result?.success) { show(result?.error === 'TRANSFER_UNIT_MISMATCH' ? (lang === 'ar' ? 'وحدة الخامة مختلفة بين المصدر والوجهة. صحح التعريف قبل التحويل.' : 'Source and destination raw material units differ. Correct the definitions before transferring.') : (result?.detail || result?.error || t('error')), 'error'); return; }
+    if (!result?.success) { show(transferApprovalFailureMessage(result), 'error'); void reloadTransfers(); return; }
     await logAudit('update', 'warehouse_transfers', tr.id, { action: 'approve' }, tr.branch_id);
     show(t('saveSuccess'), 'success');
     reloadTransfers();
