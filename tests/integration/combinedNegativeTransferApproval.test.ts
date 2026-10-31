@@ -19,6 +19,8 @@ describe.skipIf(!local)('combined preview approval with negative warehouse FIFO'
  let lineId='';
  let originalLedger=0;
  let originalDebt=0;
+ let baselineUnbalanced=0;
+ let baselineJournalLines=0;
  const stock=async(wh:string)=>Number((await client.query(
    'SELECT COALESCE(quantity,0)::numeric AS q FROM public.raw_material_warehouse_inventory WHERE raw_material_id=$1 AND branch_id=$2 AND warehouse_id=$3',
    [rawId,ids.branchA,wh])).rows[0]?.q ?? 0);
@@ -41,6 +43,13 @@ describe.skipIf(!local)('combined preview approval with negative warehouse FIFO'
     [transfer,rawId])).rows[0].id;
   originalLedger=Number((await client.query('SELECT COUNT(*)::int n FROM public.inventory_ledger')).rows[0].n);
   originalDebt=Number((await client.query('SELECT COUNT(*)::int n FROM public.raw_fifo_debts')).rows[0].n);
+  baselineUnbalanced=Number((await client.query(`
+    SELECT COUNT(*)::int n FROM (
+      SELECT je.id FROM public.journal_entries je
+      JOIN public.journal_entry_lines line ON line.journal_entry_id=je.id
+      GROUP BY je.id HAVING ABS(SUM(CASE WHEN line.debit>0 THEN line.debit ELSE -line.credit END))>0.000001
+    ) bad`)).rows[0].n);
+  baselineJournalLines=Number((await client.query('SELECT COUNT(*)::int n FROM public.journal_entry_lines')).rows[0].n);
  });
  afterAll(async()=>{if(client){try{await client.query('ROLLBACK')}finally{await client.end()}}});
  const approve=async(expected:unknown[])=> (await client.query<{r:{success:boolean,error?:string}}>(
@@ -119,6 +128,7 @@ describe.skipIf(!local)('combined preview approval with negative warehouse FIFO'
       JOIN public.journal_entry_lines line ON line.journal_entry_id=je.id
       GROUP BY je.id HAVING ABS(SUM(CASE WHEN line.debit>0 THEN line.debit ELSE -line.credit END))>0.000001
     ) bad`);
-  expect(Number(unbalanced.rows[0].n)).toBe(0);
+  expect(Number(unbalanced.rows[0].n)).toBe(baselineUnbalanced);
+  expect(Number((await client.query('SELECT COUNT(*)::int n FROM public.journal_entry_lines')).rows[0].n)).toBe(baselineJournalLines);
  });
 });
