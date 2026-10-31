@@ -1,10 +1,13 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
+- Active emergency branch: `hotfix/transfer-insufficient-stock-message-20261031`; PR #553.
+- Mandatory active work log: `docs/TRANSFER_APPROVAL_HOTFIX_20261031.md`.
+- Scope: transfer UI error accuracy, audit-success separation and candidate-only creation stock preflight. No production stock writes, merge or deployment without final approval. Preserve all FIFO, access rules and existing operation behavior.
 - Repository: `Premieros/johna-s`; production Supabase: `azzdesuowpdcoflmyezn`.
 - Baseline: `4b6da2cae7e6d5c379fd80d9cedd8f0bb8be8cde` (#550 released).
 - Branch: `fix/report-read-budget-20261030`.
-- Mandatory active work log: `docs/REPORT_READ_BUDGET_20261030.md`.
+- Prior released work log: `docs/REPORT_READ_BUDGET_20261030.md`.
 - Owner authorizes a software-only reduction in report load, with no paid upgrade. Serialize allowlisted report network reads per browser, skip abandoned queued reads and preserve shared consumers. Keep sales, payment, kitchen and printing outside the queue. No production business writes, SQL, RLS or accounting changes. Preserve the #550 emergency safeguards. Monthly historical-cost SQL timeout remains a separate unresolved root cause; do not claim this containment fixes it.
 
 ## Active usability polish — 2026-10-25
