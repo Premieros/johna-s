@@ -377,6 +377,10 @@ export function TransfersPage() {
         void loadApprovalPreview(approvalTarget);
         return;
       }
+      try {
+        await logAudit('update', 'warehouse_transfers', approvalTarget.id,
+          { action: 'revise_pending_items', before: original, after: next }, approvalTarget.branch_id);
+      } catch { /* Revision is committed: telemetry must not make it look unsuccessful. */ }
       show(lang === 'ar' ? 'تم حفظ البنود. راجعها ثم اعتمد التحويل.' : 'Items saved. Review before approving.', 'success');
       void reloadTransfers();
       await loadApprovalPreview(approvalTarget);
@@ -397,8 +401,17 @@ export function TransfersPage() {
       await loadApprovalPreview(tr);
       return;
     }
-    await loadTransferSourceBalances(tr.branch_id, tr.from_warehouse_id,
+    const freshBalances = await loadTransferSourceBalances(tr.branch_id, tr.from_warehouse_id,
       latest.map(x => x.raw_material_id || ''));
+    const changedBalance = latest.some(item => item.raw_material_id
+      && approvalBalances[item.raw_material_id] !== freshBalances[item.raw_material_id]);
+    setApprovalBalances(freshBalances);
+    if (changedBalance) {
+      show(lang === 'ar'
+        ? 'تغير رصيد المخزن منذ فتح المعاينة. راجع الأرصدة المحدثة ثم اضغط اعتماد مجددًا.'
+        : 'Source warehouse balances changed since preview. Review the updated amounts, then approve again.', 'error');
+      return;
+    }
     const { data, error } = await api.inventory.approvePreviewedTransfer({
       p_transfer_id: tr.id,
       p_expected_items: approvalOriginal.map(item => ({
