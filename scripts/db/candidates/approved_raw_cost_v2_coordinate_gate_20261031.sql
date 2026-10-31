@@ -42,6 +42,9 @@ BEGIN
      AND p_expiry_date<p_production_date THEN
     RETURN jsonb_build_object('success',false,'error','INVALID_LOT_DATES');
   END IF;
+  IF p_batch_number IS NOT NULL AND btrim(p_batch_number)='' THEN
+    RETURN jsonb_build_object('success',false,'error','EMPTY_LOT_NUMBER');
+  END IF;
   v_result:=private.raw_receive_approved_v2(
     p_raw_material_id,p_branch_id,p_warehouse_id,p_qty,p_receipt_unit_cost,
     p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by
@@ -54,9 +57,6 @@ BEGIN
   FROM public.inventory_ledger l WHERE l.id=v_ledger_id
     AND l.raw_material_id=p_raw_material_id
     AND l.branch_id=p_branch_id AND l.warehouse_id=p_warehouse_id;
-  IF p_batch_number IS NOT NULL AND btrim(p_batch_number)='' THEN
-    RETURN jsonb_build_object('success',false,'error','EMPTY_LOT_NUMBER');
-  END IF;
   IF p_batch_number IS NOT NULL THEN
     v_batch_no:=btrim(p_batch_number);
   END IF;
