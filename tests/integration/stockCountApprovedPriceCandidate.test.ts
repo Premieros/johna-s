@@ -56,4 +56,24 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
     const frozen=(await db.query('SELECT unit_cost FROM public.stock_count_items WHERE stock_count_id=$1',[count])).rows;
     expect(frozen.every(x=>Number(x.unit_cost)===0)).toBe(true);
   });
+  it('reads explicit catalog zero at count time but not before catalog update', async () => {
+    // The canonical reader candidate is never installed in production here.
+    // This transaction is deliberately rolled back by afterAll.
+    const pricing = readFileSync('scripts/candidates/latest_approved_price_zero_catalog_NOT_FOR_PRODUCTION_20261101.sql','utf8')
+      .replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,'');
+    await db.query(pricing);
+    const now = await db.query(
+      "SELECT unit_cost,price_source FROM private.latest_approved_raw_prices($1,ARRAY[$2]::uuid[],now()) WHERE raw_material_id=$2",
+      [branch,raw],
+    );
+    expect(Number(now.rows[0].unit_cost)).toBe(0);
+    expect(now.rows[0].price_source).toBe('catalog_zero');
+    const before = await db.query(
+      "SELECT unit_cost,price_source FROM private.latest_approved_raw_prices($1,ARRAY[$2]::uuid[],now()-interval '30 years') WHERE raw_material_id=$2",
+      [branch,raw],
+    );
+    expect(before.rows[0].unit_cost).toBeNull();
+    expect(before.rows[0].price_source).toBe('unpriced');
+  });
+
 });
