@@ -14,6 +14,13 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // Source-contract tests inspect code, SQL and static invariants. They do
+    // not need a simulated browser, unlike React hooks and component tests.
+    // Keep the same tests/coverage, but avoid jsdom startup per contract file.
+    // Vitest resolves these globs before creating each test environment.
+    environmentMatchGlobs: [
+      ['tests/unit/**/*Contract.test.ts', 'node'],
+    ],
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/unit/**/*.test.{ts,tsx}', 'tests/components/**/*.test.{ts,tsx}'],
     exclude: ['tests/integration/**', 'node_modules', 'dist'],
