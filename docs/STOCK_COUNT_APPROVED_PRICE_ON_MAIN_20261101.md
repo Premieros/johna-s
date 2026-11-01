@@ -36,6 +36,14 @@ Candidate updated at GitHub commit ec48989eee960751aadd395354bafa88be596491. No 
 ## Owner quantity-only count UX decision
 The count document UI and Excel template must capture physical quantities, not manually entered raw-material costs. The existing central price reader is authoritative as of the count document's creation time when posting; old workbook price columns are ignored. Count screens no longer display misleading pre-application valuations from draft line cost. Database `unit_cost` remains as a legacy/audit field and the candidate freezes the posting price there, but it must not be treated as a user-provided pricing authority. Changes staged in PR #571; no production activation or customer count applied. Exact-head UI, workbook, DB and accounting tests are required.
 
+## Production read-only blocker audit — 2026-11-01
+- Target counts `Johna's-00008` (407 raw lines) and `Johna's-00009` (402 raw lines) remain `draft`, not approved/applied.
+- Existing canonical price read model, evaluated at each count's `created_at`, returned **140 unpriced** raw materials in 00008 and **68 unpriced** in 00009 (unit_cost NULL, source `unpriced`). Valid positive prices: 267 and 334, respectively. Do not mistake returned rows for valid pricing coverage.
+- Sources for 00008: pricing 54, purchase 157, stock_count 56, unpriced 140. Sources for 00009: pricing 244, purchase 90, unpriced 68.
+- Existing legacy debt table currently has 19,795 open debt rows matching the counted coordinates: 10,585 for warehouse 00008 and 9,210 for warehouse 00009. The approved-v2 helper explicitly blocks those coordinates with `LEGACY_FIFO_POSITION_NOT_CUTOVER`.
+- Therefore **release and posting remain blocked on two independent production prerequisites**: creating or recovering authentic approved price events for the unpriced materials via existing authorized workflow, and reconciling/cutting over legacy debt balances without rewriting historical journals. DO NOT invent prices, use stale line costs, bypass historical debt guard, or force draft → applied through privileged SQL.
+- UI-only quantity workflow PR #574 passed full CI and merged to main at `25dd4057ab87ef307578f71f6f477d8bf17c1c15`. Financial PR #571 remains source-only and open.
+
 ## Next action
 Run exact-head CI, fix any integration regression, confirm accounting ledger/report value equality, then prepare audited migration and normal authorized application flow.
 
