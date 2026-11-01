@@ -38,3 +38,9 @@ Verified production public.adjust_raw_stock: it is branch-aggregate rather than 
 
 ## Reporting consumer verification — 2026-11-01
 Read-only production function inspection confirms public.get_raw_material_consumption_report uses a visible_ledger CTE and SUM(total_cost) for opening_value, period.net_value and other_net_value. The proposed zero-quantity 'revaluation' entry is included in net/other value rather than sales-consumption value (which filters sale/kitchen_send). This supports the algebra of closing_value but is NOT a full integration test: visibility via private.financial_reference_visible, time cutoffs, other reports, actual FIFO debt settlement, and _raw_add receipt settlement need explicit test coverage. The candidate remains OFF and unmerged.
+
+## 2026-11-01 follow-up — latest-price candidate integration
+- Production atomicity migration merged via PR #570 and applied directly through Supabase; pricing PR remains unmerged/unreleased.
+- Added rollback-only local integration test fixture for zero-value raw surplus plus raw shortage whose physical FIFO batch has a different cost. Test explicitly asserts the zero-quantity revaluation bridge and post-count quantity.
+- PR #569 was marked ready for review to enable validation; head 755b158063f17c07a2ca66fae37b048f7a4674ce. At last inspection GitHub returned no workflow runs for this head; there is NO verified integration passing result.
+- Production November counts remain drafts. No production financial posting or approved-price migration authorized until checks pass and source-ledger consistency is verified.
