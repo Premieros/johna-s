@@ -35,6 +35,7 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
     await db.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active) VALUES($1,$2,'FIFO cost test raw',$3,0,true)",[shortRaw,'QA-'+shortRaw.slice(0,8),branch]);
     await db.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active) VALUES($1,$2,'Unpriced raw',$3,0,true)",[unpricedRaw,'QA-'+unpricedRaw.slice(0,8),branch]);
     // No historical zero price can be inferred if the catalog value was updated after the count.
+    // A future catalog timestamp suppresses zero fallback for as-of count reads.
     await db.query("UPDATE public.raw_materials SET updated_at=now()+interval '1 day' WHERE id=$1",[unpricedRaw]);
     const initial=(await db.query("SELECT public._raw_add($1,$2,$3,5,12,NULL,NULL,NULL,'adjustment','qa_seed',NULL,NULL,NULL) r",[shortRaw,branch,warehouse])).rows[0].r;
     if (!initial?.success) throw new Error('QA_INITIAL_RAW_ADD_FAILED '+JSON.stringify(initial));
