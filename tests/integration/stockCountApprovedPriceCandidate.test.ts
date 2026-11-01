@@ -35,25 +35,18 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
     await db.query('SET LOCAL ROLE authenticated');
   },45000);
   afterAll(async () => { if(db){ await db.query('ROLLBACK').catch(()=>{}); await db.end(); } });
-  it('applies zero-priced surplus while preserving quantity and zero-valued ledger', async () => {
+  it('rejects unpriced materials atomically without altering inventory or accounts', async () => {
+    const before=(await db.query("SELECT quantity FROM public.raw_material_warehouse_inventory WHERE raw_material_id=$1 AND warehouse_id=$2",[shortRaw,warehouse])).rows[0];
     const {rows}=await db.query('SELECT public.apply_stock_count($1) result',[count]);
-    expect(rows[0].result.success,JSON.stringify(rows[0].result)).toBe(true);
+    expect(rows[0].result.success).toBe(false);
+    expect(rows[0].result.detail).toContain('APPROVED_RAW_PRICE_UNAVAILABLE');
     await db.query('RESET ROLE');
-    const result=(await db.query("SELECT status FROM public.stock_counts WHERE id=$1",[count])).rows[0];
-    expect(result.status).toBe('applied');
-    const items=(await db.query("SELECT raw_material_id,unit_cost,counted_quantity FROM public.stock_count_items WHERE stock_count_id=$1",[count])).rows;
-    expect(Number(items[0].unit_cost)).toBe(0);
-    expect(items).toHaveLength(2);
-    expect(items.every(x=>Number(x.unit_cost)===0)).toBe(true);
-    expect(Number(items.find(x=>x.raw_material_id===raw)?.counted_quantity)).toBe(3);
-    expect(Number(items.find(x=>x.raw_material_id===shortRaw)?.counted_quantity)).toBe(2);
-    const ledger=(await db.query("SELECT COALESCE(sum(quantity),0) q,COALESCE(sum(total_cost),0) v FROM public.inventory_ledger WHERE reference_id=$1 AND reference_type='stock_count'",[count])).rows[0];
-    expect(Number(ledger.q)).toBe(0);
-    expect(Number(ledger.v)).toBe(0);
-    const bridge=(await db.query("SELECT quantity,total_cost,before_qty,after_qty FROM public.inventory_ledger WHERE reference_id=$1 AND raw_material_id=$2 AND entry_type='revaluation'",[count,shortRaw])).rows;
-    expect(bridge).toHaveLength(1);
-    expect(Number(bridge[0].quantity)).toBe(0);
-    expect(Number(bridge[0].total_cost)).toBe(36);
-    expect(Number(bridge[0].after_qty)).toBe(2);
+    expect((await db.query('SELECT status FROM public.stock_counts WHERE id=$1',[count])).rows[0].status).toBe('approved');
+    const after=(await db.query("SELECT quantity FROM public.raw_material_warehouse_inventory WHERE raw_material_id=$1 AND warehouse_id=$2",[shortRaw,warehouse])).rows[0];
+    expect(Number(after.quantity)).toBe(Number(before.quantity));
+    const ledger=(await db.query("SELECT count(*)::int n FROM public.inventory_ledger WHERE reference_id=$1 AND reference_type='stock_count'",[count])).rows[0];
+    expect(ledger.n).toBe(0);
+    const frozen=(await db.query('SELECT unit_cost FROM public.stock_count_items WHERE stock_count_id=$1',[count])).rows;
+    expect(frozen.every(x=>Number(x.unit_cost)===0)).toBe(true);
   });
 });
