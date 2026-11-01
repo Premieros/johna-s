@@ -28,6 +28,9 @@ describe.skipIf(!local)('stock count apply is atomic on late FIFO shortage', () 
     await db.query("SELECT set_config('app.register_branch','on',true)");
     await db.query("INSERT INTO public.users(id,email,role,branch_id,is_active) VALUES($1,$2,'warehouse_manager',$3,true)", [actor, actor + '@atomic.test', branch]);
     await db.query("SELECT set_config('app.register_branch','off',true)");
+    // CI role seeds vary; grant only the count-apply capability in this
+    // rollback-only fixture, matching the production warehouse manager role.
+    await db.query("UPDATE public.roles SET permissions=(COALESCE(permissions,'[]'::jsonb)||'[\\"inventory.count.apply\\"]'::jsonb) WHERE role='warehouse_manager'");
     await db.query(`INSERT INTO public.stock_counts(id,count_number,branch_id,warehouse_id,status,count_type,created_by,approved_by,approved_at)
       VALUES($1,'QA-ATOMIC-'||left($1::text,8),$2,$3,'approved','partial',$4,$4,now())`, [count, branch, warehouse, actor]);
     await db.query(`INSERT INTO public.stock_count_items(id,stock_count_id,product_id,system_quantity,counted_quantity,unit_cost)
