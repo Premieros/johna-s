@@ -97,7 +97,7 @@ BEGIN
           v_res := private.raw_receive_approved_v2(
             v_item.raw_material_id, v_count.branch_id, v_count.warehouse_id,
             v_variance, v_final_price,
-            'adjustment', 'stock_count', v_count.id, v_count.count_number, auth.uid()
+            'adjustment', 'stock_count', v_count.id, v_count.count_number, auth.uid(), v_count.created_at
           );
           IF NOT COALESCE((v_res->>'success')::boolean, false) THEN
             RAISE EXCEPTION 'STOCK_COUNT_ITEM_FAILED: %', 'RAW_ADJUST_FAILED';
