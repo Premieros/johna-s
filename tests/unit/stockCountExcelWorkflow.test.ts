@@ -31,9 +31,12 @@ describe('stock count Excel workflow contract', () => {
     expect(page).toContain('quantity < 0');
   });
 
-  it('blocks a second count while the same warehouse has draft, submitted, or approved work', () => {
+  it('blocks unfinished work and same-month approved counts, not approved counts from an earlier month', () => {
     const page = read('src/features/inventory/pages/StockCountsPage.tsx');
-    expect(page).toContain("count.status === 'draft' || count.status === 'submitted' || count.status === 'approved'");
+    expect(page).toContain("count.status === 'draft' || count.status === 'submitted'");
+    expect(page).toContain("count.status === 'approved' && (() => {");
+    expect(page).toContain('created.getFullYear() === now.getFullYear()');
+    expect(page).toContain('created.getMonth() === now.getMonth()');
     expect(page).toContain('Finish or reject it before creating another count.');
     expect(page).toContain('return;');
   });
