@@ -1,6 +1,7 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
+- Active CI-only GitHub Pages verified-publish gate `fix/github-pages-deploy-after-verified-main-20261101`, PR #564; Mandatory active work log: `docs/GITHUB_PAGES_VERIFIED_DEPLOY_20261101.md`. Production Pages currently publishes before full Verify main completes; block unverified/stale deploys without changing any Supabase or financial code.
 - Active stock-count atomicity recovery `fix/stock-count-atomicity-rebase-20261101`, PR #570; Mandatory active work log: `docs/STOCK_COUNT_ATOMICITY_REBASE_20261101.md`. Only fixes rollback of partial count posting; latest-price policy remains blocked in PR #569.
 - Owner requested evidence-based optimization of redundant CI tests without losing coverage. Baseline Verify main #4576: unit suite ~235 seconds, browser ~260 seconds, DB ~134 seconds, builds three times in parallel check jobs. Experimental Node environment for source-contract tests only; no test deletion, database migration or production deployment. CI gates remain mandatory.
 - Active branch: `feat/raw-cost-v2-coordinate-gate-20261031`; PR #561 (candidate-only).

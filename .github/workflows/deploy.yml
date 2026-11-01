@@ -1,9 +1,12 @@
 name: Deploy to GitHub Pages
 
+# Publish only a commit that has already passed ALL four verification jobs.
+# GitHub Pages does not receive an independent, unverified push deployment.
 on:
-  push:
+  workflow_run:
+    workflows: ["Verify main"]
+    types: [completed]
     branches: [main, master]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -27,9 +30,26 @@ env:
 
 jobs:
   build:
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_repository.full_name == github.repository &&
+        (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'master')
+      }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Ensure verified source is still current branch HEAD
+        env:
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+          VERIFIED_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          case "$VERIFIED_BRANCH" in main|master) ;; *) exit 1 ;; esac
+          actual="$(git ls-remote origin "refs/heads/$VERIFIED_BRANCH" | cut -f1)"
+          test -n "$actual" && test "$actual" = "$VERIFIED_SHA"
 
       - uses: actions/setup-node@v4
         with:
@@ -66,6 +86,8 @@ jobs:
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -86,5 +108,16 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Refuse stale source between verification and publication
+        env:
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+          VERIFIED_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          case "$VERIFIED_BRANCH" in main|master) ;; *) exit 1 ;; esac
+          actual="$(git ls-remote origin "refs/heads/$VERIFIED_BRANCH" | cut -f1)"
+          test -n "$actual" && test "$actual" = "$VERIFIED_SHA"
       - id: deployment
         uses: actions/deploy-pages@v4
