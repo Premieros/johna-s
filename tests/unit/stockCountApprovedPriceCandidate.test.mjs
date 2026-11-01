@@ -10,9 +10,10 @@ test('stock count candidate uses central existing price source', () => {
   assert.match(sql, /private\.latest_approved_raw_prices\(/);
   assert.match(sql, /v_count\.branch_id,ARRAY\[v_item\.raw_material_id\],v_count\.created_at/);
 });
-test('known zero prices are not filtered out', () => {
-  assert.doesNotMatch(sql, /v_final_price\s*>\s*0/);
-  assert.match(sql, /COALESCE\(v_final_price,v_item\.unit_cost,0\)/);
+test('unpriced raw lines fail closed without fallback to snapshot, average or fabricated zero', () => {
+  assert.match(sql, /v_final_price IS NULL OR v_final_price <= 0/);
+  assert.match(sql, /APPROVED_RAW_PRICE_UNAVAILABLE/);
+  assert.doesNotMatch(sql, /v_final_price := COALESCE\(v_final_price,v_item\.unit_cost,0\)/);
 });
 test('raw shortage pricing is not calculated from FIFO total_cost', () => {
   assert.match(sql, /v_value := round\(-v_variance \* COALESCE\(v_final_price, 0\), 2\)/);
