@@ -64,10 +64,11 @@ BEGIN
           FROM private.latest_approved_raw_prices(
             v_count.branch_id,ARRAY[v_item.raw_material_id],v_count.created_at
           ) p WHERE p.raw_material_id=v_item.raw_material_id;
-        -- The canonical approved-price projection excludes zero and unpriced
-        -- sources. Do not fall back to stale line cost, warehouse average or FIFO.
+        -- Explicitly recorded zero is a valid cost. Missing (NULL / unpriced)
+        -- and negative prices are invalid. The source projection must be updated
+        -- separately to preserve legitimate zero-priced source events.
         -- Applied historical stock counts are filtered by its visibility predicate.
-        IF v_final_price IS NULL OR v_final_price <= 0 THEN
+        IF v_final_price IS NULL OR v_final_price < 0 THEN
           RAISE EXCEPTION 'APPROVED_RAW_PRICE_UNAVAILABLE material % branch % as_of %',
             v_item.raw_material_id,v_count.branch_id,v_count.created_at;
         END IF;
