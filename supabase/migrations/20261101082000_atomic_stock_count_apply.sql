@@ -223,7 +223,6 @@ BEGIN
       );
   END;
 END;
-$function$
-
+$function$;
 
 COMMIT;
