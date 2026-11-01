@@ -10,8 +10,8 @@ test('stock count candidate uses central existing price source', () => {
   assert.match(sql, /private\.latest_approved_raw_prices\(/);
   assert.match(sql, /v_count\.branch_id,ARRAY\[v_item\.raw_material_id\],v_count\.created_at/);
 });
-test('unpriced raw lines fail closed without fallback to snapshot, average or fabricated zero', () => {
-  assert.match(sql, /v_final_price IS NULL OR v_final_price <= 0/);
+test('missing raw prices fail closed; explicitly approved zero is allowed', () => {
+  assert.match(sql, /v_final_price IS NULL OR v_final_price < 0/);
   assert.match(sql, /APPROVED_RAW_PRICE_UNAVAILABLE/);
   assert.doesNotMatch(sql, /v_final_price := COALESCE\(v_final_price,v_item\.unit_cost,0\)/);
 });
