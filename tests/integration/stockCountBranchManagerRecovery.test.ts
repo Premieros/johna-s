@@ -30,8 +30,12 @@ describe.skipIf(!local)('branch manager count permission and unposted approval c
     db=openDb(url); await db.connect(); await db.query('BEGIN');
     await db.query("INSERT INTO public.branches(id,name) VALUES($1,'Count permission QA')",[branch]);
     await db.query("INSERT INTO public.warehouses(id,branch_id,name,is_active,is_default) VALUES($1,$2,'Count QA WH',true,true)",[warehouse,branch]);
+    // CI creates synthetic identities through the established local
+    // registration bypass; never weaken the live user-role guard.
+    await db.query("SELECT set_config('app.register_branch','on',true)");
     await db.query("INSERT INTO public.users(id,email,role,branch_id,is_active) VALUES($1,$2,'branch_manager',$3,true),($4,$5,'warehouse_manager',$3,true)",
       [actor,'count-actor-'+actor+'@example.test',branch,approver,'count-reviewer-'+approver+'@example.test']);
+    await db.query("SELECT set_config('app.register_branch','off',true)");
     // Reproduce the live missing permission, regardless of canonical seed.
     await db.query("UPDATE public.roles SET permissions=(permissions-'inventory.count.create') WHERE role='branch_manager'");
     const migration=readFileSync(
