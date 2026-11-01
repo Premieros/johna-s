@@ -100,6 +100,21 @@ The disposable database test installed the catalog-zero pricing candidate *after
 ## Latest integration fixture repair — 2026-11-01
 The missing-price rollback fixture mistakenly created a raw material with positive `default_cost=1`, which may automatically generate a legitimate approved price event via the catalog trigger. Changed the fixture to an explicit zero catalog value whose `updated_at` is later than the synthetic count, so the canonical as-of reader must return `unpriced`. Commit `5262daab0ce808ea26a282e35787c4a7eee4fe9d`. Still source-only; do not merge/deploy before full exact-head CI and financial movement cutover verification.
 
+## Single consolidated completion gate — owner request (2026-11-01)
+**One execution batch, one acceptance gate; no unrelated small follow-ups.**
+
+**Verified starting point:** PR #571 open, not mergeable as currently reported, 1 commit behind main and 60 commits ahead; the latest PR-head `6355cac4d0aab2a28027142a939c38cbdc81f1bf` has no returned commit workflow run. The stock-count SQL and v2 movement functions are source candidates marked NOT FOR PRODUCTION, not a deployable migration. The previously merged quantity-only UI is on main.
+
+### Required work in this single batch
+1. **Pricing contract:** existing `private.latest_approved_raw_prices`; branch and count timestamp, truly recorded zero vs missing, source provenance, latest source priority, positive and zero amounts, UOM. Never substitute FIFO cost or invent zero.
+2. **Every raw material writer:** inventory issue, receipt, purchases, transfers, kitchen/production, returns/reversals, adjustments and stock counts must route through approved-last-price valuation, preserving warehouse quantities, batches, permissions, concurrency and journal parity. Check that there are no active legacy FIFO valuation callers after cutover.
+3. **Historical compatibility:** existing FIFO debt/negative positions must coexist safely without deleting or bulk replaying old debt records. Test later receipts, shortages, branch movements, retries and reversals to prevent double counts and double settlement.
+4. **Stock count application:** preserve the two real count documents and their entered quantities; after required authorization steps, atomically apply once, using price at count time (zero remains zero), with ledger and balanced journal matching the applied difference. Do not bypass `draft → submitted → approved → applied`.
+5. **Verification and release:** run source contracts and disposable Postgres end-to-end scenarios, full GitHub exact-head CI, fix any failures, resolve main divergence, create an actual migration, merge only once fully verified, deploy through authorized Supabase/Vercel path, verify production version, then post counts and independently reconcile physical warehouse stock/ledger/journals.
+
+### Hard stop conditions
+Do **not** merge or deploy a NOT FOR PRODUCTION source candidate, assume an absent CI run means pass, force user approval, treat an unpriced row as zero without provenance, or alter production balances to satisfy a test. If a gate is blocked, record **one precise blocker with observed evidence and next required action**, not a series of tiny test commits. This replaces all conflicting status notes in this file as the current next-step contract.
+
 ## Next action
 Run exact-head CI, fix any integration regression, confirm accounting ledger/report value equality, then prepare audited migration and normal authorized application flow.
 
