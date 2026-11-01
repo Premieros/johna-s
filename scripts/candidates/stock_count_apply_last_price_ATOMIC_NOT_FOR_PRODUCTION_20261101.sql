@@ -64,6 +64,7 @@ BEGIN
           FROM private.latest_approved_raw_prices(
             v_count.branch_id,ARRAY[v_item.raw_material_id],v_count.created_at
           ) p WHERE p.raw_material_id=v_item.raw_material_id;
+        -- Existing central approved-price engine; a known zero remains valid.
         v_final_price := COALESCE(v_final_price,v_item.unit_cost,0);
         -- Note: a stock_count source must be eligible only if it is historically
         -- approved/applied. The read model's visibility predicate controls this.
@@ -97,9 +98,17 @@ BEGIN
             -v_variance, 'adjustment', 'stock_count', v_count.id,
             v_count.count_number, auth.uid()
           );
+          IF COALESCE((v_res->>'success')::boolean,false) IS NOT TRUE THEN
+            RAISE EXCEPTION 'STOCK_COUNT_REMOVE_FAILED: %',COALESCE(v_res->>'error','unknown');
+          END IF;
           v_shortage := COALESCE((v_res->>'shortage')::numeric, 0);
           IF v_shortage > 0 THEN
             RAISE EXCEPTION 'STOCK_COUNT_ITEM_FAILED: %', 'STOCK_COUNT_SHORTAGE';
+          END IF;
+          -- Do not post a journal inconsistent with FIFO-valued ledger.
+          IF round(COALESCE((v_res->>'total_cost')::numeric,0),2)
+             IS DISTINCT FROM round(-v_variance * v_final_price,2) THEN
+            RAISE EXCEPTION 'STOCK_COUNT_LEDGER_VALUATION_MISMATCH material %',v_item.raw_material_id;
           END IF;
           v_value := round(-v_variance * COALESCE(v_final_price, 0), 2);
           v_rm_delta := v_rm_delta - v_value;
