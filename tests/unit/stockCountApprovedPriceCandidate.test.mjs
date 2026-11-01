@@ -34,3 +34,8 @@ test('checks both raw and product removal success before applying', () => {
   assert.match(sql, /PRODUCT_STOCK_COUNT_REMOVE_FAILED/);
   assert.match(sql, /UPDATE public\.stock_counts\s+SET status = 'applied'/);
 });
+
+test('value-only bridge requires fully removed quantity', () => {
+  assert.match(sql, /STOCK_COUNT_REMOVED_QUANTITY_MISMATCH/);
+  assert.match(sql, /\(v_res->>'removed'\)::numeric/);
+});
