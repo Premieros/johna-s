@@ -154,12 +154,17 @@ describe('stock count Excel validation', () => {
     });
     expect(result.errors.some((error) => error.includes('معرف الخامة'))).toBe(true);
   });
-  it('imports an optional stock-unit cost and rejects invalid/conflicting prices', () => {
-    const parse = (price: unknown, extra = {}) => parseStockCountExcelRows({ rows: [{ ...baseRows()[0], 'سعر الوحدة': price, ...extra }], materials, branchId: 'branch-1', warehouseId: 'warehouse-1', requireComplete: false, isAr: true });
-    expect(parse(22.75).lines[0].unit_cost).toBe('22.75');
-    expect(parse('').lines[0].unit_cost).toBeUndefined();
-    for (const value of [0, -1, 'bad', Infinity, 100000000]) expect(parse(value).errors).not.toHaveLength(0);
-    expect(parse(22.75, { unit_cost: 25 }).errors).not.toHaveLength(0);
+  it('ignores prices in old workbooks and exports no price column', () => {
+    const columns = stockCountExcelColumns(true);
+    expect(Object.keys(columns)).not.toContain('unitCost');
+    const imported = parseStockCountExcelRows({
+      rows: [{ ...baseRows()[0], 'سعر الوحدة': 999, unit_cost: -10 }],
+      materials, branchId: 'branch-1', warehouseId: 'warehouse-1',
+      requireComplete: false, isAr: true,
+    });
+    expect(imported.errors).toEqual([]);
+    expect(imported.lines).toHaveLength(1);
+    expect(imported.lines[0]).not.toHaveProperty('unit_cost');
   });
 
 });
