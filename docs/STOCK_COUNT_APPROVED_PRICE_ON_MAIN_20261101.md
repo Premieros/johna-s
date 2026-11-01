@@ -6,6 +6,27 @@ Current PR: `#571`
 Last updated: 2026-11-01
 State: **BLOCKED**
 
+## OWNER-LOCKED EXECUTION PLAN — FIFO → EXISTING LAST RAW PRICE (2026-11-01)
+**Priority: authoritative owner decision. Read this before making ANY further changes.** Any older log text proposing FIFO valuation, a FIFO-only count fix, a separate pricing engine, or mandatory bulk historical FIFO debt replay is superseded by this section. Do not switch architecture without explicit new owner instruction.
+
+**Goal:** Replace FIFO costing for **all new raw-material movements** with the existing centralized last-price calculation `private.latest_approved_raw_prices` (and its existing catalog-source data), not a new engine. The same price must drive movement ledger, stock count variance, accounting, returns, transfers, production/kitchen, purchases and other callers as appropriate. **An explicitly recorded zero price remains zero.** Distinguish actual zero from absent/unknown price; never invent a positive price or silently substitute FIFO, averages or stale count-line cost. Preserve the stock count as quantities only; evaluate prices as of count time. Count items 00008 and 00009 must retain their entered quantities.
+
+### Fixed scope and sequential delivery
+1. **Single existing price source:** audit its authorization, source precedence, branch, timestamp, missing vs zero, catalog zero historical validity, UOM normalization, and immutability of posted cost. Reuse/extend existing reader, not new pricing tables or engines.
+2. **One canonical approved-last-price physical movement path:** map every legacy raw receipt/issue/transfer, kitchen, sale, manufacturing, return, reversal and stock count writer. Replace FIFO *valuation* and new per-movement debt creation for new writes; maintain lot identity, warehouse and branch quantities, concurrency locks, expiry metadata and permissions. Prefer the smallest supported change per caller, no unnecessary redesign.
+3. **Legacy coexistence rather than replay:** preserve historical FIFO lots/debts/journals unchanged. Provide a tested, explicit bridge for existing outstanding debt coordinates so new approved-price movements work without replaying tens of thousands of old entries, do not double-settle on later receipts, and remain reversible. No silent deletion, corruption or resetting historical cost.
+4. **Stock count atomic posting:** raw count difference = counted quantity − locked current warehouse quantity; use approved last raw price at the count time including zero; match signed movement value in inventory ledger and balanced journal. Any failure must abort all changes. Keep workflow: draft → submitted → approved → applied, with real user permissions; no direct database status hacks.
+5. **Tests and gates:** disposable Postgres integration of zero, missing, positive, multi-line abort, cross-warehouse, negative quantities, existing FIFO debt, later receipts, reversals, price provenance, role isolation, ledger/journal parity; then exact-head CI and audited deployment. Monitor and verify production configuration. Only THEN apply counts `Johna's-00008` / `Johna's-00009` via authorized workflow, and reconcile resulting stock/journal. Never apply them while still `draft` or while any data-integrity test fails.
+
+### Current known state / no false completion
+- UI quantity-only price removal was merged separately in PR #574 (main commit `25dd4057`).
+- Pricing and physical movement candidate remains PR #571: **DO NOT DEPLOY** until the above tests and a migration are ready.
+- Read-only audit of both counts found 140 + 68 previously unpriced raw lines, all with `raw_materials.default_cost=0` and `updated_at <= count.created_at`; zero must be honored only with correct source/timestamp semantics.
+- Existing open FIFO debts affected 72 + 77 warehouse/material coordinates and 10,585 + 9,210 debt rows respectively. Do not confuse legacy record count with required new design complexity.
+- Both counts were still `draft` and unapplied at last verification. No live postings or stock adjustments have been authorized by simply editing this document.
+- Update **this** log and `docs/CURRENT_WORK_PLAN.md` after each actual step, with evidence of test, merge or production application. Never describe proposed source-only code as deployed.
+
+
 ## Work status
 Source-only approved-price stock-count candidate rebased onto atomicity-fixed main. No production price migration or November stock count applied.
 
