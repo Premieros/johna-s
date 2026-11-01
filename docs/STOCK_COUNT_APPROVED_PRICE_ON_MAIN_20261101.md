@@ -94,6 +94,9 @@ Added rollback-only local PostgreSQL coverage for **both** zero-price stock-coun
 ## Last-price vs FIFO valuation regression — 2026-11-01
 Added a disposable-Postgres test proving the intended decisive distinction: an existing raw batch originally cost **12**, while the central approved pricing event says **7**; applying a raw stock-count shortage of **3** must result in ledger quantity **−3** and value **−21**, not FIFO value −36. This is a new test fixture, **not a successful test run or production posting**; commit `6a113a14711a0bdd540802719a4f75d1aa3b2dbf`. Earlier zero-price in/out tests are also staged. The PR still has no exact-head GitHub workflow results from the commit-run lookup. The owner-locked plan remains full raw movement FIFO → existing latest-price, not a stock-count-only workaround. No production cutover while existing legacy debt coexistence remains untested.
 
+## Integration-fixture correction — 2026-11-01
+The disposable database test installed the catalog-zero pricing candidate *after* the initial missing-price test, so that test was not exercising the same reader later used by the posting scenarios. Corrected setup to install the candidate before all fixture execution and introduced a separate truly unpriced raw material (positive catalog default, no approved source). This keeps the all-or-nothing missing-price regression meaningful while testing catalog-zero receipt/issue and last-approved-price-vs-FIFO under one consistent reader. Commits `141a8ee`, `d027cd7`. No claim of passing database run; latest exact-head CI still unconfirmed, no production deployment or count application.
+
 ## Next action
 Run exact-head CI, fix any integration regression, confirm accounting ledger/report value equality, then prepare audited migration and normal authorized application flow.
 
