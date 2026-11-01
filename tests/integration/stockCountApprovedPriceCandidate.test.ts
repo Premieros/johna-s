@@ -23,6 +23,10 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
     await db.query(schema);
     const helpers=readFileSync('scripts/db/candidates/approved_raw_cost_engine_v2_helpers_20261031.sql','utf8');
     await db.query(helpers);
+    // Install the candidate price reader first, so every count movement shares it.
+    const pricing=readFileSync('scripts/candidates/latest_approved_price_zero_catalog_NOT_FOR_PRODUCTION_20261101.sql','utf8')
+      .replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,'');
+    await db.query(pricing);
     const candidate=readFileSync('scripts/candidates/stock_count_apply_last_price_ATOMIC_NOT_FOR_PRODUCTION_20261101.sql','utf8');
     await db.query(candidate);
     await db.query("INSERT INTO public.branches(id,name) VALUES($1,'Latest price QA')",[branch]);
@@ -42,7 +46,7 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
     await db.query('SET LOCAL ROLE authenticated');
   },45000);
   afterAll(async () => { if(db){ await db.query('ROLLBACK').catch(()=>{}); await db.end(); } });
-  it('rejects unpriced materials atomically without altering inventory or accounts', async () => {
+  it('rejects an unpriced material atomically without altering inventory or accounts', async () => {
     const before=(await db.query("SELECT quantity FROM public.raw_material_warehouse_inventory WHERE raw_material_id=$1 AND warehouse_id=$2",[shortRaw,warehouse])).rows[0];
     const {rows}=await db.query('SELECT public.apply_stock_count($1) result',[count]);
     expect(rows[0].result.success).toBe(false);
@@ -59,9 +63,6 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
   it('reads explicit catalog zero at count time but not before catalog update', async () => {
     // The canonical reader candidate is never installed in production here.
     // This transaction is deliberately rolled back by afterAll.
-    const pricing = readFileSync('scripts/candidates/latest_approved_price_zero_catalog_NOT_FOR_PRODUCTION_20261101.sql','utf8')
-      .replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,'');
-    await db.query(pricing);
     const now = await db.query(
       "SELECT unit_cost,price_source FROM private.latest_approved_raw_prices($1,ARRAY[$2]::uuid[],now()) WHERE raw_material_id=$2",
       [branch,raw],
