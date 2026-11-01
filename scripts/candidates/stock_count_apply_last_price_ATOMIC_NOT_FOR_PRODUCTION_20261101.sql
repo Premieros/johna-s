@@ -1,5 +1,6 @@
 -- DO NOT DEPLOY: candidate value-only ledger bridge not integration tested.
--- Price zero is valid. This patch is deliberately staged for testing only.
+-- Only a documented approved price from the existing central read model is valid.
+-- A missing price must fail closed; the model currently indexes only positive prices.
 -- In particular, the stock ledger still records FIFO costs for shortages, while
 -- the journal below records approved price. They must be reconciled before ship.
 CREATE OR REPLACE FUNCTION public.apply_stock_count(p_stock_count_id uuid)
@@ -58,18 +59,18 @@ BEGIN
 
       IF v_item.raw_material_id IS NOT NULL THEN
         -- Resolve as of the physical count document creation time (pending explicit
-        -- physical counted_at support). A known zero is a valid value.
+        -- physical counted_at support). Never invent a price from count snapshots.
         SELECT p.unit_cost,p.price_source
           INTO v_final_price,v_price_source
           FROM private.latest_approved_raw_prices(
             v_count.branch_id,ARRAY[v_item.raw_material_id],v_count.created_at
           ) p WHERE p.raw_material_id=v_item.raw_material_id;
-        -- Existing central approved-price engine; a known zero remains valid.
-        v_final_price := COALESCE(v_final_price,v_item.unit_cost,0);
-        -- Note: a stock_count source must be eligible only if it is historically
-        -- approved/applied. The read model's visibility predicate controls this.
-        IF v_final_price < 0 THEN
-          RAISE EXCEPTION 'INVALID_STOCK_COUNT_COST material %',v_item.raw_material_id;
+        -- The canonical approved-price projection excludes zero and unpriced
+        -- sources. Do not fall back to stale line cost, warehouse average or FIFO.
+        -- Applied historical stock counts are filtered by its visibility predicate.
+        IF v_final_price IS NULL OR v_final_price <= 0 THEN
+          RAISE EXCEPTION 'APPROVED_RAW_PRICE_UNAVAILABLE material % branch % as_of %',
+            v_item.raw_material_id,v_count.branch_id,v_count.created_at;
         END IF;
         -- Freeze the approved price actually used at posting on the count line.
         -- The existing stock-count source trigger is NOT authoritative until
