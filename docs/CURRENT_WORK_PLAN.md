@@ -1,6 +1,10 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
+- Active branch: `fix/stock-count-apply-atomicity-20261101` (draft candidate, PR #565).
+- Mandatory active work log: `docs/STOCK_COUNT_APPLY_ATOMICITY_20261101.md`.
+- Proactive high-severity stock count atomicity defect: `fix/stock-count-apply-atomicity-20261101` (draft candidate). Mandatory log: `docs/STOCK_COUNT_APPLY_ATOMICITY_20261101.md`. Read-only production function review found four early failure returns in `apply_stock_count` that can commit earlier inventory line writes. Candidate raises and catches within the nested transaction block to roll back all earlier effects, with rollback-only localhost regression test. **No production migration, no stock write, no merge before green CI and review.**
+- Stock count operator recovery remains separate in PR #562; do not apply or cancel live historical counts automatically.
 - Active branch: `feat/raw-cost-v2-coordinate-gate-20261031`; PR #561 (candidate-only).
 - Mandatory active work log: `docs/RAW_COST_V2_COORDINATE_GATE_20261031.md`.
 - Owner directs completion of low-storage approved-price costing and safeguards. This PR stages an **OFF-by-default private per-coordinate gate**, guarded core _raw_add/_raw_remove_fifo routing and a tiny 2-material fixture. No production migration or activation, no 717-debt test. Never change customer stock or retroactive accounting before reversals, full writer parity and converted 20,263 open debts are reconciled; transfer #00008 still unapproved.
