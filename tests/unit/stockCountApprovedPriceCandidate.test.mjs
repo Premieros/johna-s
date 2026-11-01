@@ -64,3 +64,8 @@ test('explicit zero price can be stored in the existing approved source and its 
   assert.match(source, /private\.raw_approved_price_read_model/);
   assert.match(source, /v_cost IS NULL OR v_cost<0/);
 });
+
+test('zero-cost raw posting must have a real approved or catalog source', () => {
+  assert.match(sql, /v_price_source NOT IN \('purchase','pricing','stock_count','catalog_zero'\)/);
+  assert.match(sql, /v_price_source IS NULL/);
+});
