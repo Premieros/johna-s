@@ -22,3 +22,14 @@ test('raw item failures are raised and rolled back, not early-returned', () => {
   assert.match(sql, /RAISE EXCEPTION 'STOCK_COUNT_ITEM_FAILED/);
   assert.match(sql, /EXCEPTION\s+WHEN OTHERS/);
 });
+
+test('rejects FIFO ledger and approved-price journal divergence', () => {
+  assert.match(sql, /STOCK_COUNT_LEDGER_VALUATION_MISMATCH/);
+  assert.match(sql, /round\(COALESCE\(\(v_res->>'total_cost'\)::numeric,0\),2\)/);
+  assert.match(sql, /RAISE EXCEPTION 'STOCK_COUNT_LEDGER_VALUATION_MISMATCH/);
+});
+test('checks both raw and product removal success before applying', () => {
+  assert.match(sql, /RAW_STOCK_COUNT_REMOVE_FAILED|STOCK_COUNT_REMOVE_FAILED/);
+  assert.match(sql, /PRODUCT_STOCK_COUNT_REMOVE_FAILED/);
+  assert.match(sql, /UPDATE public\.stock_counts\s+SET status = 'applied'/);
+});
