@@ -52,7 +52,7 @@ BEGIN
   WHERE raw_material_id=p_raw_material_id;
   IF v_price.unit_cost IS NULL OR v_price.unit_cost<0
     OR v_price.priced_at IS NULL
-    OR v_price.price_source NOT IN ('purchase','pricing','stock_count') THEN
+    OR v_price.price_source NOT IN ('purchase','pricing','stock_count','catalog_zero') THEN
     RETURN jsonb_build_object('success',false,'error','APPROVED_RAW_PRICE_UNAVAILABLE');
   END IF;
   SELECT COALESCE(SUM(quantity),0) INTO v_before
