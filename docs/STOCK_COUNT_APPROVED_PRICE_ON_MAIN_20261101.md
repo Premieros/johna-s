@@ -57,6 +57,13 @@ A new source-only candidate `scripts/candidates/latest_approved_price_zero_catal
 ## Legacy debt coordinate audit — read only
 As of the most recent production query, the 10,585 open debt rows in count 00008 belong to **72 distinct counted raw materials**, and 9,210 open debt rows in count 00009 belong to **77 distinct counted raw materials**. This is a much smaller number of blocked stock coordinates than debt rows, but it does **not** authorize bulk deletion, settlement, bypass of the legacy debt guard, or a forced status update. Conversion must be atomic per coordinate and preserve accounting history, document quantity, warehouses, journal balances and subsequent receipt behavior. Exact-head CI was not yet available at the most recent check for the current candidate changes.
 
+## Minimal implementation decision — avoid full FIFO debt conversion
+Owner requests the simplest correct path: count adjustment must be separate from legacy sales/receipt FIFO debt settlement. No bulk migration of 19,795 old debt rows as a prerequisite, no retroactive journal edits, and no new pricing engine. Preserve old debt history for existing obligations.
+
+A stock-count-specific **atomic physical delta** needs to update canonical warehouse/batch quantity, warehouse and branch summaries, and write one approved-price-valued inventory ledger movement per actual nonzero delta. The journal must match the ledger valuation, including explicit catalog zero. Do NOT merely update the warehouse summary (batches are authoritative), delete or settle debts implicitly, or insert arbitrary zero-quantity offsets. It needs the same branch/material advisory lock and snapshot-safe preflight as other stock writers. The old debt still cannot silently participate in later receipt reconciliation; subsequent receipt behavior must be explicitly tested so adjustment stock is not counted twice.
+
+Snapshot read-only audit: 00008 has 286 nonzero snapshot differences, 72 involving open-debt coordinates; 00009 has 285 nonzero differences, 76 involving open-debt coordinates, one additional open-debt material without snapshot difference. These are snapshot comparisons only; apply must recompute under lock at posting time. All counts remain drafts and no live writes authorized before testing.
+
 ## Next action
 Run exact-head CI, fix any integration regression, confirm accounting ledger/report value equality, then prepare audited migration and normal authorized application flow.
 
