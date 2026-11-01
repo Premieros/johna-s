@@ -32,7 +32,7 @@ describe.skipIf(!local)('stock count apply is atomic on late FIFO shortage', () 
     // rollback-only fixture, matching the production warehouse manager role.
     await db.query("UPDATE public.roles SET permissions=(COALESCE(permissions,'[]'::jsonb)||'[\"inventory.count.apply\"]'::jsonb) WHERE role='warehouse_manager'");
     await db.query(`INSERT INTO public.stock_counts(id,count_number,branch_id,warehouse_id,status,count_type,created_by,approved_by,approved_at)
-      VALUES($1,'QA-ATOMIC-'||left($1::text,8),$2,$3,'approved','partial',$4,$4,now())`, [count, branch, warehouse, actor]);
+      VALUES($1,$5,$2,$3,'approved','partial',$4,$4,now())`, [count, branch, warehouse, actor, 'QA-ATOMIC-' + count.slice(0, 8)]);
     await db.query(`INSERT INTO public.stock_count_items(id,stock_count_id,product_id,system_quantity,counted_quantity,unit_cost)
       VALUES($1,$3,$4,0,1,10),($2,$3,$5,1,0,10)`, [firstLine, secondLine, count, firstProduct, shortProduct]);
     await db.query("SELECT set_config('app.user_id',$1,true),set_config('request.jwt.claim.sub',$1,true)", [actor]);
