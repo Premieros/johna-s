@@ -22,6 +22,7 @@
 
 
 ## Active work
+- Active approved-last-price FIFO replacement: `fix/stock-count-approved-price-on-main-20261101`, PR #571; Mandatory active work log: `docs/STOCK_COUNT_APPROVED_PRICE_ON_MAIN_20261101.md`. Owner-locked plan: replace FIFO in all new raw movements using existing last price, preserve zero; **NOT DEPLOYABLE** pending end-to-end verification.
 - Active quantity-only stock count UI: `fix/stock-count-quantity-only-ui-20261101`, PR #574; Mandatory active work log: `docs/STOCK_COUNT_QUANTITY_ONLY_UI_20261101.md`. No financial RPC changes, do not apply customer counts until approved pricing cutover.
 - Active stock-count atomicity recovery `fix/stock-count-atomicity-rebase-20261101`, PR #570; Mandatory active work log: `docs/STOCK_COUNT_ATOMICITY_REBASE_20261101.md`. Only fixes rollback of partial count posting; latest-price policy remains blocked in PR #569.
 - Owner requested evidence-based optimization of redundant CI tests without losing coverage. Baseline Verify main #4576: unit suite ~235 seconds, browser ~260 seconds, DB ~134 seconds, builds three times in parallel check jobs. Experimental Node environment for source-contract tests only; no test deletion, database migration or production deployment. CI gates remain mandatory.
