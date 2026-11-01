@@ -32,3 +32,6 @@ Design existing-writer-only valuation bridge with _raw_remove_fifo legacy FIFO b
 
 ## Mandatory update protocol
 Every material change must update this ledger and validate current PR branch, CI, and deployment gate. Never report a production rollout without exact runtime proof.
+
+## Existing adjustment-path inspection — 2026-11-01
+Verified production public.adjust_raw_stock: it is branch-aggregate rather than warehouse-scoped, values increases at avg_cost and decreases with _raw_remove_fifo(total_cost), and posts its own journal. It cannot safely substitute for stock count's warehouse-specific valuation without wrong warehouse movement, duplicated accounting, and same FIFO discrepancy. Do not route November counts through adjust_raw_stock. Use the central approved-price resolver but retain stock-count's scoped movement and single journal with a properly tested price-variance bridge.
