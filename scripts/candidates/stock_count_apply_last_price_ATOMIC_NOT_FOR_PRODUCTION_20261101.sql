@@ -106,7 +106,7 @@ BEGIN
           v_res := private.raw_issue_approved_v2(
             v_item.raw_material_id, v_count.branch_id, v_count.warehouse_id,
             -v_variance, 'adjustment', 'stock_count', v_count.id,
-            v_count.count_number, auth.uid()
+            v_count.count_number, auth.uid(), v_count.created_at
           );
           IF COALESCE((v_res->>'success')::boolean,false) IS NOT TRUE THEN
             RAISE EXCEPTION 'STOCK_COUNT_REMOVE_FAILED: %',COALESCE(v_res->>'error','unknown');
