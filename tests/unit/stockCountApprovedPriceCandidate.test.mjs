@@ -56,3 +56,11 @@ test('stock count raw issue reuses original historical timestamp', () => {
   assert.match(helper, /COALESCE\(p_valuation_as_of,v_now\)/);
   assert.match(helper, /v_price\.unit_cost<0/);
 });
+
+test('explicit zero price can be stored in the existing approved source and its projection', () => {
+  const source = readFileSync('scripts/candidates/approved_zero_price_projection_NOT_FOR_PRODUCTION_20261101.sql','utf8');
+  assert.match(source, /ALTER TABLE public\.raw_material_price_events/);
+  assert.match(source, /CHECK \(unit_cost>=0\)/);
+  assert.match(source, /private\.raw_approved_price_read_model/);
+  assert.match(source, /v_cost IS NULL OR v_cost<0/);
+});
