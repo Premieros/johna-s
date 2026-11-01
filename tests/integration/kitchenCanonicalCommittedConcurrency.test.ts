@@ -90,6 +90,15 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
       .find((row:{proname:string})=>row.proname==='_send_to_kitchen_core_20260914');
     if(!historicalCore?.definition)throw new Error('HISTORICAL_CORE_FIXTURE_MISSING');
     await observer.query(historicalCore.definition);
+    // The October-13 rollout review is intentionally pinned to the historical
+    // canonical apply_stock_count body. Later atomicity fixes must not weaken
+    // its fail-closed drift guard. Restore that historical body ONLY in this
+    // newly created qa_kitchen_* disposable database before replaying forward().
+    const historicalRollback = readFileSync('scripts/rollout/kitchen_dedup_rollback_review_20261013.sql','utf8');
+    const applyStart = historicalRollback.lastIndexOf('CREATE OR REPLACE FUNCTION public.apply_stock_count(');
+    const applyEnd = historicalRollback.indexOf('$function$;', applyStart);
+    if (applyStart < 0 || applyEnd < 0) throw new Error('HISTORICAL_COUNT_APPLY_FIXTURE_MISSING');
+    await observer.query(historicalRollback.slice(applyStart, applyEnd + '$function$;'.length));
     await observer.query(`UPDATE public.roles SET permissions=permissions || '["pos.send_kitchen"]'::jsonb WHERE role='cashier'`);
     originalDefinitions=(await observer.query(catalogSQL)).rows;
     await observer.query("SET app.kitchen_rollout_ack='johnas-kitchen-20261013-review-required'");
