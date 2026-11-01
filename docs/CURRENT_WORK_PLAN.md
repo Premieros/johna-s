@@ -1,6 +1,8 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
+- Current active performance audit `perf/ci-unit-node-contracts-20261101`, PR #566; mandatory active work log: `docs/CI_PERFORMANCE_AUDIT_20261101.md`.
+- Owner requested evidence-based optimization of redundant CI tests without losing coverage. Baseline Verify main #4576: unit suite ~235 seconds, browser ~260 seconds, DB ~134 seconds, builds three times in parallel check jobs. Experimental Node environment for source-contract tests only; no test deletion, database migration or production deployment. CI gates remain mandatory.
 - Active branch: `feat/raw-cost-v2-coordinate-gate-20261031`; PR #561 (candidate-only).
 - Mandatory active work log: `docs/RAW_COST_V2_COORDINATE_GATE_20261031.md`.
 - Owner directs completion of low-storage approved-price costing and safeguards. This PR stages an **OFF-by-default private per-coordinate gate**, guarded core _raw_add/_raw_remove_fifo routing and a tiny 2-material fixture. No production migration or activation, no 717-debt test. Never change customer stock or retroactive accounting before reversals, full writer parity and converted 20,263 open debts are reconciled; transfer #00008 still unapproved.
