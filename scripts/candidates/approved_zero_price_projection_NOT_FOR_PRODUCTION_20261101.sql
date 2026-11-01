@@ -15,6 +15,22 @@ BEGIN
  END IF;
 END $guard$;
 
+-- A recorded zero price must also be allowed in the original source table;
+-- changing only the projection would leave it impossible to record.
+DO $zero_source_guard$
+BEGIN
+ IF NOT EXISTS (
+   SELECT 1 FROM pg_constraint
+   WHERE conrelid='public.raw_material_price_events'::regclass
+     AND conname='raw_material_price_events_unit_cost_check'
+     AND pg_get_constraintdef(oid) LIKE '%> (0)::numeric%'
+ ) THEN RAISE EXCEPTION 'ZERO_PRICE_SOURCE_CONSTRAINT_DRIFT'; END IF;
+END $zero_source_guard$;
+ALTER TABLE public.raw_material_price_events
+ DROP CONSTRAINT raw_material_price_events_unit_cost_check;
+ALTER TABLE public.raw_material_price_events
+ ADD CONSTRAINT raw_material_price_events_unit_cost_check CHECK (unit_cost>=0) NOT VALID;
+
 ALTER TABLE private.raw_approved_price_read_model
  DROP CONSTRAINT IF EXISTS raw_approved_price_read_model_unit_cost_check;
 ALTER TABLE private.raw_approved_price_read_model
