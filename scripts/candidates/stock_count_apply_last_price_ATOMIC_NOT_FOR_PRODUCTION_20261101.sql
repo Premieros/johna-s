@@ -71,6 +71,14 @@ BEGIN
         IF v_final_price < 0 THEN
           RAISE EXCEPTION 'INVALID_STOCK_COUNT_COST material %',v_item.raw_material_id;
         END IF;
+        -- Freeze the approved price actually used at posting on the count line.
+        -- The existing stock-count source trigger is NOT authoritative until
+        -- the parent count becomes applied; this preserves source lineage.
+        IF v_item.unit_cost IS DISTINCT FROM v_final_price THEN
+          UPDATE public.stock_count_items
+             SET unit_cost = v_final_price
+           WHERE id = v_item.id AND stock_count_id = v_count.id;
+        END IF;
         SELECT COALESCE(quantity, 0)
           INTO v_current
           FROM public.raw_material_warehouse_inventory
