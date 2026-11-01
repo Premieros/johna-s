@@ -27,6 +27,9 @@ GitHub Actions run 41292586447: browser-smoke, pages-continuity and db SUCCESS; 
 ## Production gate
 BLOCKED: candidate SQL explicitly DO NOT DEPLOY, financial ledger bridge has not been independently reconciled with existing reporting; no tested production migration, no authorization to apply November counts while ledger and journal revaluation integration and reporting need review.
 
+## Owner architecture decision — no FIFO dependency in final stock count
+Owner explicitly requires stock count correction to use the existing approved-last-price path, not a new pricing engine and not FIFO valuation. FIFO is legacy and will be retired after a safe replacement. The current candidate still calls `_raw_remove_fifo` for physical shortage; this is NOT acceptable as final implementation, and PR #571 must not merge/deploy in this form. Separate physical lot/quantity movement from value; use existing `private.latest_approved_raw_prices` for branch/time-specific valuation, with frozen provenance and a balanced stock ledger and journal. Any replacement physical writer must respect existing lots, canonical locks, shortage semantics, rollback, access controls and legacy debt cutover, with no historical replay or data mutation as a shortcut. Reuse the staged default-off v2 movement infrastructure only after proving it works at legacy positions; do not assume v2 is activated or safe on production. Complete local disposable-DB tests of surplus, deficit, multiple lines, missing approved price, historical debt, journal/ledger equality and abort behavior before any migration or production activation.
+
 ## Next action
 Run exact-head CI, fix any integration regression, confirm accounting ledger/report value equality, then prepare audited migration and normal authorized application flow.
 
