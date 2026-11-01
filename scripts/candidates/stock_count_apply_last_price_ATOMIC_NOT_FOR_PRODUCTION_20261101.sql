@@ -111,6 +111,11 @@ BEGIN
           -- This candidate must be tested against ALL report/read consumers.
           v_value := round(-v_variance * COALESCE(v_final_price, 0), 2);
           IF round(COALESCE((v_res->>'total_cost')::numeric,0),2) IS DISTINCT FROM v_value THEN
+            -- Never allow a value bridge to mask an incomplete FIFO removal.
+            IF COALESCE((v_res->>'removed')::numeric,0) IS DISTINCT FROM -v_variance THEN
+              RAISE EXCEPTION 'STOCK_COUNT_REMOVED_QUANTITY_MISMATCH raw % expected % actual %',
+                v_item.raw_material_id,-v_variance,v_res->>'removed';
+            END IF;
             INSERT INTO public.inventory_ledger(
               raw_material_id,branch_id,warehouse_id,batch_number,
               quantity,unit_cost,total_cost,before_qty,after_qty,
