@@ -1,7 +1,7 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Active urgent stock-count frontend recovery `fix/stock-count-prior-month-ui-block-20261101`, PR #567; Mandatory active work log: `docs/STOCK_COUNT_NOVEMBER_HOTFIX_20261101.md`.
+- Active urgent stock-count approved-price financial candidate `fix/stock-count-approved-price-preflight-20261101`, PR #569; Mandatory active work log: `docs/STOCK_COUNT_APPROVED_PRICE_20261101.md`. Historical November frontend hotfix #567 already merged. Candidate is NOT for production until FIFO ledger/journal parity and rollback verified.
 - Owner requested evidence-based optimization of redundant CI tests without losing coverage. Baseline Verify main #4576: unit suite ~235 seconds, browser ~260 seconds, DB ~134 seconds, builds three times in parallel check jobs. Experimental Node environment for source-contract tests only; no test deletion, database migration or production deployment. CI gates remain mandatory.
 - Active branch: `feat/raw-cost-v2-coordinate-gate-20261031`; PR #561 (candidate-only).
 - Mandatory active work log: `docs/RAW_COST_V2_COORDINATE_GATE_20261031.md`.
