@@ -1,21 +1,34 @@
 # Approved-price stock count candidate — refreshed on main
-Repository: Premieros/johna-s
+Repository: `Premieros/johna-s`
+Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/stock-count-approved-price-on-main-20261101`
-Date: 2026-11-01
-Status: **BLOCKED — source candidate, not production migration**
+Current PR: `#571`
+Last updated: 2026-11-01
+State: **BLOCKED**
 
 ## Work status
-Rebased the latest price candidate from PR #569 on post-atomicity `main` without retaining conflicting old worklog edits. Existing production atomicity fix is separate and already applied. No business data mutation here.
+Source-only approved-price stock-count candidate rebased onto atomicity-fixed main. No production price migration or November stock count applied.
 
-## Required behavior
-For each raw material use last approved branch price as of the count creation date, retain known zero, and atomically reconcile valuation and inventory journal at the count warehouse. Preserve existing permission, branch visibility, historical transactions, and full rollback on failure.
+## Guardrails
+Never deploy scripts/candidates SQL without validated production migration. Preserve role/branch/warehouse access, atomic rollback, approved branch price including valid zero, historical financial records and production inventory.
 
-## Current work
-Candidate function (DO NOT DEPLOY), unit regex contracts, and transaction-rollback local integration fixture testing zero-value surplus and cost-bearing FIFO shortage with zero-value revaluation bridge.
+## Baseline
+Atomicity fix PR #570 merged and separately applied to Supabase. PR #569 from older base has conflicts. November count drafts #00008 and #00009 not applied.
 
-## Blocking issues
-No passing exact-head database integration CI yet. Source-only tests are not enough. Need prove ledger bridge doesn't misstate historical raw batch valuations or financial reporting, ensure the latest price engine has an authorized source at count time, validate end-to-end complete shortage and journal, and resolve test failures. PR #569 remains unmerged.
-November count drafts #00008 and #00009 are not approved/applied. No production business writes.
+## Root-cause ledger
+Original apply_count values shortage from FIFO while owner's policy requires last approved branch price. Candidate uses zero-quantity ledger revaluation to bridge FIFO outgoing cost and approved-price journal, not yet validated for all financial consumers.
 
-## Next
-Run exact-head CI, fix failures in disposable local DB, thoroughly review batch/ledger reconciliation. Only afterwards propose a production migration and approve/apply stock count using normal role-gated workflow. 
+## Change ledger
+PR #571 rebases candidate and unit contract plus rollback-scoped local PostgreSQL integration case with zero-price surplus and FIFO-priced shortage onto current main. Latest change is documentation gate correction after Verify failed.
+
+## Verification ledger
+GitHub Actions run 41292586447: browser-smoke, pages-continuity and db SUCCESS; verify FAILURE due to mandatory active-worklog contract requiring specific section headings and metadata. This file fixes those structural deficiencies. Exact-head CI must be rerun.
+
+## Production gate
+BLOCKED: candidate SQL explicitly DO NOT DEPLOY, no tested production migration, no authorization to apply November counts while ledger and journal revaluation integration and reporting need review.
+
+## Next action
+Run exact-head CI, fix any integration regression, confirm accounting ledger/report value equality, then prepare audited migration and normal authorized application flow.
+
+## Mandatory update protocol
+Update this log after substantive code/test changes. Never claim deployment or post real inventory without verifying the production state.
