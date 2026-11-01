@@ -124,7 +124,7 @@ BEGIN
               v_item.raw_material_id,v_count.branch_id,v_count.warehouse_id,NULL,
               0,v_final_price,
               round(COALESCE((v_res->>'total_cost')::numeric,0),2)-v_value,
-              v_current,v_current,
+              v_item.counted_quantity,v_item.counted_quantity,
               'revaluation','stock_count',v_count.id,v_count.count_number,auth.uid()
             );
           END IF;
