@@ -91,6 +91,9 @@ Added rollback-only local PostgreSQL integration regression to post a zero-price
 ## Latest implementation step — 2026-11-01
 Added rollback-only local PostgreSQL coverage for **both** zero-price stock-count directions: receive 3 at zero cost, then issue 2 to arrive at warehouse quantity 1 without FIFO valuation. This checks each new movement ledger row carries zero unit and total cost and the document completes atomically in disposable test state. Commit `5f76d89d13c3d4be1e288473c71359c8647791ca`. These are source changes only; exact-head CI still has no returned workflow result, so no test success is claimed. The broader all-writer FIFO-to-last-price cutover and existing historical debt coexistence remain unfinished.
 
+## Last-price vs FIFO valuation regression — 2026-11-01
+Added a disposable-Postgres test proving the intended decisive distinction: an existing raw batch originally cost **12**, while the central approved pricing event says **7**; applying a raw stock-count shortage of **3** must result in ledger quantity **−3** and value **−21**, not FIFO value −36. This is a new test fixture, **not a successful test run or production posting**; commit `6a113a14711a0bdd540802719a4f75d1aa3b2dbf`. Earlier zero-price in/out tests are also staged. The PR still has no exact-head GitHub workflow results from the commit-run lookup. The owner-locked plan remains full raw movement FIFO → existing latest-price, not a stock-count-only workaround. No production cutover while existing legacy debt coexistence remains untested.
+
 ## Next action
 Run exact-head CI, fix any integration regression, confirm accounting ledger/report value equality, then prepare audited migration and normal authorized application flow.
 
