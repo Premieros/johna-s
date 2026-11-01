@@ -88,6 +88,9 @@ Snapshot read-only audit: 00008 has 286 nonzero snapshot differences, 72 involvi
 ## Latest executable test work — 2026-11-01
 Added rollback-only local PostgreSQL integration regression to post a zero-priced raw surplus through the staged approved-price reader and movement helper, assert the ledger records exact quantity and **zero cost**, and verify the count becomes applied within the disposable test transaction (which is subsequently rolled back). This is not a production application. Commit `f6552ae91112ffb94104249ae8e36ce82956844f`. Exact-head CI still needs to run; no test pass is claimed for this new case.
 
+## Latest implementation step — 2026-11-01
+Added rollback-only local PostgreSQL coverage for **both** zero-price stock-count directions: receive 3 at zero cost, then issue 2 to arrive at warehouse quantity 1 without FIFO valuation. This checks each new movement ledger row carries zero unit and total cost and the document completes atomically in disposable test state. Commit `5f76d89d13c3d4be1e288473c71359c8647791ca`. These are source changes only; exact-head CI still has no returned workflow result, so no test success is claimed. The broader all-writer FIFO-to-last-price cutover and existing historical debt coexistence remain unfinished.
+
 ## Next action
 Run exact-head CI, fix any integration regression, confirm accounting ledger/report value equality, then prepare audited migration and normal authorized application flow.
 
