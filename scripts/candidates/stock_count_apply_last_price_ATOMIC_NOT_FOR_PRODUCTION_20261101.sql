@@ -140,6 +140,9 @@ BEGIN
             -v_variance, 'adjustment', 'stock_count', v_count.id,
             v_count.count_number, auth.uid()
           );
+          IF COALESCE((v_res->>'success')::boolean,false) IS NOT TRUE THEN
+            RAISE EXCEPTION 'PRODUCT_STOCK_COUNT_REMOVE_FAILED: %',COALESCE(v_res->>'error','unknown');
+          END IF;
           v_shortage := COALESCE((v_res->>'shortage')::numeric, 0);
           IF v_shortage > 0 THEN
             RAISE EXCEPTION 'STOCK_COUNT_ITEM_FAILED: %', 'STOCK_COUNT_SHORTAGE';
