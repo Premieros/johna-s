@@ -13,7 +13,7 @@ try { local = ['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostname);
 describe.skipIf(!local)('latest-price stock count candidate in disposable database', () => {
   let db: pg.Client;
   const branch=randomUUID(), warehouse=randomUUID(), actor=randomUUID();
-  const raw=randomUUID(), shortRaw=randomUUID(), count=randomUUID(), zeroCount=randomUUID(), zeroIssueCount=randomUUID();
+  const raw=randomUUID(), shortRaw=randomUUID(), count=randomUUID(), zeroCount=randomUUID(), zeroIssueCount=randomUUID(), latestPriceCount=randomUUID();
   beforeAll(async () => {
     db=openDb(url); await db.connect(); await db.query('BEGIN');
     // Install the existing unshipped v2 movement prototype ONLY inside this local
@@ -103,6 +103,24 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
     const inventory=(await db.query("SELECT quantity FROM public.raw_material_warehouse_inventory WHERE raw_material_id=$1 AND warehouse_id=$2",[raw,warehouse])).rows[0];
     expect(Number(inventory.quantity)).toBe(1);
     expect((await db.query("SELECT status FROM public.stock_counts WHERE id=$1",[zeroIssueCount])).rows[0].status).toBe('applied');
+  });
+
+  it('values a raw shortage at the latest approved price, not the historic FIFO batch cost', async () => {
+    // shortRaw was seeded into a legacy batch at cost 12; the canonical
+    // approved pricing event is 7. Every count movement must use 7.
+    await db.query("INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,reference_number,priced_at) VALUES($1,$2,7,'pricing',$3,now()-interval '1 minute')",[shortRaw,branch,'QA-APPROVED-PRICE']);
+    await db.query("INSERT INTO public.stock_counts(id,count_number,branch_id,warehouse_id,status,count_type,created_by,approved_by,approved_at) VALUES($1,$5,$2,$3,'approved','partial',$4,$4,now())",[latestPriceCount,branch,warehouse,actor,'QA-LAST-PRICE-'+latestPriceCount.slice(0,8)]);
+    await db.query("INSERT INTO public.stock_count_items(stock_count_id,raw_material_id,system_quantity,counted_quantity,unit_cost) VALUES($1,$2,5,2,0)",[latestPriceCount,shortRaw]);
+    await db.query('SET LOCAL ROLE authenticated');
+    const outcome=(await db.query('SELECT public.apply_stock_count($1) r',[latestPriceCount])).rows[0].r;
+    await db.query('RESET ROLE');
+    expect(outcome.success).toBe(true);
+    const entries=(await db.query("SELECT quantity,unit_cost,total_cost FROM public.inventory_ledger WHERE reference_id=$1 AND reference_type='stock_count' AND raw_material_id=$2",[latestPriceCount,shortRaw])).rows;
+    expect(entries.reduce((total,e)=>total+Number(e.quantity),0)).toBe(-3);
+    expect(entries.every(e=>Number(e.unit_cost)===7)).toBe(true);
+    expect(entries.reduce((total,e)=>total+Number(e.total_cost),0)).toBe(-21);
+    const balance=(await db.query("SELECT quantity FROM public.raw_material_warehouse_inventory WHERE raw_material_id=$1 AND warehouse_id=$2",[shortRaw,warehouse])).rows[0];
+    expect(Number(balance.quantity)).toBe(2);
   });
 
 });
