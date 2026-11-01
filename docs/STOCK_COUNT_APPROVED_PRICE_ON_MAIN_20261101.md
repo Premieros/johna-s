@@ -33,6 +33,9 @@ Owner explicitly requires stock count correction to use the existing approved-la
 ## Latest verification status
 Candidate updated at GitHub commit ec48989eee960751aadd395354bafa88be596491. No passing exact-head CI is available yet for this commit, so tests are NOT claimed green. The candidate must remain DO NOT DEPLOY.
 
+## Owner quantity-only count UX decision
+The count document UI and Excel template must capture physical quantities, not manually entered raw-material costs. The existing central price reader is authoritative as of the count document's creation time when posting; old workbook price columns are ignored. Count screens no longer display misleading pre-application valuations from draft line cost. Database `unit_cost` remains as a legacy/audit field and the candidate freezes the posting price there, but it must not be treated as a user-provided pricing authority. Changes staged in PR #571; no production activation or customer count applied. Exact-head UI, workbook, DB and accounting tests are required.
+
 ## Next action
 Run exact-head CI, fix any integration regression, confirm accounting ledger/report value equality, then prepare audited migration and normal authorized application flow.
 
