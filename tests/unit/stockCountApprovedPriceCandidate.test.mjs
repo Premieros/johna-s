@@ -39,3 +39,8 @@ test('value-only bridge requires fully removed quantity', () => {
   assert.match(sql, /STOCK_COUNT_REMOVED_QUANTITY_MISMATCH/);
   assert.match(sql, /\(v_res->>'removed'\)::numeric/);
 });
+
+test('resolved approved price is frozen on posted stock count line', () => {
+  assert.match(sql, /UPDATE public\.stock_count_items\s+SET unit_cost = v_final_price/);
+  assert.match(sql, /v_item\.unit_cost IS DISTINCT FROM v_final_price/);
+});
