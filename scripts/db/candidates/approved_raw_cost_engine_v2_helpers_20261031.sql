@@ -50,7 +50,7 @@ BEGIN
   SELECT * INTO v_price FROM private.latest_approved_raw_prices(
     p_branch_id,ARRAY[p_raw_material_id],v_now)
   WHERE raw_material_id=p_raw_material_id;
-  IF v_price.unit_cost IS NULL OR v_price.unit_cost<=0
+  IF v_price.unit_cost IS NULL OR v_price.unit_cost<0
     OR v_price.priced_at IS NULL
     OR v_price.price_source NOT IN ('purchase','pricing','stock_count') THEN
     RETURN jsonb_build_object('success',false,'error','APPROVED_RAW_PRICE_UNAVAILABLE');
@@ -176,7 +176,7 @@ DECLARE
   v_variance_reference uuid;
 BEGIN
   IF p_qty IS NULL OR p_qty<=0 OR p_receipt_unit_cost IS NULL
-     OR p_receipt_unit_cost<=0 OR p_warehouse_id IS NULL
+     OR p_receipt_unit_cost<0 OR p_warehouse_id IS NULL
      OR p_raw_material_id IS NULL OR p_branch_id IS NULL THEN
     RETURN jsonb_build_object('success',false,'error','APPROVED_RECEIPT_INVALID_INPUT');
   END IF;
