@@ -44,6 +44,9 @@ The count document UI and Excel template must capture physical quantities, not m
 - Therefore **release and posting remain blocked on two independent production prerequisites**: creating or recovering authentic approved price events for the unpriced materials via existing authorized workflow, and reconciling/cutting over legacy debt balances without rewriting historical journals. DO NOT invent prices, use stale line costs, bypass historical debt guard, or force draft → applied through privileged SQL.
 - UI-only quantity workflow PR #574 passed full CI and merged to main at `25dd4057ab87ef307578f71f6f477d8bf17c1c15`. Financial PR #571 remains source-only and open.
 
+## Owner price policy: zero is zero
+A legitimately recorded current raw-material price of 0 must be used as 0 in stock count accounting; do NOT replace it with a fallback or synthesize a positive amount. Distinguish **explicit verified zero** from **missing price** (the `unpriced` sentinel with NULL cost). The existing approved-price projection currently filters zero (`unit_cost > 0`, sync skips `<=0`), and the unshipped approved-v2 movement helpers also reject `<=0`; thus no code path yet proves a legitimate zero through to posting. The 140 / 68 `unpriced` records may NOT be treated as verified zero until a price source explicitly records zero. A compatible change requires extending the existing canonical projection, maintaining source provenance and testing zero-valued receipts/issues, journals and safeguards. Financial PR remains **DO NOT DEPLOY** and counts 00008/00009 remain drafts.
+
 ## Next action
 Run exact-head CI, fix any integration regression, confirm accounting ledger/report value equality, then prepare audited migration and normal authorized application flow.
 
