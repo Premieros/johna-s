@@ -38,7 +38,8 @@ describe.skipIf(!local)('branch manager count permission and unposted approval c
       [actor,'count-actor-'+actor+'@example.test',branch,approver,'count-reviewer-'+approver+'@example.test']);
     await db.query("SELECT set_config('app.register_branch','off',true)");
     // Reproduce the live missing permission, regardless of canonical seed.
-    await db.query("UPDATE public.roles SET permissions=((COALESCE(permissions,'[]'::jsonb)||'[\"inventory.view\"]'::jsonb)-'inventory.count.create') WHERE role='branch_manager'");
+    await db.query("UPDATE public.roles SET permissions=((COALESCE(permissions,'[]'::jsonb)||'[\"inventory.view\"]'::jsonb)-'inventory.count.create'-'inventory.count.approve'-'inventory.count.apply') WHERE role='branch_manager'");
+    await db.query("UPDATE public.roles SET permissions=(COALESCE(permissions,'[]'::jsonb)||'[\"inventory.count.apply\"]'::jsonb) WHERE role='warehouse_manager'");
     const migration=readFileSync(
       'supabase/migrations/20261101071500_restore_stock_count_operator_and_safe_cancel.sql','utf8'
     );
