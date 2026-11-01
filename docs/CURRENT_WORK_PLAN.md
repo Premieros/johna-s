@@ -1,6 +1,9 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
+- Current user-reported incident: `fix/stock-count-operator-activation-20261101` (PR #562): staff cannot create or complete stock counts. Mandatory active work log: `docs/STOCK_COUNT_OPERATOR_RECOVERY_20261101.md`.
+- Verified live: 4 branch_manager users have inventory view but lack count.create; stock counts #00006/#00007 approved since Oct 1 and unposted block new counts in Smouha and Cleopatra. Only grant branch_manager inventory.count.create; keep approve/apply privilege separate. Offer authorized, reasoned cancellation of approved unposted documents with zero stock effects. No production stock writes or automatic actions.
+- Prior inactive raw-cost v2 PR #560/#561 remains merged; production rollout not activated.
 - Active branch: `feat/raw-cost-v2-coordinate-gate-20261031`; PR #561 (candidate-only).
 - Mandatory active work log: `docs/RAW_COST_V2_COORDINATE_GATE_20261031.md`.
 - Owner directs completion of low-storage approved-price costing and safeguards. This PR stages an **OFF-by-default private per-coordinate gate**, guarded core _raw_add/_raw_remove_fifo routing and a tiny 2-material fixture. No production migration or activation, no 717-debt test. Never change customer stock or retroactive accounting before reversals, full writer parity and converted 20,263 open debts are reconciled; transfer #00008 still unapproved.
