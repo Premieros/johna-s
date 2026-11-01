@@ -69,3 +69,12 @@ test('zero-cost raw posting must have a real approved or catalog source', () => 
   assert.match(sql, /v_price_source NOT IN \('purchase','pricing','stock_count','catalog_zero'\)/);
   assert.match(sql, /v_price_source IS NULL/);
 });
+
+test('raw count receipt verifies last approved as-of price and freezes ledger provenance', () => {
+  const helper = readFileSync('scripts/db/candidates/approved_raw_cost_engine_v2_helpers_20261031.sql','utf8');
+  assert.match(helper, /APPROVED_RECEIPT_PRICE_MISMATCH/);
+  assert.match(helper, /p_valuation_as_of timestamptz DEFAULT NULL/);
+  assert.match(helper, /v_approved_price\.unit_cost IS DISTINCT FROM p_receipt_unit_cost/);
+  assert.match(helper, /approved_cost_basis,approved_price_source,approved_price_at/);
+  assert.match(sql, /v_count\.count_number, auth\.uid\(\), v_count\.created_at/);
+});
