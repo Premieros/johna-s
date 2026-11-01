@@ -68,7 +68,9 @@ BEGIN
         -- and negative prices are invalid. The source projection must be updated
         -- separately to preserve legitimate zero-priced source events.
         -- Applied historical stock counts are filtered by its visibility predicate.
-        IF v_final_price IS NULL OR v_final_price < 0 THEN
+        IF v_final_price IS NULL OR v_final_price < 0
+           OR v_price_source IS NULL
+           OR v_price_source NOT IN ('purchase','pricing','stock_count','catalog_zero') THEN
           RAISE EXCEPTION 'APPROVED_RAW_PRICE_UNAVAILABLE material % branch % as_of %',
             v_item.raw_material_id,v_count.branch_id,v_count.created_at;
         END IF;
