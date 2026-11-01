@@ -27,7 +27,7 @@ test('bridges FIFO ledger and approved-price journal valuation at zero quantity'
   assert.match(sql, /INSERT INTO public\.inventory_ledger\(/);
   assert.match(sql, /round\(COALESCE\(\(v_res->>'total_cost'\)::numeric,0\),2\)/);
   assert.match(sql, /'revaluation','stock_count'/);
-  assert.match(sql, /v_current,v_current/);
+  assert.match(sql, /v_item\.counted_quantity,v_item\.counted_quantity/);
 });
 test('checks both raw and product removal success before applying', () => {
   assert.match(sql, /RAW_STOCK_COUNT_REMOVE_FAILED|STOCK_COUNT_REMOVE_FAILED/);
