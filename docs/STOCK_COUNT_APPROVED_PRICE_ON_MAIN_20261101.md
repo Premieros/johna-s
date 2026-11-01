@@ -85,6 +85,9 @@ A stock-count-specific **atomic physical delta** needs to update canonical wareh
 
 Snapshot read-only audit: 00008 has 286 nonzero snapshot differences, 72 involving open-debt coordinates; 00009 has 285 nonzero differences, 76 involving open-debt coordinates, one additional open-debt material without snapshot difference. These are snapshot comparisons only; apply must recompute under lock at posting time. All counts remain drafts and no live writes authorized before testing.
 
+## Latest executable test work — 2026-11-01
+Added rollback-only local PostgreSQL integration regression to post a zero-priced raw surplus through the staged approved-price reader and movement helper, assert the ledger records exact quantity and **zero cost**, and verify the count becomes applied within the disposable test transaction (which is subsequently rolled back). This is not a production application. Commit `f6552ae91112ffb94104249ae8e36ce82956844f`. Exact-head CI still needs to run; no test pass is claimed for this new case.
+
 ## Next action
 Run exact-head CI, fix any integration regression, confirm accounting ledger/report value equality, then prepare audited migration and normal authorized application flow.
 
