@@ -115,6 +115,11 @@ The missing-price rollback fixture mistakenly created a raw material with positi
 ### Hard stop conditions
 Do **not** merge or deploy a NOT FOR PRODUCTION source candidate, assume an absent CI run means pass, force user approval, treat an unpriced row as zero without provenance, or alter production balances to satisfy a test. If a gate is blocked, record **one precise blocker with observed evidence and next required action**, not a series of tiny test commits. This replaces all conflicting status notes in this file as the current next-step contract.
 
+## Movement-source parity fix — 2026-11-01
+Improved the actual approved-v2 **raw receipt writer** for stock counts rather than another status-only change. It now independently looks up the existing approved-last-price source at the count's as-of timestamp and refuses a mismatched caller-provided price with `APPROVED_RECEIPT_PRICE_MISMATCH`, including explicit zero vs absent distinction. It freezes approved price provenance in the receipt ledger columns, matching the already-staged issue path. The stock-count posting RPC passes the count's `created_at` to both receipt and issue. Ordinary non-count receipts retain their supplied invoice price and NULL approved lineage in this prototype. Unit contract added. Commits `3ef7417`, `6ce36e8`, `67666f6`, `0e9b48c`.
+
+**Still blocked:** these are NOT-FOR-PRODUCTION candidates; no confirmed executable end-to-end CI for current head, older FIFO debt coordinates still reject the new writer, and other live raw-material callers are not cut over. No merge, deployment, or real count posting is safe yet.
+
 ## Next action
 Run exact-head CI, fix any integration regression, confirm accounting ledger/report value equality, then prepare audited migration and normal authorized application flow.
 
