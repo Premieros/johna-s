@@ -54,6 +54,9 @@ A new source-only candidate `scripts/candidates/latest_approved_price_zero_catal
 
 **Do not deploy:** the v2 physical writers and open historical debts still prevent applying these counts safely. A passing CI contract alone is not evidence of journal reconciliation or writer cutover.
 
+## Legacy debt coordinate audit — read only
+As of the most recent production query, the 10,585 open debt rows in count 00008 belong to **72 distinct counted raw materials**, and 9,210 open debt rows in count 00009 belong to **77 distinct counted raw materials**. This is a much smaller number of blocked stock coordinates than debt rows, but it does **not** authorize bulk deletion, settlement, bypass of the legacy debt guard, or a forced status update. Conversion must be atomic per coordinate and preserve accounting history, document quantity, warehouses, journal balances and subsequent receipt behavior. Exact-head CI was not yet available at the most recent check for the current candidate changes.
+
 ## Next action
 Run exact-head CI, fix any integration regression, confirm accounting ledger/report value equality, then prepare audited migration and normal authorized application flow.
 
