@@ -161,6 +161,9 @@ AS $fn$
 DECLARE
   v_shortage public.raw_material_batches%ROWTYPE;
   v_approved_price record;
+  v_approved_price_source text;
+  v_approved_priced_at timestamptz;
+  v_approved_price_ref text;
   v_shortage_absorbed numeric(18,6):=0;
   v_shortage_basis numeric(20,6):=0;
   v_variance numeric(20,6):=0;
@@ -210,6 +213,9 @@ BEGIN
        OR v_approved_price.unit_cost IS DISTINCT FROM p_receipt_unit_cost THEN
       RETURN jsonb_build_object('success',false,'error','APPROVED_RECEIPT_PRICE_MISMATCH');
     END IF;
+    v_approved_price_source:=v_approved_price.price_source;
+    v_approved_priced_at:=v_approved_price.priced_at;
+    v_approved_price_ref:=v_approved_price.reference_number;
   END IF;
   SELECT COALESCE(sum(quantity),0) INTO v_before FROM public.raw_material_batches
     WHERE raw_material_id=p_raw_material_id AND branch_id=p_branch_id
@@ -254,8 +260,8 @@ BEGIN
     p_receipt_unit_cost,p_qty*p_receipt_unit_cost,v_before,v_before+p_qty,
     p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,
     CASE WHEN p_reference_type='stock_count' THEN 'approved_last_known' ELSE NULL END,
-    v_approved_price.price_source,v_approved_price.priced_at,
-    v_approved_price.reference_number,v_now
+    v_approved_price_source,v_approved_priced_at,
+    v_approved_price_ref,v_now
   ) RETURNING id INTO v_receipt_ledger;
 
   v_posted_variance:=round(v_variance,2);
