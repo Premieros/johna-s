@@ -1,8 +1,7 @@
--- DO NOT DEPLOY: candidate value-only ledger bridge not integration tested.
--- Only a documented approved price from the existing central read model is valid.
--- A missing price must fail closed; the model currently indexes only positive prices.
--- In particular, the stock ledger still records FIFO costs for shortages, while
--- the journal below records approved price. They must be reconciled before ship.
+-- DO NOT DEPLOY: depends on UNINSTALLED private approved-v2 physical helpers.
+-- Uses the existing central approved-price source, never FIFO for raw counts.
+-- Missing price and legacy debt coordinates fail closed; no rollout is authorized.
+-- Requires independent disposable-DB and accounting reconciliation tests.
 CREATE OR REPLACE FUNCTION public.apply_stock_count(p_stock_count_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -91,9 +90,10 @@ BEGIN
         v_variance := v_item.counted_quantity - v_current;
 
         IF v_variance > 0 THEN
-          v_res := public._raw_add(
+          -- Candidate-only approved-price physical receipt; no legacy FIFO writer.
+          v_res := private.raw_receive_approved_v2(
             v_item.raw_material_id, v_count.branch_id, v_count.warehouse_id,
-            v_variance, v_final_price, NULL, NULL, NULL,
+            v_variance, v_final_price,
             'adjustment', 'stock_count', v_count.id, v_count.count_number, auth.uid()
           );
           IF NOT COALESCE((v_res->>'success')::boolean, false) THEN
@@ -102,7 +102,7 @@ BEGIN
           v_value := round(v_variance * COALESCE(v_final_price, 0), 2);
           v_rm_delta := v_rm_delta + v_value;
         ELSIF v_variance < 0 THEN
-          v_res := public._raw_remove_fifo(
+          v_res := private.raw_issue_approved_v2(
             v_item.raw_material_id, v_count.branch_id, v_count.warehouse_id,
             -v_variance, 'adjustment', 'stock_count', v_count.id,
             v_count.count_number, auth.uid()
@@ -114,28 +114,13 @@ BEGIN
           IF v_shortage > 0 THEN
             RAISE EXCEPTION 'STOCK_COUNT_ITEM_FAILED: %', 'STOCK_COUNT_SHORTAGE';
           END IF;
-          -- Existing FIFO batches are consumed for quantity provenance.
-          -- Post one value-only bridge to ensure the SAME net value as the
-          -- approved last-price adjustment, without fabricating quantity.
-          -- This candidate must be tested against ALL report/read consumers.
-          v_value := round(-v_variance * COALESCE(v_final_price, 0), 2);
-          IF round(COALESCE((v_res->>'total_cost')::numeric,0),2) IS DISTINCT FROM v_value THEN
-            -- Never allow a value bridge to mask an incomplete FIFO removal.
-            IF COALESCE((v_res->>'removed')::numeric,0) IS DISTINCT FROM -v_variance THEN
-              RAISE EXCEPTION 'STOCK_COUNT_REMOVED_QUANTITY_MISMATCH raw % expected % actual %',
-                v_item.raw_material_id,-v_variance,v_res->>'removed';
-            END IF;
-            INSERT INTO public.inventory_ledger(
-              raw_material_id,branch_id,warehouse_id,batch_number,
-              quantity,unit_cost,total_cost,before_qty,after_qty,
-              entry_type,reference_type,reference_id,reference_number,created_by
-            ) VALUES (
-              v_item.raw_material_id,v_count.branch_id,v_count.warehouse_id,NULL,
-              0,v_final_price,
-              round(COALESCE((v_res->>'total_cost')::numeric,0),2)-v_value,
-              v_item.counted_quantity,v_item.counted_quantity,
-              'revaluation','stock_count',v_count.id,v_count.count_number,auth.uid()
-            );
+          -- Approved-price v2 movement emits the physical ledger at the same
+          -- canonical approved price as the balancing accounting journal.
+          -- No FIFO valuation, zero-quantity revaluation bridge or debt replay.
+          v_value := round(-v_variance * v_final_price, 2);
+          IF COALESCE((v_res->>'removed')::numeric,0) IS DISTINCT FROM -v_variance
+             OR round(COALESCE((v_res->>'total_cost')::numeric,0),2) IS DISTINCT FROM v_value THEN
+            RAISE EXCEPTION 'STOCK_COUNT_APPROVED_MOVEMENT_MISMATCH raw %',v_item.raw_material_id;
           END IF;
           v_rm_delta := v_rm_delta - v_value;
         END IF;
