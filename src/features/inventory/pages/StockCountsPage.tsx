@@ -227,10 +227,15 @@ export function StockCountsPage() {
       && (count.status === 'draft' || count.status === 'submitted' || count.status === 'approved')
     );
     if (activeForWarehouse) {
+      const approvedPending = activeForWarehouse.status === 'approved';
       show(
-        isAr
-          ? `يوجد جرد نشط بالفعل لهذا المخزن (${activeForWarehouse.count_number || activeForWarehouse.status}). يجب إنهاؤه أو رفضه قبل إنشاء جرد جديد.`
-          : `An active stock count already exists for this warehouse (${activeForWarehouse.count_number || activeForWarehouse.status}). Finish or reject it before creating another count.`,
+        approvedPending
+          ? (isAr
+            ? `الجرد ${activeForWarehouse.count_number || ''} معتمد لكنه لم يُطبّق. اطلب من مسؤول يملك صلاحية تطبيق الجرد إلغاء الجرد القديم بعد مراجعته، أو تطبيقه فقط إذا كانت كمياته لا تزال صحيحة.`
+            : `Count ${activeForWarehouse.count_number || ''} is approved but not applied. An inventory-apply approver must review and cancel the stale count or apply it only if its quantities are still valid.`)
+          : (isAr
+            ? `يوجد جرد نشط بالفعل لهذا المخزن (${activeForWarehouse.count_number || activeForWarehouse.status}). يجب إنهاؤه أو رفضه قبل إنشاء جرد جديد.`
+            : `An active stock count already exists for this warehouse (${activeForWarehouse.count_number || activeForWarehouse.status}). Finish or reject it before creating another count.`),
         'error',
       );
       return;
@@ -319,6 +324,10 @@ export function StockCountsPage() {
     if (!confirmTarget) return;
     const { count } = confirmTarget;
     const id = count.id;
+    if (action === 'reject' && count.status === 'approved' && !rejectReason.trim()) {
+      show(isAr ? 'يجب توضيح سبب إلغاء الجرد المعتمد قبل تحرير المخزن.' : 'A reason is required to cancel an approved count.', 'error');
+      return;
+    }
     let res: { data: { success?: boolean; error?: string; detail?: string } | null; error?: { message: string } | null };
     if (action === 'submit') res = await api.inventory.submitStockCount({ p_stock_count_id: id });
     else if (action === 'approve') res = await api.inventory.approveStockCount({ p_stock_count_id: id });
@@ -354,6 +363,7 @@ export function StockCountsPage() {
         {can('inventory.count.approve') && c.status === 'submitted' && <button onClick={() => setConfirmTarget({ count: c, action: 'approve' })} className="p-1.5 rounded-md hover:bg-ui-success-soft text-ui-success" title={t('approveCount')}><CheckCircle2 className="w-4 h-4" /></button>}
         {can('inventory.count.reject') && c.status === 'submitted' && <button onClick={() => { setConfirmTarget({ count: c, action: 'reject' }); setRejectReason(''); }} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={t('rejectCount')}><XCircle className="w-4 h-4" /></button>}
         {can('inventory.count.apply') && c.status === 'approved' && <button onClick={() => setConfirmTarget({ count: c, action: 'apply' })} className="p-1.5 rounded-md hover:bg-purple-50 text-purple-500" title={t('applyCount')}><CheckCheck className="w-4 h-4" /></button>}
+        {can('inventory.count.apply') && c.status === 'approved' && <button onClick={() => { setConfirmTarget({ count: c, action: 'reject' }); setRejectReason(''); }} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={isAr ? 'إلغاء جرد معتمد لم يُطبّق (بدون تعديل المخزون)' : 'Cancel approved, unposted count (no stock change)'}><XCircle className="w-4 h-4" /></button>}
       </div>;
     }},
   ];
@@ -408,7 +418,7 @@ export function StockCountsPage() {
       <Modal open={!!viewTarget} onClose={() => setViewTarget(null)} title={t('countItems') + (viewTarget?.count_number ? ` - ${viewTarget.count_number}` : '')} size="lg">{viewTarget && <div className="space-y-3"><div className="flex items-center justify-between rounded-lg bg-ui-page-alt px-4 py-3"><span className="text-sm text-ui-muted">{isAr ? 'إجمالي قيمة الجرد' : 'Total Count Value'}</span><span className="text-lg font-bold text-ui-text">{formatNumber(viewTotalValue, 2)}</span></div><DataTable columns={itemColumns} data={viewTarget.items || []} emptyMessage={t('noData')} /></div>}</Modal>
       <Modal open={!!editTarget} onClose={() => setEditTarget(null)} title={t('editCountItem')} size="lg">{editTarget && <div className="space-y-4"><div className="flex items-center justify-between"><p className="text-sm font-medium text-ui-muted">{t('countItems')}</p><Button variant="outline" size="sm" onClick={addEditLine}><Plus className="w-4 h-4" /> {t('addCountItem')}</Button></div><div className="space-y-2">{editLines.map((l, idx) => <div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-6"><Select label={idx === 0 ? t('product') : undefined} value={l.product_id} onChange={(e) => updateEditLine(idx, 'product_id', e.target.value)}><option value="">{t('product')}</option>{editProducts.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></div><div className="col-span-3"><Input label={idx === 0 ? t('countedQuantity') : undefined} type="number" step="0.0001" value={l.counted_quantity} onChange={(e) => updateEditLine(idx, 'counted_quantity', e.target.value)} placeholder="0" /></div><div className="col-span-2"><Input label={idx === 0 ? t('reason') : undefined} value={l.reason} onChange={(e) => updateEditLine(idx, 'reason', e.target.value)} placeholder={isAr ? 'سبب' : 'Reason'} /></div><div className="col-span-1 flex justify-end"><button onClick={() => removeEditLine(idx)} className="p-2 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button></div></div>)}</div><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setEditTarget(null)}>{t('cancel')}</Button><Button onClick={saveEdit}>{t('save')}</Button></div></div>}</Modal>
       <ConfirmDialog open={!!confirmTarget && confirmTarget.action !== 'reject'} onClose={() => setConfirmTarget(null)} onConfirm={() => confirmTarget && runWorkflow(confirmTarget.action)} title={confirmTarget?.action ? t(confirmTarget.action === 'submit' ? 'submitCount' : confirmTarget.action === 'approve' ? 'approveCount' : 'applyCount') : ''} message={confirmTarget?.action ? (confirmTarget.action === 'submit' ? t('submitCountConfirm') : confirmTarget.action === 'approve' ? t('approveCountConfirm') : t('applyCountConfirm')) : ''} confirmLabel={t('save')} cancelLabel={t('cancel')} />
-      <Modal open={!!confirmTarget && confirmTarget.action === 'reject'} onClose={() => setConfirmTarget(null)} title={t('rejectCount')} size="sm"><div className="space-y-4"><p className="text-sm text-ui-subtle">{t('rejectCountConfirm')}</p><Input label={t('reason')} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder={isAr ? 'سبب الرفض' : 'Rejection reason'} /><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setConfirmTarget(null)}>{t('cancel')}</Button><Button variant="danger" onClick={() => runWorkflow('reject')}>{t('rejectCount')}</Button></div></div></Modal>
+      <Modal open={!!confirmTarget && confirmTarget.action === 'reject'} onClose={() => setConfirmTarget(null)} title={confirmTarget?.count.status === 'approved' ? (isAr ? 'إلغاء جرد معتمد لم يُطبّق' : 'Cancel approved count') : t('rejectCount')} size="sm"><div className="space-y-4"><p className="text-sm text-ui-subtle">{confirmTarget?.count.status === 'approved' ? (isAr ? 'هذا الجرد معتمد، لكن لم تُطبّق كمياته بعد. الإلغاء يحتاج سببًا ولن يغيّر أرصدة المخزون أو القيود. لا يُسمح بالإلغاء إذا سبق ترحيل أي حركة.' : 'This approved count has not been applied. Cancellation requires a reason and does not post stock or accounting entries. Counts with posted effects cannot be cancelled.') : t('rejectCountConfirm')}</p><Input label={t('reason')} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder={isAr ? 'سبب الإلغاء أو الرفض' : 'Cancellation or rejection reason'} /><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setConfirmTarget(null)}>{t('cancel')}</Button><Button variant="danger" onClick={() => runWorkflow('reject')}>{confirmTarget?.count.status === 'approved' ? (isAr ? 'إلغاء الجرد المعتمد' : 'Cancel approved count') : t('rejectCount')}</Button></div></div></Modal>
     </DesignSurface>
   );
 }
