@@ -16,16 +16,16 @@ test('unpriced raw lines fail closed without fallback to snapshot, average or fa
   assert.doesNotMatch(sql, /v_final_price := COALESCE\(v_final_price,v_item\.unit_cost,0\)/);
 });
 test('raw count movements use v2 approved-price writers, never FIFO helpers', () => {
-  assert.match(sql, /private\\.raw_issue_approved_v2\\(/);
-  assert.match(sql, /private\\.raw_receive_approved_v2\\(/);
-  assert.doesNotMatch(sql, /public\\._raw_remove_fifo\\(/);
-  assert.doesNotMatch(sql, /public\\._raw_add\\(/);
+  assert.match(sql, /private\.raw_issue_approved_v2\(/);
+  assert.match(sql, /private\.raw_receive_approved_v2\(/);
+  assert.doesNotMatch(sql, /public\._raw_remove_fifo\(/);
+  assert.doesNotMatch(sql, /public\._raw_add\(/);
   assert.doesNotMatch(sql, /'revaluation','stock_count'/);
 });
 test('raw movement amount must match approved price and raised errors roll back', () => {
   assert.match(sql, /STOCK_COUNT_APPROVED_MOVEMENT_MISMATCH/);
   assert.match(sql, /RAISE EXCEPTION 'STOCK_COUNT_ITEM_FAILED/);
-  assert.match(sql, /EXCEPTION\\s+WHEN OTHERS/);
+  assert.match(sql, /EXCEPTION\s+WHEN OTHERS/);
 });
 test('checks both raw and product removal success before applying', () => {
   assert.match(sql, /RAW_STOCK_COUNT_REMOVE_FAILED|STOCK_COUNT_REMOVE_FAILED/);
