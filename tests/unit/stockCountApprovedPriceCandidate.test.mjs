@@ -41,3 +41,18 @@ test('resolved approved price is frozen on posted stock count line', () => {
   assert.match(sql, /UPDATE public\.stock_count_items\s+SET unit_cost = v_final_price/);
   assert.match(sql, /v_item\.unit_cost IS DISTINCT FROM v_final_price/);
 });
+
+test('catalog zero fallback stays in central reader and is historically guarded', () => {
+  const price = readFileSync('scripts/candidates/latest_approved_price_zero_catalog_NOT_FOR_PRODUCTION_20261101.sql','utf8');
+  assert.match(price, /CREATE OR REPLACE FUNCTION private\.latest_approved_raw_prices/);
+  assert.match(price, /rm\.default_cost=0/);
+  assert.match(price, /rm\.updated_at<=p_as_of/);
+  assert.match(price, /'catalog_zero'/);
+  assert.match(price, /ELSE w\.unit_cost END/);
+});
+test('stock count raw issue reuses original historical timestamp', () => {
+  assert.match(sql, /v_count\.count_number, auth\.uid\(\), v_count\.created_at/);
+  const helper = readFileSync('scripts/db/candidates/approved_raw_cost_engine_v2_helpers_20261031.sql','utf8');
+  assert.match(helper, /COALESCE\(p_valuation_as_of,v_now\)/);
+  assert.match(helper, /v_price\.unit_cost<0/);
+});
