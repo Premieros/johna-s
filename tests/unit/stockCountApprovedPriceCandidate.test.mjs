@@ -16,17 +16,18 @@ test('known zero prices are not filtered out', () => {
 });
 test('raw shortage pricing is not calculated from FIFO total_cost', () => {
   assert.match(sql, /v_value := round\(-v_variance \* COALESCE\(v_final_price, 0\), 2\)/);
-  assert.match(sql, /STOCK_COUNT_LEDGER_VALUATION_MISMATCH/);
+  assert.match(sql, /INSERT INTO public\.inventory_ledger\(/);
 });
 test('raw item failures are raised and rolled back, not early-returned', () => {
   assert.match(sql, /RAISE EXCEPTION 'STOCK_COUNT_ITEM_FAILED/);
   assert.match(sql, /EXCEPTION\s+WHEN OTHERS/);
 });
 
-test('rejects FIFO ledger and approved-price journal divergence', () => {
-  assert.match(sql, /STOCK_COUNT_LEDGER_VALUATION_MISMATCH/);
+test('bridges FIFO ledger and approved-price journal valuation at zero quantity', () => {
+  assert.match(sql, /INSERT INTO public\.inventory_ledger\(/);
   assert.match(sql, /round\(COALESCE\(\(v_res->>'total_cost'\)::numeric,0\),2\)/);
-  assert.match(sql, /RAISE EXCEPTION 'STOCK_COUNT_LEDGER_VALUATION_MISMATCH/);
+  assert.match(sql, /'revaluation','stock_count'/);
+  assert.match(sql, /v_current,v_current/);
 });
 test('checks both raw and product removal success before applying', () => {
   assert.match(sql, /RAW_STOCK_COUNT_REMOVE_FAILED|STOCK_COUNT_REMOVE_FAILED/);
