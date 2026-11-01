@@ -224,7 +224,17 @@ export function StockCountsPage() {
     if (!form.branch_id || !form.warehouse_id) { show(t('required') + ': ' + t('branch') + ' / ' + t('warehouse'), 'error'); return; }
     const activeForWarehouse = counts.find((count) =>
       count.warehouse_id === form.warehouse_id
-      && (count.status === 'draft' || count.status === 'submitted' || count.status === 'approved')
+      && (count.status === 'draft' || count.status === 'submitted'
+        || (count.status === 'approved' && (() => {
+          // An approved count from an earlier calendar month is not an active
+          // current-month draft. Preserve it for reconciliation; never apply it
+          // or change its status merely to create a fresh count.
+          const created = new Date(count.created_at);
+          const now = new Date();
+          return !Number.isNaN(created.getTime())
+            && created.getFullYear() === now.getFullYear()
+            && created.getMonth() === now.getMonth();
+        })()))
     );
     if (activeForWarehouse) {
       show(
