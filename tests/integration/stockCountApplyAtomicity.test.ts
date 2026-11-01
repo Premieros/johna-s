@@ -46,13 +46,16 @@ describe.skipIf(!local)('stock count apply is atomic on late FIFO shortage', () 
     expect(result).toMatchObject({success:false,error:'STOCK_COUNT_SHORTAGE'});
     expect(Number(result.shortage)).toBeGreaterThan(0);
 
+    // Assert as the test DB owner so RLS cannot hide a leaked posting.
+    await db.query('RESET ROLE');
     const inventory = (await db.query<{product_id:string;quantity:string}>(
       'SELECT product_id,quantity FROM public.inventory WHERE warehouse_id=$1', [warehouse]
     )).rows;
     expect(Number(inventory.find(x => x.product_id === firstProduct)?.quantity)).toBe(0);
     expect(Number(inventory.find(x => x.product_id === shortProduct)?.quantity)).toBe(1);
     for (const table of ['inventory_batches','inventory_ledger','stock_transactions','journal_entries']) {
-      const {rows} = await db.query<{n:number}>(`SELECT count(*)::int n FROM public.${table} WHERE reference_id=$1`, [count]);
+      const referenceColumn = table === 'inventory_batches' ? 'source_id' : 'reference_id';
+      const {rows} = await db.query<{n:number}>(`SELECT count(*)::int n FROM public.${table} WHERE ${referenceColumn}=$1`, [count]);
       expect(rows[0].n, `${table} must be rolled back`).toBe(0);
     }
     const status = (await db.query<{status:string;applied_at:string|null}>(
