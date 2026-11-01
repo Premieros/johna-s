@@ -13,7 +13,7 @@ try { local = ['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostname);
 describe.skipIf(!local)('latest-price stock count candidate in disposable database', () => {
   let db: pg.Client;
   const branch=randomUUID(), warehouse=randomUUID(), actor=randomUUID();
-  const raw=randomUUID(), shortRaw=randomUUID(), count=randomUUID();
+  const raw=randomUUID(), shortRaw=randomUUID(), count=randomUUID(), zeroCount=randomUUID();
   beforeAll(async () => {
     db=openDb(url); await db.connect(); await db.query('BEGIN');
     // Install the existing unshipped v2 movement prototype ONLY inside this local
@@ -74,6 +74,20 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
     );
     expect(before.rows[0].unit_cost).toBeNull();
     expect(before.rows[0].price_source).toBe('unpriced');
+  });
+
+  it('posts a zero-priced raw surplus with zero-valued ledger and no invented journal', async () => {
+    await db.query("INSERT INTO public.stock_counts(id,count_number,branch_id,warehouse_id,status,count_type,created_by,approved_by,approved_at) VALUES($1,$5,$2,$3,'approved','partial',$4,$4,now())",[zeroCount,branch,warehouse,actor,'QA-ZERO-POST-'+zeroCount.slice(0,8)]);
+    await db.query("INSERT INTO public.stock_count_items(stock_count_id,raw_material_id,system_quantity,counted_quantity,unit_cost) VALUES($1,$2,0,3,0)",[zeroCount,raw]);
+    await db.query("SET LOCAL ROLE authenticated");
+    const result=(await db.query('SELECT public.apply_stock_count($1) AS r',[zeroCount])).rows[0].r;
+    expect(result.success).toBe(true);
+    await db.query('RESET ROLE');
+    const ledger=(await db.query("SELECT quantity,total_cost,unit_cost FROM public.inventory_ledger WHERE reference_id=$1 AND reference_type='stock_count' AND raw_material_id=$2",[zeroCount,raw])).rows;
+    expect(ledger.length).toBeGreaterThan(0);
+    expect(ledger.reduce((sum,r)=>sum+Number(r.quantity),0)).toBe(3);
+    expect(ledger.every(r=>Number(r.total_cost)===0 && Number(r.unit_cost)===0)).toBe(true);
+    expect((await db.query("SELECT status FROM public.stock_counts WHERE id=$1",[zeroCount])).rows[0].status).toBe('applied');
   });
 
 });
