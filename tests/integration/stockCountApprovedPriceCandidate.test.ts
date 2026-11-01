@@ -16,6 +16,13 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
   const raw=randomUUID(), shortRaw=randomUUID(), count=randomUUID();
   beforeAll(async () => {
     db=openDb(url); await db.connect(); await db.query('BEGIN');
+    // Install the existing unshipped v2 movement prototype ONLY inside this local
+    // disposable transaction. Strip outer transaction commands to retain ROLLBACK.
+    const schema=readFileSync('scripts/db/candidates/approved_raw_cost_engine_minimal_storage_20261031.sql','utf8')
+      .replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,'');
+    await db.query(schema);
+    const helpers=readFileSync('scripts/db/candidates/approved_raw_cost_engine_v2_helpers_20261031.sql','utf8');
+    await db.query(helpers);
     const candidate=readFileSync('scripts/candidates/stock_count_apply_last_price_ATOMIC_NOT_FOR_PRODUCTION_20261101.sql','utf8');
     await db.query(candidate);
     await db.query("INSERT INTO public.branches(id,name) VALUES($1,'Latest price QA')",[branch]);
