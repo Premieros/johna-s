@@ -1,0 +1,101 @@
+# Approved-price stock count candidate — refreshed on main
+Repository: `Premieros/johna-s`
+Production Supabase: `azzdesuowpdcoflmyezn`
+Branch: `fix/stock-count-approved-price-on-main-20261101`
+Current PR: `#571`
+Last updated: 2026-11-01
+State: **BLOCKED**
+
+## OWNER-LOCKED EXECUTION PLAN — FIFO → EXISTING LAST RAW PRICE (2026-11-01)
+**Priority: authoritative owner decision. Read this before making ANY further changes.** Any older log text proposing FIFO valuation, a FIFO-only count fix, a separate pricing engine, or mandatory bulk historical FIFO debt replay is superseded by this section. Do not switch architecture without explicit new owner instruction.
+
+**Goal:** Replace FIFO costing for **all new raw-material movements** with the existing centralized last-price calculation `private.latest_approved_raw_prices` (and its existing catalog-source data), not a new engine. The same price must drive movement ledger, stock count variance, accounting, returns, transfers, production/kitchen, purchases and other callers as appropriate. **An explicitly recorded zero price remains zero.** Distinguish actual zero from absent/unknown price; never invent a positive price or silently substitute FIFO, averages or stale count-line cost. Preserve the stock count as quantities only; evaluate prices as of count time. Count items 00008 and 00009 must retain their entered quantities.
+
+### Fixed scope and sequential delivery
+1. **Single existing price source:** audit its authorization, source precedence, branch, timestamp, missing vs zero, catalog zero historical validity, UOM normalization, and immutability of posted cost. Reuse/extend existing reader, not new pricing tables or engines.
+2. **One canonical approved-last-price physical movement path:** map every legacy raw receipt/issue/transfer, kitchen, sale, manufacturing, return, reversal and stock count writer. Replace FIFO *valuation* and new per-movement debt creation for new writes; maintain lot identity, warehouse and branch quantities, concurrency locks, expiry metadata and permissions. Prefer the smallest supported change per caller, no unnecessary redesign.
+3. **Legacy coexistence rather than replay:** preserve historical FIFO lots/debts/journals unchanged. Provide a tested, explicit bridge for existing outstanding debt coordinates so new approved-price movements work without replaying tens of thousands of old entries, do not double-settle on later receipts, and remain reversible. No silent deletion, corruption or resetting historical cost.
+4. **Stock count atomic posting:** raw count difference = counted quantity − locked current warehouse quantity; use approved last raw price at the count time including zero; match signed movement value in inventory ledger and balanced journal. Any failure must abort all changes. Keep workflow: draft → submitted → approved → applied, with real user permissions; no direct database status hacks.
+5. **Tests and gates:** disposable Postgres integration of zero, missing, positive, multi-line abort, cross-warehouse, negative quantities, existing FIFO debt, later receipts, reversals, price provenance, role isolation, ledger/journal parity; then exact-head CI and audited deployment. Monitor and verify production configuration. Only THEN apply counts `Johna's-00008` / `Johna's-00009` via authorized workflow, and reconcile resulting stock/journal. Never apply them while still `draft` or while any data-integrity test fails.
+
+### Current known state / no false completion
+- UI quantity-only price removal was merged separately in PR #574 (main commit `25dd4057`).
+- Pricing and physical movement candidate remains PR #571: **DO NOT DEPLOY** until the above tests and a migration are ready.
+- Read-only audit of both counts found 140 + 68 previously unpriced raw lines, all with `raw_materials.default_cost=0` and `updated_at <= count.created_at`; zero must be honored only with correct source/timestamp semantics.
+- Existing open FIFO debts affected 72 + 77 warehouse/material coordinates and 10,585 + 9,210 debt rows respectively. Do not confuse legacy record count with required new design complexity.
+- Both counts were still `draft` and unapplied at last verification. No live postings or stock adjustments have been authorized by simply editing this document.
+- Update **this** log and `docs/CURRENT_WORK_PLAN.md` after each actual step, with evidence of test, merge or production application. Never describe proposed source-only code as deployed.
+
+
+## Work status
+Source-only approved-price stock-count candidate rebased onto atomicity-fixed main. No production price migration or November stock count applied.
+
+## Guardrails
+Never deploy scripts/candidates SQL without validated production migration. Preserve role/branch/warehouse access, atomic rollback, approved branch price returned by the existing central function (current projection only indexes positive values; never manufacture zero), historical financial records and production inventory.
+
+## Baseline
+Atomicity fix PR #570 merged and separately applied to Supabase. PR #569 from older base has conflicts. November count drafts #00008 and #00009 not applied.
+
+## Root-cause ledger
+Original apply_count values shortage from FIFO while owner's policy requires last approved branch price. Earlier candidate used a FIFO revaluation bridge; it has now been removed. Raw count issue/receipt calls existing unshipped approved-v2 physical helpers, which value their ledger entries using the existing central approved-price read model.
+
+## Change ledger
+PR #571 now stages a FIFO-free raw-count candidate and updates unit/integration test fixtures to install existing v2 helpers only inside a disposable local transaction. Owner direction reaffirmed: reuse the existing latest-price calculation path. Candidate now fails closed with APPROVED_RAW_PRICE_UNAVAILABLE if central pricing has no positive approved price. Replaced the zero-price fixture expectation with an atomic no-write rejection test. No new price calculation engine or price tables created.
+
+## Verification ledger
+GitHub Actions run 41292586447: browser-smoke, pages-continuity and db SUCCESS; verify FAILURE due to mandatory active-worklog contract requiring specific section headings and metadata. Worklog structure was corrected; the new head with fail-closed behavior still requires exact-head CI. Local tests have not been independently confirmed in this session.
+
+## Production gate
+BLOCKED: candidate SQL explicitly DO NOT DEPLOY, approved-v2 physical helpers are not installed in production and legacy FIFO debt coordinates remain blocked; end-to-end ledger/journal reconciliation remains unverified; no tested production migration, no authorization to apply November counts while ledger and journal revaluation integration and reporting need review.
+
+## Owner architecture decision — no FIFO dependency in final stock count
+Owner explicitly requires stock count correction to use the existing approved-last-price path, not a new pricing engine and not FIFO valuation. FIFO is legacy and will be retired after a safe replacement. The candidate no longer calls `_raw_remove_fifo` or `_raw_add` for raw stock lines, but the new movement helpers are unshipped and intentionally reject legacy debt coordinates. PR #571 must not merge/deploy until production cutover and reconciliation gates are met. Separate physical lot/quantity movement from value; use existing `private.latest_approved_raw_prices` for branch/time-specific valuation, with frozen provenance and a balanced stock ledger and journal. Any replacement physical writer must respect existing lots, canonical locks, shortage semantics, rollback, access controls and legacy debt cutover, with no historical replay or data mutation as a shortcut. Reuse the staged default-off v2 movement infrastructure only after proving it works at legacy positions; do not assume v2 is activated or safe on production. Complete local disposable-DB tests of surplus, deficit, multiple lines, missing approved price, historical debt, journal/ledger equality and abort behavior before any migration or production activation.
+
+## Latest verification status
+Candidate updated at GitHub commit ec48989eee960751aadd395354bafa88be596491. No passing exact-head CI is available yet for this commit, so tests are NOT claimed green. The candidate must remain DO NOT DEPLOY.
+
+## Owner quantity-only count UX decision
+The count document UI and Excel template must capture physical quantities, not manually entered raw-material costs. The existing central price reader is authoritative as of the count document's creation time when posting; old workbook price columns are ignored. Count screens no longer display misleading pre-application valuations from draft line cost. Database `unit_cost` remains as a legacy/audit field and the candidate freezes the posting price there, but it must not be treated as a user-provided pricing authority. Changes staged in PR #571; no production activation or customer count applied. Exact-head UI, workbook, DB and accounting tests are required.
+
+## Production read-only blocker audit — 2026-11-01
+- Target counts `Johna's-00008` (407 raw lines) and `Johna's-00009` (402 raw lines) remain `draft`, not approved/applied.
+- Existing canonical price read model, evaluated at each count's `created_at`, returned **140 unpriced** raw materials in 00008 and **68 unpriced** in 00009 (unit_cost NULL, source `unpriced`). Valid positive prices: 267 and 334, respectively. Do not mistake returned rows for valid pricing coverage.
+- Sources for 00008: pricing 54, purchase 157, stock_count 56, unpriced 140. Sources for 00009: pricing 244, purchase 90, unpriced 68.
+- Existing legacy debt table currently has 19,795 open debt rows matching the counted coordinates: 10,585 for warehouse 00008 and 9,210 for warehouse 00009. The approved-v2 helper explicitly blocks those coordinates with `LEGACY_FIFO_POSITION_NOT_CUTOVER`.
+- Therefore **release and posting remain blocked on two independent production prerequisites**: creating or recovering authentic approved price events for the unpriced materials via existing authorized workflow, and reconciling/cutting over legacy debt balances without rewriting historical journals. DO NOT invent prices, use stale line costs, bypass historical debt guard, or force draft → applied through privileged SQL.
+- UI-only quantity workflow PR #574 passed full CI and merged to main at `25dd4057ab87ef307578f71f6f477d8bf17c1c15`. Financial PR #571 remains source-only and open.
+
+## Owner price policy: zero is zero
+A legitimately recorded current raw-material price of 0 must be used as 0 in stock count accounting; do NOT replace it with a fallback or synthesize a positive amount. Distinguish **explicit verified zero** from **missing price** (the `unpriced` sentinel with NULL cost). The existing approved-price projection currently filters zero (`unit_cost > 0`, sync skips `<=0`), and the unshipped approved-v2 movement helpers also reject `<=0`; thus no code path yet proves a legitimate zero through to posting. The 140 / 68 `unpriced` records may NOT be treated as verified zero until a price source explicitly records zero. A compatible change requires extending the existing canonical projection, maintaining source provenance and testing zero-valued receipts/issues, journals and safeguards. Financial PR remains **DO NOT DEPLOY** and counts 00008/00009 remain drafts.
+
+## Catalog-zero implementation candidate — 2026-11-01
+Read-only production audit found all 140 + 68 `unpriced` materials have `raw_materials.default_cost=0` and `raw_materials.updated_at <= stock_counts.created_at`. Current `raw_material_price_events` has **zero** zero-cost rows (its schema presently enforces cost > 0); `purchase_items` has zero zero-cost rows, whereas `stock_count_items` has 1113 zero-cost rows, not necessarily authoritative when still in draft. The older narrow zero-price event projection prototype is therefore **not sufficient** to repair the two counts.
+
+A new source-only candidate `scripts/candidates/latest_approved_price_zero_catalog_NOT_FOR_PRODUCTION_20261101.sql` updates the EXISTING price reader to return `catalog_zero` only if no approved source price is visible, the catalog default is explicitly 0, and the catalog row was not updated after the requested `as_of`. It never fabricates source events or uses draft stock count lines as approved prices. Approved-v2 movement helper accepts `catalog_zero`, allows a nonnegative price, and can now resolve raw issue price as of `v_count.created_at` rather than the transaction time; count candidate passes that timestamp. SQL source-contract and rollback-only PostgreSQL tests staged. This does **not** establish that all historical changes to default cost are audited; an approved price that was overridden to zero after an earlier positive price remains a future design issue requiring a real zero price event.
+
+**Do not deploy:** the v2 physical writers and open historical debts still prevent applying these counts safely. A passing CI contract alone is not evidence of journal reconciliation or writer cutover.
+
+## Legacy debt coordinate audit — read only
+As of the most recent production query, the 10,585 open debt rows in count 00008 belong to **72 distinct counted raw materials**, and 9,210 open debt rows in count 00009 belong to **77 distinct counted raw materials**. This is a much smaller number of blocked stock coordinates than debt rows, but it does **not** authorize bulk deletion, settlement, bypass of the legacy debt guard, or a forced status update. Conversion must be atomic per coordinate and preserve accounting history, document quantity, warehouses, journal balances and subsequent receipt behavior. Exact-head CI was not yet available at the most recent check for the current candidate changes.
+
+## Minimal implementation decision — avoid full FIFO debt conversion
+Owner requests the simplest correct path: count adjustment must be separate from legacy sales/receipt FIFO debt settlement. No bulk migration of 19,795 old debt rows as a prerequisite, no retroactive journal edits, and no new pricing engine. Preserve old debt history for existing obligations.
+
+A stock-count-specific **atomic physical delta** needs to update canonical warehouse/batch quantity, warehouse and branch summaries, and write one approved-price-valued inventory ledger movement per actual nonzero delta. The journal must match the ledger valuation, including explicit catalog zero. Do NOT merely update the warehouse summary (batches are authoritative), delete or settle debts implicitly, or insert arbitrary zero-quantity offsets. It needs the same branch/material advisory lock and snapshot-safe preflight as other stock writers. The old debt still cannot silently participate in later receipt reconciliation; subsequent receipt behavior must be explicitly tested so adjustment stock is not counted twice.
+
+Snapshot read-only audit: 00008 has 286 nonzero snapshot differences, 72 involving open-debt coordinates; 00009 has 285 nonzero differences, 76 involving open-debt coordinates, one additional open-debt material without snapshot difference. These are snapshot comparisons only; apply must recompute under lock at posting time. All counts remain drafts and no live writes authorized before testing.
+
+## Latest executable test work — 2026-11-01
+Added rollback-only local PostgreSQL integration regression to post a zero-priced raw surplus through the staged approved-price reader and movement helper, assert the ledger records exact quantity and **zero cost**, and verify the count becomes applied within the disposable test transaction (which is subsequently rolled back). This is not a production application. Commit `f6552ae91112ffb94104249ae8e36ce82956844f`. Exact-head CI still needs to run; no test pass is claimed for this new case.
+
+## Latest implementation step — 2026-11-01
+Added rollback-only local PostgreSQL coverage for **both** zero-price stock-count directions: receive 3 at zero cost, then issue 2 to arrive at warehouse quantity 1 without FIFO valuation. This checks each new movement ledger row carries zero unit and total cost and the document completes atomically in disposable test state. Commit `5f76d89d13c3d4be1e288473c71359c8647791ca`. These are source changes only; exact-head CI still has no returned workflow result, so no test success is claimed. The broader all-writer FIFO-to-last-price cutover and existing historical debt coexistence remain unfinished.
+
+## Last-price vs FIFO valuation regression — 2026-11-01
+Added a disposable-Postgres test proving the intended decisive distinction: an existing raw batch originally cost **12**, while the central approved pricing event says **7**; applying a raw stock-count shortage of **3** must result in ledger quantity **−3** and value **−21**, not FIFO value −36. This is a new test fixture, **not a successful test run or production posting**; commit `6a113a14711a0bdd540802719a4f75d1aa3b2dbf`. Earlier zero-price in/out tests are also staged. The PR still has no exact-head GitHub workflow results from the commit-run lookup. The owner-locked plan remains full raw movement FIFO → existing latest-price, not a stock-count-only workaround. No production cutover while existing legacy debt coexistence remains untested.
+
+## Next action
+Run exact-head CI, fix any integration regression, confirm accounting ledger/report value equality, then prepare audited migration and normal authorized application flow.
+
+## Mandatory update protocol
+Update this log after substantive code/test changes. Never claim deployment or post real inventory without verifying the production state.

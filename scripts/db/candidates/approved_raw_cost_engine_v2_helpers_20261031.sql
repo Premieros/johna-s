@@ -7,7 +7,8 @@
 CREATE OR REPLACE FUNCTION private.raw_issue_approved_v2(
   p_raw_material_id uuid,p_branch_id uuid,p_warehouse_id uuid,p_qty numeric,
   p_entry_type text,p_reference_type text,p_reference_id uuid,
-  p_reference_number text DEFAULT NULL,p_created_by uuid DEFAULT NULL
+  p_reference_number text DEFAULT NULL,p_created_by uuid DEFAULT NULL,
+  p_valuation_as_of timestamptz DEFAULT NULL
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SET search_path TO 'public','pg_temp'
@@ -48,11 +49,11 @@ BEGIN
     RETURN jsonb_build_object('success',false,'error','LEGACY_FIFO_POSITION_NOT_CUTOVER');
   END IF;
   SELECT * INTO v_price FROM private.latest_approved_raw_prices(
-    p_branch_id,ARRAY[p_raw_material_id],v_now)
+    p_branch_id,ARRAY[p_raw_material_id],COALESCE(p_valuation_as_of,v_now))
   WHERE raw_material_id=p_raw_material_id;
-  IF v_price.unit_cost IS NULL OR v_price.unit_cost<=0
+  IF v_price.unit_cost IS NULL OR v_price.unit_cost<0
     OR v_price.priced_at IS NULL
-    OR v_price.price_source NOT IN ('purchase','pricing','stock_count') THEN
+    OR v_price.price_source NOT IN ('purchase','pricing','stock_count','catalog_zero') THEN
     RETURN jsonb_build_object('success',false,'error','APPROVED_RAW_PRICE_UNAVAILABLE');
   END IF;
   SELECT COALESCE(SUM(quantity),0) INTO v_before
@@ -176,7 +177,7 @@ DECLARE
   v_variance_reference uuid;
 BEGIN
   IF p_qty IS NULL OR p_qty<=0 OR p_receipt_unit_cost IS NULL
-     OR p_receipt_unit_cost<=0 OR p_warehouse_id IS NULL
+     OR p_receipt_unit_cost<0 OR p_warehouse_id IS NULL
      OR p_raw_material_id IS NULL OR p_branch_id IS NULL THEN
     RETURN jsonb_build_object('success',false,'error','APPROVED_RECEIPT_INVALID_INPUT');
   END IF;
@@ -295,7 +296,7 @@ $fn$;
 
 -- Deliberately NO SECURITY DEFINER, no public RPC, no API execute grant.
 REVOKE ALL ON FUNCTION private.raw_issue_approved_v2(
- uuid,uuid,uuid,numeric,text,text,uuid,text,uuid
+ uuid,uuid,uuid,numeric,text,text,uuid,text,uuid,timestamptz
 ) FROM PUBLIC,anon,authenticated,service_role;
 REVOKE ALL ON FUNCTION private.raw_receive_approved_v2(
  uuid,uuid,uuid,numeric,numeric,text,text,uuid,text,uuid

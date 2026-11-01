@@ -30,11 +30,11 @@ BEGIN
       approved_cost_basis IS NULL OR (
         approved_cost_basis='approved_last_known'
         AND raw_material_id IS NOT NULL
-        AND approved_price_source IN('purchase','pricing','stock_count')
+        AND approved_price_source IN('purchase','pricing','stock_count','catalog_zero')
         AND approved_price_at IS NOT NULL
         AND approved_cost_recorded_at IS NOT NULL
         AND approved_price_at<=approved_cost_recorded_at
-        AND unit_cost>0
+        AND unit_cost>=0
         AND abs(total_cost - quantity*unit_cost)<=0.005
       )
     ) NOT VALID;
