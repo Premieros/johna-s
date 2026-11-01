@@ -1,4 +1,4 @@
--- DO NOT DEPLOY: candidate migration pending journal vs FIFO-ledger valuation reconciliation.
+-- DO NOT DEPLOY: candidate value-only ledger bridge not integration tested.
 -- Price zero is valid. This patch is deliberately staged for testing only.
 -- In particular, the stock ledger still records FIFO costs for shortages, while
 -- the journal below records approved price. They must be reconciled before ship.
@@ -105,12 +105,24 @@ BEGIN
           IF v_shortage > 0 THEN
             RAISE EXCEPTION 'STOCK_COUNT_ITEM_FAILED: %', 'STOCK_COUNT_SHORTAGE';
           END IF;
-          -- Do not post a journal inconsistent with FIFO-valued ledger.
-          IF round(COALESCE((v_res->>'total_cost')::numeric,0),2)
-             IS DISTINCT FROM round(-v_variance * v_final_price,2) THEN
-            RAISE EXCEPTION 'STOCK_COUNT_LEDGER_VALUATION_MISMATCH material %',v_item.raw_material_id;
-          END IF;
+          -- Existing FIFO batches are consumed for quantity provenance.
+          -- Post one value-only bridge to ensure the SAME net value as the
+          -- approved last-price adjustment, without fabricating quantity.
+          -- This candidate must be tested against ALL report/read consumers.
           v_value := round(-v_variance * COALESCE(v_final_price, 0), 2);
+          IF round(COALESCE((v_res->>'total_cost')::numeric,0),2) IS DISTINCT FROM v_value THEN
+            INSERT INTO public.inventory_ledger(
+              raw_material_id,branch_id,warehouse_id,batch_number,
+              quantity,unit_cost,total_cost,before_qty,after_qty,
+              entry_type,reference_type,reference_id,reference_number,created_by
+            ) VALUES (
+              v_item.raw_material_id,v_count.branch_id,v_count.warehouse_id,NULL,
+              0,v_final_price,
+              round(COALESCE((v_res->>'total_cost')::numeric,0),2)-v_value,
+              v_current,v_current,
+              'revaluation','stock_count',v_count.id,v_count.count_number,auth.uid()
+            );
+          END IF;
           v_rm_delta := v_rm_delta - v_value;
         END IF;
       ELSE
