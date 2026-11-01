@@ -9,7 +9,7 @@ SET LOCAL lock_timeout='2s';
 SET LOCAL statement_timeout='10s';
 DO $guard$
 BEGIN
- IF position('COALESCE(w.price_source,''unpriced'')' IN
+ IF position('raw_approved_price_read_model' IN
     pg_get_functiondef('private.latest_approved_raw_prices(uuid,uuid[],timestamptz)'::regprocedure))=0
  THEN RAISE EXCEPTION 'LATEST_APPROVED_PRICE_FUNCTION_SOURCE_DRIFT'; END IF;
 END $guard$;
