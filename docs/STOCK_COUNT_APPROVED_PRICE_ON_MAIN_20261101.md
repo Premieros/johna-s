@@ -97,6 +97,9 @@ Added a disposable-Postgres test proving the intended decisive distinction: an e
 ## Integration-fixture correction — 2026-11-01
 The disposable database test installed the catalog-zero pricing candidate *after* the initial missing-price test, so that test was not exercising the same reader later used by the posting scenarios. Corrected setup to install the candidate before all fixture execution and introduced a separate truly unpriced raw material (positive catalog default, no approved source). This keeps the all-or-nothing missing-price regression meaningful while testing catalog-zero receipt/issue and last-approved-price-vs-FIFO under one consistent reader. Commits `141a8ee`, `d027cd7`. No claim of passing database run; latest exact-head CI still unconfirmed, no production deployment or count application.
 
+## Latest integration fixture repair — 2026-11-01
+The missing-price rollback fixture mistakenly created a raw material with positive `default_cost=1`, which may automatically generate a legitimate approved price event via the catalog trigger. Changed the fixture to an explicit zero catalog value whose `updated_at` is later than the synthetic count, so the canonical as-of reader must return `unpriced`. Commit `5262daab0ce808ea26a282e35787c4a7eee4fe9d`. Still source-only; do not merge/deploy before full exact-head CI and financial movement cutover verification.
+
 ## Next action
 Run exact-head CI, fix any integration regression, confirm accounting ledger/report value equality, then prepare audited migration and normal authorized application flow.
 
