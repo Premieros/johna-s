@@ -225,7 +225,7 @@ test('user journey: redirect aliases resolve without blank pages', async ({ page
   }
 });
 
-test('employee receivables statement supports current month and a custom period', async ({ page }) => {
+test('employee receivables list shows period totals and applies a custom period', async ({ page }) => {
   await mockAuthenticatedApp(page);
 
   const branchId = '10000000-0000-0000-0000-000000000001';
@@ -247,12 +247,7 @@ test('employee receivables statement supports current month and a custom period'
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([branch]) });
   });
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/customers**`, async (route) => {
-    const accept = route.request().headers()['accept'] || '';
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(accept.includes('application/vnd.pgrst.object+json') ? employee : [employee]),
-    });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([employee]) });
   });
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_employee_receivable_balances**`, async (route) => {
     await route.fulfill({
@@ -265,6 +260,25 @@ test('employee receivables statement supports current month and a custom period'
         bucket_31_60: 0,
         bucket_61_90: 0,
         bucket_90_plus: 0,
+      }]),
+    });
+  });
+
+  const periodRequests: Array<{ p_branch_id: string; p_from_date: string; p_to_date: string }> = [];
+  await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_employee_receivables_period_summary**`, async (route) => {
+    const body = route.request().postDataJSON() as { p_branch_id: string; p_from_date: string; p_to_date: string };
+    periodRequests.push(body);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{
+        customer_id: customerId,
+        employee_name: employee.name,
+        phone: employee.phone,
+        period_opening_balance: 100,
+        period_debit: 30,
+        period_credit: 10,
+        period_closing_balance: 120,
       }]),
     });
   });
@@ -283,69 +297,26 @@ test('employee receivables statement supports current month and a custom period'
   };
   const customFrom = offsetDate(today, -5);
   const customTo = offsetDate(today, -3);
-  const priorDate = offsetDate(customFrom, -1);
-  const afterDate = offsetDate(customTo, 1);
-
-  await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_party_statement**`, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        party_id: customerId,
-        side: 'ar',
-        opening: 0,
-        rows: [
-          {
-            line_id: 'period-prior-line',
-            entry_date: priorDate,
-            entry_number: 'EMP-PERIOD-PRIOR',
-            reference_type: 'sale',
-            reference_number: 'EMP-PERIOD-PRIOR',
-            description: 'Before selected period',
-            debit: 25,
-            credit: 0,
-          },
-          {
-            line_id: 'period-payment-line',
-            entry_date: customTo,
-            entry_number: 'EMP-PERIOD-PAY',
-            reference_type: 'employee_receivable_payment',
-            reference_number: 'EMP-PERIOD-PAY',
-            description: 'Payment in selected period',
-            debit: 0,
-            credit: 5,
-          },
-          {
-            line_id: 'period-after-line',
-            entry_date: afterDate,
-            entry_number: 'EMP-PERIOD-AFTER',
-            reference_type: 'sale',
-            reference_number: 'EMP-PERIOD-AFTER',
-            description: 'After selected period',
-            debit: 10,
-            credit: 0,
-          },
-        ],
-      }),
-    });
-  });
 
   await login(page);
   await openRoute(page, '/employee-receivables');
   await expect(page.getByText('Period Test Employee')).toBeVisible();
-  await page.getByRole('button', { name: /كشف الحساب|Statement/i }).first().click();
 
   const from = page.getByTestId('employee-period-from');
   const to = page.getByTestId('employee-period-to');
   await expect(from).toHaveValue(`${today.slice(0, 7)}-01`);
   await expect(to).toHaveValue(today);
+  await expect(page.getByTestId('employee-period-total-opening')).toBeVisible();
+  await expect(page.getByTestId('employee-period-total-debit')).toBeVisible();
+  await expect(page.getByTestId('employee-period-total-credit')).toBeVisible();
+  await expect(page.getByTestId('employee-period-total-closing')).toBeVisible();
+  await expect(page.getByTestId('employee-period-total-current')).toBeVisible();
 
   await from.fill(customFrom);
   await to.fill(customTo);
   await page.getByTestId('employee-period-apply').click();
 
   await expect(page.getByTestId('employee-period-applied')).toContainText(`${customFrom} — ${customTo}`);
-  await expect(page.getByText('EMP-PERIOD-PAY')).toBeVisible();
-  await expect(page.getByText('EMP-PERIOD-PRIOR')).toHaveCount(0);
-  await expect(page.getByText('EMP-PERIOD-AFTER')).toHaveCount(0);
+  await expect.poll(() => periodRequests.some((request) => request.p_from_date === customFrom && request.p_to_date === customTo)).toBe(true);
+  await expect(page.getByText('Period Test Employee')).toBeVisible();
 });
