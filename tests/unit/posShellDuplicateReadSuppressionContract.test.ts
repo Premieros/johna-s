@@ -21,6 +21,13 @@ describe('POS shell duplicate-read suppression contract', () => {
     expect(subscribe).toBeGreaterThan(disabledGuard);
   });
 
+  it('throttles non-critical badge reads across realtime bursts to the 15s cache window', () => {
+    expect(hook).toContain('const cachedSnapshot = countCache.get(branchId)');
+    expect(hook).toContain('COUNT_CACHE_TTL_MS - (Date.now() - cachedSnapshot.loadedAt)');
+    expect(hook).toContain('Math.max(REFRESH_DEBOUNCE_MS, cacheRemainingMs)');
+    expect(hook).toContain('void refresh(true)');
+  });
+
   it('keeps the lightweight non-POS implementation and excludes frozen paths', () => {
     expect(hook).toContain(".from('orders')");
     expect(hook).toContain(".from('order_items')");
