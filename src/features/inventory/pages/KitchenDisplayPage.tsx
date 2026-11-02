@@ -14,7 +14,7 @@ import { catalog } from '@/api/domains/catalog';
 import { subscribePosRealtime } from '@/features/pos/services/posRealtime';
 import type { KitchenQueueItem, KitchenStation } from '@/lib/types';
 import { KitchenCompletedHistory } from '../components/KitchenCompletedHistory';
-import { KITCHEN_AUTO_CLOSE_SECONDS, isKitchenQueueAutoClosed, isKitchenQueueOverdue, kitchenElapsedSeconds } from '../services/kitchenQueueAge';
+import { isKitchenQueueAutoClosed, isKitchenQueueOverdue, kitchenElapsedSeconds } from '../services/kitchenQueueAge';
 
 function elapsedColor(seconds: number): string {
   if (seconds > 600) return 'text-ui-danger font-bold';
