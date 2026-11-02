@@ -19,6 +19,7 @@ AS $function$
 DECLARE
   v_from date;
   v_to date;
+  v_today date;
   v_rows jsonb;
 BEGIN
   IF auth.uid() IS NULL
@@ -34,8 +35,9 @@ BEGIN
   END IF;
 
   -- Match the same historical visibility boundary used by party statements.
+  v_today := public.history_business_date();
   v_from := public.history_clamp_from(p_from_date);
-  v_to := public.history_clamp_to(p_to_date);
+  v_to := LEAST(public.history_clamp_to(p_to_date), v_today);
   IF v_from IS NULL OR v_to IS NULL OR v_from > v_to THEN
     RETURN '[]'::jsonb;
   END IF;
@@ -47,14 +49,16 @@ BEGIN
       b.value ->> 'phone' AS phone,
       COALESCE((b.value ->> 'open_amount')::numeric, 0)::numeric(14,2) AS period_closing_balance
     FROM jsonb_array_elements(
-      public.get_employee_receivable_balances(p_branch_id, v_to)
+      public.get_employee_receivable_balances(p_branch_id, v_today)
     ) AS b(value)
   ),
   period_movements AS MATERIALIZED (
     SELECT
       jl.customer_id,
-      round(COALESCE(sum(jl.debit), 0), 2)::numeric(14,2) AS period_debit,
-      round(COALESCE(sum(jl.credit), 0), 2)::numeric(14,2) AS period_credit
+      round(COALESCE(sum(jl.debit) FILTER (WHERE j.entry_date >= v_from AND j.entry_date <= v_to), 0), 2)::numeric(14,2) AS period_debit,
+      round(COALESCE(sum(jl.credit) FILTER (WHERE j.entry_date >= v_from AND j.entry_date <= v_to), 0), 2)::numeric(14,2) AS period_credit,
+      round(COALESCE(sum(jl.debit) FILTER (WHERE j.entry_date > v_to AND j.entry_date <= v_today), 0), 2)::numeric(14,2) AS after_period_debit,
+      round(COALESCE(sum(jl.credit) FILTER (WHERE j.entry_date > v_to AND j.entry_date <= v_today), 0), 2)::numeric(14,2) AS after_period_credit
     FROM public.journal_entry_lines jl
     JOIN public.journal_entries j ON j.id = jl.journal_entry_id
     JOIN public.customers c
@@ -63,7 +67,7 @@ BEGIN
      AND c.customer_type = 'employee'
     WHERE j.branch_id = p_branch_id
       AND j.entry_date >= v_from
-      AND j.entry_date <= v_to
+      AND j.entry_date <= v_today
     GROUP BY jl.customer_id
   ),
   result_rows AS (
@@ -73,13 +77,20 @@ BEGIN
       b.phone,
       round(
         b.period_closing_balance
+        - COALESCE(m.after_period_debit, 0)
+        + COALESCE(m.after_period_credit, 0),
+        2
+      )::numeric(14,2) AS period_closing_balance,
+      COALESCE(m.period_debit, 0)::numeric(14,2) AS period_debit,
+      COALESCE(m.period_credit, 0)::numeric(14,2) AS period_credit,
+      round(
+        b.period_closing_balance
+        - COALESCE(m.after_period_debit, 0)
+        + COALESCE(m.after_period_credit, 0)
         - COALESCE(m.period_debit, 0)
         + COALESCE(m.period_credit, 0),
         2
-      )::numeric(14,2) AS period_opening_balance,
-      COALESCE(m.period_debit, 0)::numeric(14,2) AS period_debit,
-      COALESCE(m.period_credit, 0)::numeric(14,2) AS period_credit,
-      b.period_closing_balance
+      )::numeric(14,2) AS period_opening_balance
     FROM employee_balances b
     LEFT JOIN period_movements m ON m.customer_id = b.customer_id
   )
@@ -97,6 +108,6 @@ $function$;
 REVOKE ALL ON FUNCTION public.get_employee_receivables_period_summary(uuid,date,date) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_employee_receivables_period_summary(uuid,date,date) TO authenticated;
 COMMENT ON FUNCTION public.get_employee_receivables_period_summary(uuid,date,date)
-  IS 'One branch-scoped employee receivables period projection using the canonical as-of employee balances and caller-visible customer journal movements. Read-only; applies history_clamp_from/to.';
+  IS 'One branch-scoped employee receivables period projection using current employee balances and caller-visible journal movements to reverse post-period activity. Read-only; applies history_clamp_from/to.';
 
 COMMIT;
