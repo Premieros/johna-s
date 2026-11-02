@@ -78,3 +78,9 @@ test('raw count receipt verifies last approved as-of price and freezes ledger pr
   assert.match(helper, /approved_cost_basis,approved_price_source,approved_price_at/);
   assert.match(sql, /v_count\.count_number, auth\.uid\(\), v_count\.created_at/);
 });
+
+test('ordinary raw receipts must not claim approved stock-count valuation provenance', () => {
+  const helper = readFileSync('scripts/db/candidates/approved_raw_cost_engine_v2_helpers_20261031.sql','utf8');
+  assert.match(helper, /CASE WHEN p_reference_type='stock_count' THEN 'approved_last_known' ELSE NULL END/);
+  assert.match(helper, /CASE WHEN p_reference_type='stock_count' THEN v_now ELSE NULL END/);
+});
