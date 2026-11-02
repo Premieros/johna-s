@@ -71,10 +71,10 @@ export function StockCountsPage() {
     setReviewError('');
     // Read the same canonical source as Cost Center. A missing price stays
     // NULL in this review even though the costing display may show zero.
-    supabase.rpc('get_raw_material_current_prices', {
+    Promise.resolve(supabase.rpc('get_raw_material_current_prices', {
       p_branch_id: viewTarget.branch_id,
       p_raw_material_ids: materialIds,
-    }).then(({ data, error }) => {
+    })).then(({ data, error }) => {
       if (cancelled) return;
       if (error) { setReviewError(error.message); setReviewPrices({}); return; }
       const next: Record<string, { unit_cost: number | null; price_source: string }> = {};
