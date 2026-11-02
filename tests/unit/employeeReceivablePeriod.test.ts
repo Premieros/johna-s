@@ -83,4 +83,19 @@ describe('employee receivables period view', () => {
     expect(result.closingBalance).toBe(30);
     expect(result.rows).toHaveLength(3);
   });
+  it('preserves canonical same-day accounting order instead of sorting by display IDs', () => {
+    const result = buildEmployeeReceivablePeriod([
+      { ...row('opening', '2026-09-16', 'opening', 0, 0), balance: 10 },
+      row('z-line', '2026-11-02', 'sale', 20, 0),
+      row('a-line', '2026-11-02', 'payment', 0, 5),
+    ], { from: '2026-11-02', to: '2026-11-02' });
+
+    expect(result.rows.map((item) => item.id)).toEqual([
+      'period-opening-2026-11-02',
+      'z-line',
+      'a-line',
+    ]);
+    expect(result.rows.map((item) => item.balance)).toEqual([10, 30, 25]);
+  });
+
 });
