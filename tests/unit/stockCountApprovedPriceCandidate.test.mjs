@@ -98,3 +98,8 @@ test('approved receipt matches real v2 helper result and posted ledger', () => {
   assert.match(sql, /before_qty/);
   assert.match(sql, /STOCK_COUNT_APPROVED_RECEIPT_MISMATCH/);
 });
+
+test('raw stock count validates final warehouse quantity after posting', () => {
+  assert.match(sql, /STOCK_COUNT_WAREHOUSE_QUANTITY_MISMATCH/);
+  assert.match(sql, /COALESCE\(v_current,0\) IS DISTINCT FROM v_item\.counted_quantity/);
+});
