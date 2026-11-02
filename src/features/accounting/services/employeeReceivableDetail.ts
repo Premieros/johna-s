@@ -1,6 +1,7 @@
 import { supabase } from '@/api';
 import type { ArAgingRow } from '@/lib/types';
 import { getCairoToday } from './employeeReceivablePeriod';
+import { getCairoToday } from './employeeReceivablePeriod';
 
 export type EmployeeCustomerSnapshot = {
   id: string;
