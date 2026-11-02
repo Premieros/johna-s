@@ -142,3 +142,9 @@ Update this log after substantive code/test changes. Never claim deployment or p
 ## 2026-11-02 deterministic abort test syntax repair
 - Corrected a malformed TypeScript integration fixture containing literal `\\n` text after its deterministic valid-first / unpriced-second line declarations. This could prevent the suite from being parsed at all. GitHub commit b4b60010f3b06c61b3cb8023934a9e0cee903f25.
 - Exact-head CI has not reported a workflow run at inspection; test pass is not claimed. No price v2 release or November customer count posting.
+
+## 2026-11-02 explicit-zero provenance verification
+- Read-only production recheck: 00008 has 407 raw lines, 139 unpriced; 00009 has 402 raw lines, 68 unpriced. All 207 missing-price lines have catalog default_cost=0, but neither count has an explicit approved zero-price event in raw_material_price_events before count time. Legacy unsettled debts affect 72 and 77 distinct materials, respectively.
+- Critical distinction: catalog default zero is not proof that a user explicitly approved zero. Do NOT release the zero-catalog candidate as authoritative until that provenance rule is independently verified or corrected.
+- Added repeatable read-only audit: scripts/audit/november_count_zero_provenance_and_debt_gate_20261102.sql.
+- Candidate remains BLOCKED / DO NOT DEPLOY. No price, journal, or count data modified during this audit.
