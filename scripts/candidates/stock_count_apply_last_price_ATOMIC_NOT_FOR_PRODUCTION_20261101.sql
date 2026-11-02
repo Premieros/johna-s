@@ -108,7 +108,13 @@ BEGIN
           IF NOT COALESCE((v_res->>'success')::boolean, false) THEN
             RAISE EXCEPTION 'STOCK_COUNT_ITEM_FAILED: %', 'RAW_ADJUST_FAILED';
           END IF;
-          v_value := round(v_variance * COALESCE(v_final_price, 0), 2);
+          v_value := round(v_variance * v_final_price, 2);
+          -- A successful helper response is insufficient: a partial receipt or
+          -- receipt-side legacy debt absorption may silently break journal parity.
+          IF COALESCE((v_res->>'received')::numeric,0) IS DISTINCT FROM v_variance
+             OR round(COALESCE((v_res->>'total_cost')::numeric,0),2) IS DISTINCT FROM v_value THEN
+            RAISE EXCEPTION 'STOCK_COUNT_APPROVED_RECEIPT_MISMATCH raw %',v_item.raw_material_id;
+          END IF;
           v_rm_delta := v_rm_delta + v_value;
         ELSIF v_variance < 0 THEN
           v_res := private.raw_issue_approved_v2(
