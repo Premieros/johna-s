@@ -111,8 +111,17 @@ BEGIN
           v_value := round(v_variance * v_final_price, 2);
           -- A successful helper response is insufficient: a partial receipt or
           -- receipt-side legacy debt absorption may silently break journal parity.
-          IF COALESCE((v_res->>'received')::numeric,0) IS DISTINCT FROM v_variance
-             OR round(COALESCE((v_res->>'total_cost')::numeric,0),2) IS DISTINCT FROM v_value THEN
+          IF COALESCE((v_res->>'after_qty')::numeric,0)
+               - COALESCE((v_res->>'before_qty')::numeric,0) IS DISTINCT FROM v_variance
+             OR NOT EXISTS (
+               SELECT 1 FROM public.inventory_ledger il
+               WHERE il.id=(v_res->>'receipt_ledger_id')::bigint
+                 AND il.reference_id=v_count.id AND il.reference_type='stock_count'
+                 AND il.raw_material_id=v_item.raw_material_id
+                 AND il.warehouse_id=v_count.warehouse_id
+                 AND il.quantity=v_variance
+                 AND round(il.total_cost,2)=v_value
+             ) THEN
             RAISE EXCEPTION 'STOCK_COUNT_APPROVED_RECEIPT_MISMATCH raw %',v_item.raw_material_id;
           END IF;
           v_rm_delta := v_rm_delta + v_value;
