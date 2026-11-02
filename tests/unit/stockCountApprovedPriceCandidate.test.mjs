@@ -91,3 +91,10 @@ test('stock count serializes raw baseline with approved-v2 physical writers', ()
   assert.ok(lock >= 0 && baseline > lock, 'canonical material lock must precede warehouse quantity read');
   assert.match(sql, /v_item\.raw_material_id::text\|\|':'\|\|v_count\.branch_id::text,0/);
 });
+
+test('approved receipt matches real v2 helper result and posted ledger', () => {
+  assert.match(sql, /receipt_ledger_id/);
+  assert.match(sql, /after_qty/);
+  assert.match(sql, /before_qty/);
+  assert.match(sql, /STOCK_COUNT_APPROVED_RECEIPT_MISMATCH/);
+});
