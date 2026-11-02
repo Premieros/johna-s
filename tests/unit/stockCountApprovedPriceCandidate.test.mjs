@@ -84,3 +84,10 @@ test('ordinary raw receipts must not claim approved stock-count valuation proven
   assert.match(helper, /CASE WHEN p_reference_type='stock_count' THEN 'approved_last_known' ELSE NULL END/);
   assert.match(helper, /CASE WHEN p_reference_type='stock_count' THEN v_now ELSE NULL END/);
 });
+
+test('stock count serializes raw baseline with approved-v2 physical writers', () => {
+  const lock = sql.indexOf('PERFORM pg_advisory_xact_lock(hashtextextended(');
+  const baseline = sql.indexOf('FROM public.raw_material_warehouse_inventory');
+  assert.ok(lock >= 0 && baseline > lock, 'canonical material lock must precede warehouse quantity read');
+  assert.match(sql, /v_item\.raw_material_id::text\|\|':'\|\|v_count\.branch_id::text,0/);
+});
