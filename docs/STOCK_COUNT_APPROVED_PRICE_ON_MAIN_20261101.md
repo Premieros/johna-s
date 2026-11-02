@@ -130,3 +130,7 @@ Update this log after substantive code/test changes. Never claim deployment or p
 - Found a race in candidate apply: it read raw warehouse quantity before acquiring the canonical material/branch advisory lock held by approved-v2 receipt and issue. Simultaneous sales/transfers could result in stale count variance.
 - Added the same `hashtextextended(raw_material_id::text||':'||branch_id::text,0)` transaction lock before price and warehouse reads; it remains held until transaction commits or aborts. Added source regression check. Commit 5020c16c151edf5295a4f6eb6dd7c4048db4b8f8.
 - Candidate is still NOT FOR PRODUCTION. Existing legacy FIFO debt and missing authentic zero price sources remain unresolved. Must run disposable database concurrency/legacy-debt/accounting integration and exact-head CI before deployment or posting November counts.
+
+## 2026-11-02 receipt ledger parity guard
+- Added fail-closed receipt quantity/value validation to the stock count candidate, using the *actual* v2 helper response fields `before_qty`, `after_qty`, `receipt_ledger_id` and the persisted inventory ledger row. An initial prototype mistakenly expected nonexistent `received` and `total_cost` response fields; corrected before release. Unit source guard added. Latest commit c6ea446e8c0a1d821167e1b1aa3772e0f754f064.
+- Still NOT FOR PRODUCTION. Existing price-source gaps, legacy debt coordinates and no verified latest-head CI prevent release and count application.
