@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ClipboardCheck, Plus, Eye, Send, CheckCircle2, XCircle, CheckCheck, Trash2, Download, Upload } from 'lucide-react';
 import * as api from '@/api';
-import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { useCan } from '@/lib/permissions';
@@ -18,7 +17,7 @@ import { logAudit } from '@/lib/audit';
 import { exportToExcelAdvanced, importFromExcel } from '@/lib/excel';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { StockCount, StockCountItem, Branch, Warehouse, Product, RawMaterial } from '@/lib/types';
-import { loadRawMaterialWarehouseSnapshot, loadStockCountMetadata } from '../services/stockCountData';
+import { loadRawMaterialWarehouseSnapshot, loadStockCountMetadata, loadStockCountReviewPrices } from '../services/stockCountData';
 import { buildStockCountExcelRows, parseStockCountExcelRows, stockCountExcelColumns } from '../utils/stockCountExcel';
 
 interface EditLine {
@@ -63,31 +62,23 @@ export function StockCountsPage() {
   const [reviewError, setReviewError] = useState('');
 
   useEffect(() => {
-    if (!viewTarget) { setReviewPrices({}); setReviewError(''); return; }
+    if (!viewTarget) { setReviewPrices({}); setReviewError(''); setReviewLoading(false); return; }
     const materialIds = (viewTarget.items || []).map((item) => item.raw_material_id).filter((id): id is string => Boolean(id));
-    if (!materialIds.length) return;
+    if (!materialIds.length) { setReviewPrices({}); setReviewError(''); setReviewLoading(false); return; }
     let cancelled = false;
     setReviewLoading(true);
     setReviewError('');
-    // Read the same canonical source as Cost Center. A missing price stays
-    // NULL in this review even though the costing display may show zero.
-    Promise.resolve(supabase.rpc('get_raw_material_current_prices', {
-      p_branch_id: viewTarget.branch_id,
-      p_raw_material_ids: materialIds,
-    })).then(({ data, error }) => {
-      if (cancelled) return;
-      if (error) { setReviewError(error.message); setReviewPrices({}); return; }
-      const next: Record<string, { unit_cost: number | null; price_source: string }> = {};
-      for (const row of (data || []) as Array<{ raw_material_id: string; unit_cost: number | string | null; price_source: string | null }>) {
-        next[row.raw_material_id] = {
-          unit_cost: row.unit_cost == null ? null : Number(row.unit_cost),
-          price_source: row.price_source || 'unpriced',
-        };
-      }
-      setReviewPrices(next);
-    }).catch((error: unknown) => {
-      if (!cancelled) setReviewError(error instanceof Error ? error.message : String(error));
-    }).finally(() => { if (!cancelled) setReviewLoading(false); });
+    // Read the same canonical source as Cost Center through the feature service.
+    // A missing price stays NULL in this review even when costing displays zero.
+    loadStockCountReviewPrices(viewTarget.branch_id, materialIds)
+      .then((next) => { if (!cancelled) setReviewPrices(next); })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setReviewError(error instanceof Error ? error.message : String(error));
+          setReviewPrices({});
+        }
+      })
+      .finally(() => { if (!cancelled) setReviewLoading(false); });
     return () => { cancelled = true; };
   }, [viewTarget]);
 
