@@ -261,7 +261,8 @@ BEGIN
     p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,
     CASE WHEN p_reference_type='stock_count' THEN 'approved_last_known' ELSE NULL END,
     v_approved_price_source,v_approved_priced_at,
-    v_approved_price_ref,v_now
+    v_approved_price_ref,
+    CASE WHEN p_reference_type='stock_count' THEN v_now ELSE NULL END
   ) RETURNING id INTO v_receipt_ledger;
 
   v_posted_variance:=round(v_variance,2);
