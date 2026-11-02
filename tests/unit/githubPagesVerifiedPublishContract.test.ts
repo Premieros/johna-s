@@ -29,6 +29,7 @@ describe('GitHub Pages requires verified exact-HEAD main build',()=>{
     expect(workflow.match(/test -n "\$actual" && test "\$actual" = "\$VERIFIED_SHA"/g)).toHaveLength(2);
     expect(workflow).toMatch(/deploy:\s*\n\s*needs:\s*\[build, production-parity\]/);
     expect(workflow).toContain('actions/deploy-pages@v4');
+    expect(workflow).toContain('deployment-branch: ${{ github.event.workflow_run.head_branch }}');
     expect(workflow).toContain('node scripts/db/check-production-parity.js');
   });
 });
