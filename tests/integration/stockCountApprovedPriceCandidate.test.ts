@@ -51,14 +51,14 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
   },45000);
   afterAll(async () => { if(db){ await db.query('ROLLBACK').catch(()=>{}); await db.end(); } });
   it('rejects an unpriced material atomically without altering inventory or accounts', async () => {
-    const before=(await db.query("SELECT quantity FROM public.raw_material_warehouse_inventory WHERE raw_material_id=$1 AND warehouse_id=$2",[shortRaw,warehouse])).rows[0];
+    const before=(await db.query("SELECT quantity FROM public.raw_material_warehouse_inventory WHERE raw_material_id=$1 AND warehouse_id=$2",[raw,warehouse])).rows[0];
     const {rows}=await db.query('SELECT public.apply_stock_count($1) result',[count]);
     expect(rows[0].result.success).toBe(false);
     expect(rows[0].result.detail).toContain('APPROVED_RAW_PRICE_UNAVAILABLE');
     await db.query('RESET ROLE');
     expect((await db.query('SELECT status FROM public.stock_counts WHERE id=$1',[count])).rows[0].status).toBe('approved');
-    const after=(await db.query("SELECT quantity FROM public.raw_material_warehouse_inventory WHERE raw_material_id=$1 AND warehouse_id=$2",[shortRaw,warehouse])).rows[0];
-    expect(Number(after.quantity)).toBe(Number(before.quantity));
+    const after=(await db.query("SELECT quantity FROM public.raw_material_warehouse_inventory WHERE raw_material_id=$1 AND warehouse_id=$2",[raw,warehouse])).rows[0];
+    expect(Number(after?.quantity ?? 0)).toBe(Number(before?.quantity ?? 0));
     const ledger=(await db.query("SELECT count(*)::int n FROM public.inventory_ledger WHERE reference_id=$1 AND reference_type='stock_count'",[count])).rows[0];
     expect(ledger.n).toBe(0);
     const frozen=(await db.query('SELECT unit_cost FROM public.stock_count_items WHERE stock_count_id=$1',[count])).rows;
