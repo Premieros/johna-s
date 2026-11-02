@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const workflow = readFileSync('.github/workflows/deploy.yml','utf8');
 const verify = readFileSync('.github/workflows/verify-main.yml','utf8');
+const plan = readFileSync('docs/CURRENT_WORK_PLAN.md','utf8');
 
 describe('GitHub Pages requires verified exact-HEAD main build',()=>{
   it('has no direct push/manual publishing route that bypasses Verify main',()=>{
@@ -12,6 +13,7 @@ describe('GitHub Pages requires verified exact-HEAD main build',()=>{
     expect(workflow).not.toMatch(/^\s+push:\s*$/m);
     expect(workflow).not.toMatch(/^\s+workflow_dispatch:\s*$/m);
     expect(verify).toMatch(/name:\s*Verify main/);
+    expect(plan).toContain('Mandatory active work log: `docs/GITHUB_PAGES_VERIFIED_DEPLOY_20261101.md`');
     for(const name of ['verify','db','browser-smoke','pages-continuity']){
       expect(verify).toMatch(new RegExp('^  '+name+':','m'));
     }
