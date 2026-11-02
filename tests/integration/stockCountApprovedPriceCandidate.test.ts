@@ -14,7 +14,10 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
   let db: pg.Client;
   const branch=randomUUID(), warehouse=randomUUID(), actor=randomUUID();
   const raw=randomUUID(), shortRaw=randomUUID(), unpricedRaw=randomUUID(), count=randomUUID(), zeroCount=randomUUID(), zeroIssueCount=randomUUID(), latestPriceCount=randomUUID();
-  // Force a valid receipt first and an unpriced error second, proving rollback of earlier writes.\n  const firstLine='00000000-0000-4000-8000-000000000011';\n  const failingLine='00000000-0000-4000-8000-000000000012';\n  beforeAll(async () => {
+  // Force a valid receipt first and an unpriced error second, proving rollback of earlier writes.
+  const firstLine='00000000-0000-4000-8000-000000000011';
+  const failingLine='00000000-0000-4000-8000-000000000012';
+  beforeAll(async () => {
     db=openDb(url); await db.connect(); await db.query('BEGIN');
     // Install the existing unshipped v2 movement prototype ONLY inside this local
     // disposable transaction. Strip outer transaction commands to retain ROLLBACK.
