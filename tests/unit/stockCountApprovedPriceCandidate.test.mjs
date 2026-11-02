@@ -103,3 +103,11 @@ test('raw stock count validates final warehouse quantity after posting', () => {
   assert.match(sql, /STOCK_COUNT_WAREHOUSE_QUANTITY_MISMATCH/);
   assert.match(sql, /COALESCE\(v_current,0\) IS DISTINCT FROM v_item\.counted_quantity/);
 });
+
+test('legacy unsettled FIFO debts fail before any count-line writes', () => {
+  const preflight = sql.indexOf("IF EXISTS (\n      SELECT 1 FROM public.stock_count_items sci");
+  const loop = sql.indexOf("FOR v_item IN");
+  assert.ok(preflight >= 0 && loop > preflight);
+  assert.match(sql, /d\.debt_quantity>d\.settled_quantity/);
+  assert.match(sql, /LEGACY_FIFO_POSITION_NOT_CUTOVER/);
+});
