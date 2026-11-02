@@ -1,6 +1,7 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
+- Active combined verified-Pages release gate and stock-count review service repair: branch `fix/github-pages-deploy-after-verified-main-20261101`, PR #564. Pages may publish only after all four Verify main jobs pass for the same latest main SHA. Stock-count review pricing now stays behind `loadStockCountReviewPrices` in the inventory feature service, with a focused PromiseLike/zero/NULL test. No production SQL, stock, journal, debt or FIFO mutations. Mandatory active work log: `docs/GITHUB_PAGES_VERIFIED_DEPLOY_20261101.md`.
 - Active quantity-only stock count UI: `fix/stock-count-quantity-only-ui-20261101`, PR #574; Mandatory active work log: `docs/STOCK_COUNT_QUANTITY_ONLY_UI_20261101.md`. No financial RPC changes, do not apply customer counts until approved pricing cutover.
 - Active stock-count atomicity recovery `fix/stock-count-atomicity-rebase-20261101`, PR #570; Mandatory active work log: `docs/STOCK_COUNT_ATOMICITY_REBASE_20261101.md`. Only fixes rollback of partial count posting; latest-price policy remains blocked in PR #569.
 - Owner requested evidence-based optimization of redundant CI tests without losing coverage. Baseline Verify main #4576: unit suite ~235 seconds, browser ~260 seconds, DB ~134 seconds, builds three times in parallel check jobs. Experimental Node environment for source-contract tests only; no test deletion, database migration or production deployment. CI gates remain mandatory.
