@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ClipboardCheck, Plus, Eye, Send, CheckCircle2, XCircle, CheckCheck, Trash2, Download, Upload } from 'lucide-react';
 import * as api from '@/api';
+import { supabase } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { useCan } from '@/lib/permissions';
@@ -57,6 +58,39 @@ export function StockCountsPage() {
   const [formItems, setFormItems] = useState<CreateLine[]>([{ item_id: '', counted_quantity: '', reason: '' }]);
 
   const [viewTarget, setViewTarget] = useState<StockCount | null>(null);
+  const [reviewPrices, setReviewPrices] = useState<Record<string, { unit_cost: number | null; price_source: string }>>({});
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+
+  useEffect(() => {
+    if (!viewTarget) { setReviewPrices({}); setReviewError(''); return; }
+    const materialIds = (viewTarget.items || []).map((item) => item.raw_material_id).filter((id): id is string => Boolean(id));
+    if (!materialIds.length) return;
+    let cancelled = false;
+    setReviewLoading(true);
+    setReviewError('');
+    // Read the same canonical source as Cost Center. A missing price stays
+    // NULL in this review even though the costing display may show zero.
+    supabase.rpc('get_raw_material_current_prices', {
+      p_branch_id: viewTarget.branch_id,
+      p_raw_material_ids: materialIds,
+    }).then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) { setReviewError(error.message); setReviewPrices({}); return; }
+      const next: Record<string, { unit_cost: number | null; price_source: string }> = {};
+      for (const row of (data || []) as Array<{ raw_material_id: string; unit_cost: number | string | null; price_source: string | null }>) {
+        next[row.raw_material_id] = {
+          unit_cost: row.unit_cost == null ? null : Number(row.unit_cost),
+          price_source: row.price_source || 'unpriced',
+        };
+      }
+      setReviewPrices(next);
+    }).catch((error: unknown) => {
+      if (!cancelled) setReviewError(error instanceof Error ? error.message : String(error));
+    }).finally(() => { if (!cancelled) setReviewLoading(false); });
+    return () => { cancelled = true; };
+  }, [viewTarget]);
+
   const [editTarget, setEditTarget] = useState<StockCount | null>(null);
   const [editLines, setEditLines] = useState<EditLine[]>([]);
   const [confirmTarget, setConfirmTarget] = useState<{ count: StockCount; action: 'submit' | 'approve' | 'reject' | 'apply' } | null>(null);
@@ -369,6 +403,18 @@ export function StockCountsPage() {
     { key: 'system', header: t('systemQuantity'), render: (i) => formatNumber(Number(i.system_quantity)) },
     { key: 'counted', header: t('countedQuantity'), render: (i) => formatNumber(Number(i.counted_quantity)) },
     { key: 'variance', header: t('varianceQuantity'), render: (i) => <span className={`font-semibold ${Number(i.variance_quantity) >= 0 ? 'text-ui-success' : 'text-ui-danger'}`}>{Number(i.variance_quantity) >= 0 ? '+' : ''}{formatNumber(Number(i.variance_quantity))}</span> },
+    { key: 'cost_center_price', header: isAr ? 'آخر سعر بمركز التكلفة' : 'Current cost-center price', render: (i) => {
+      if (!i.raw_material_id) return '-';
+      const price = reviewPrices[i.raw_material_id];
+      if (!price || price.unit_cost == null) return <span className="text-ui-danger">{isAr ? 'بدون سعر معروف' : 'Unpriced'}</span>;
+      return <span>{formatNumber(price.unit_cost, 2)} <span className="text-xs text-ui-subtle">({price.price_source})</span></span>;
+    } },
+    { key: 'review_value', header: isAr ? 'تقييم الفرق الحالي (غير مرحّل)' : 'Current variance estimate (not posted)', render: (i) => {
+      if (!i.raw_material_id) return '-';
+      const price = reviewPrices[i.raw_material_id];
+      if (!price || price.unit_cost == null) return '-';
+      return formatNumber((Number(i.counted_quantity) - Number(i.system_quantity)) * price.unit_cost, 2);
+    } },
     { key: 'variance_value', header: t('varianceValue'), render: (i) => formatNumber(Number(i.variance_value), 2) },
     { key: 'reason', header: t('reason'), render: (i) => i.reason || '-' },
   ];
@@ -405,7 +451,22 @@ export function StockCountsPage() {
         <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setCreateOpen(false)}>{t('cancel')}</Button><Button onClick={createCount}>{isAr ? 'حفظ المسودة' : 'Save Draft'}</Button></div>
       </div></Modal>
 
-      <Modal open={!!viewTarget} onClose={() => setViewTarget(null)} title={t('countItems') + (viewTarget?.count_number ? ` - ${viewTarget.count_number}` : '')} size="lg">{viewTarget && <div className="space-y-3"><DataTable columns={itemColumns} data={viewTarget.items || []} emptyMessage={t('noData')} /></div>}</Modal>
+      <Modal open={!!viewTarget} onClose={() => setViewTarget(null)} title={t('countItems') + (viewTarget?.count_number ? ` - ${viewTarget.count_number}` : '')} size="lg">{viewTarget && <div className="space-y-3">
+        <p className="text-sm text-ui-muted">{isAr
+          ? 'مراجعة داخل النظام فقط، بدون تعديل المخزون أو القيود. الأسعار الحالية من نفس مصدر مركز التكلفة، وقد تختلف عن الأسعار بتاريخ الجرد. فروق الكميات محسوبة من الرصيد المسجل في مستند الجرد.'
+          : 'In-system review only: no inventory or journal postings. Current prices use the same source as Cost Center and may differ from count-date prices. Quantity differences use the recorded count snapshot.'}</p>
+        {reviewLoading && <p className="text-sm text-ui-subtle">{isAr ? 'جارٍ تحميل أسعار مركز التكلفة...' : 'Loading Cost Center prices...'}</p>}
+        {reviewError && <p role="alert" className="text-sm text-ui-danger">{reviewError}</p>}
+        {!reviewLoading && !reviewError && <p className="text-sm font-medium text-ui-text">{isAr ? 'بنود بلا سعر معروف: ' : 'Unpriced lines: '}
+          {(viewTarget.items || []).filter((i) => i.raw_material_id && reviewPrices[i.raw_material_id]?.unit_cost == null).length}
+          {' · '}{isAr ? 'قيمة الفروق المسعّرة (تقريبية): ' : 'Priced variance total (estimate): '}
+          {formatNumber((viewTarget.items || []).reduce((sum, i) => {
+            const price = i.raw_material_id ? reviewPrices[i.raw_material_id] : undefined;
+            return sum + (price?.unit_cost == null ? 0 : (Number(i.counted_quantity) - Number(i.system_quantity)) * price.unit_cost);
+          }, 0), 2)}
+        </p>}
+        <DataTable columns={itemColumns} data={viewTarget.items || []} emptyMessage={t('noData')} />
+      </div>}</Modal>
       <Modal open={!!editTarget} onClose={() => setEditTarget(null)} title={t('editCountItem')} size="lg">{editTarget && <div className="space-y-4"><div className="flex items-center justify-between"><p className="text-sm font-medium text-ui-muted">{t('countItems')}</p><Button variant="outline" size="sm" onClick={addEditLine}><Plus className="w-4 h-4" /> {t('addCountItem')}</Button></div><div className="space-y-2">{editLines.map((l, idx) => <div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-6"><Select label={idx === 0 ? t('product') : undefined} value={l.product_id} onChange={(e) => updateEditLine(idx, 'product_id', e.target.value)}><option value="">{t('product')}</option>{editProducts.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></div><div className="col-span-3"><Input label={idx === 0 ? t('countedQuantity') : undefined} type="number" step="0.0001" value={l.counted_quantity} onChange={(e) => updateEditLine(idx, 'counted_quantity', e.target.value)} placeholder="0" /></div><div className="col-span-2"><Input label={idx === 0 ? t('reason') : undefined} value={l.reason} onChange={(e) => updateEditLine(idx, 'reason', e.target.value)} placeholder={isAr ? 'سبب' : 'Reason'} /></div><div className="col-span-1 flex justify-end"><button onClick={() => removeEditLine(idx)} className="p-2 rounded-md hover:bg-ui-danger-soft text-ui-danger"><Trash2 className="w-4 h-4" /></button></div></div>)}</div><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setEditTarget(null)}>{t('cancel')}</Button><Button onClick={saveEdit}>{t('save')}</Button></div></div>}</Modal>
       <ConfirmDialog open={!!confirmTarget && confirmTarget.action !== 'reject'} onClose={() => setConfirmTarget(null)} onConfirm={() => confirmTarget && runWorkflow(confirmTarget.action)} title={confirmTarget?.action ? t(confirmTarget.action === 'submit' ? 'submitCount' : confirmTarget.action === 'approve' ? 'approveCount' : 'applyCount') : ''} message={confirmTarget?.action ? (confirmTarget.action === 'submit' ? t('submitCountConfirm') : confirmTarget.action === 'approve' ? t('approveCountConfirm') : t('applyCountConfirm')) : ''} confirmLabel={t('save')} cancelLabel={t('cancel')} />
       <Modal open={!!confirmTarget && confirmTarget.action === 'reject'} onClose={() => setConfirmTarget(null)} title={t('rejectCount')} size="sm"><div className="space-y-4"><p className="text-sm text-ui-subtle">{t('rejectCountConfirm')}</p><Input label={t('reason')} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder={isAr ? 'سبب الرفض' : 'Rejection reason'} /><div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setConfirmTarget(null)}>{t('cancel')}</Button><Button variant="danger" onClick={() => runWorkflow('reject')}>{t('rejectCount')}</Button></div></div></Modal>
