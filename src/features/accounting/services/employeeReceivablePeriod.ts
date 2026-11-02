@@ -71,10 +71,10 @@ export function buildEmployeeReceivablePeriod(
 ): EmployeeReceivablePeriodResult {
   const openingSourceRow = allRows.find((row) => row.kind === 'opening');
   const baseOpening = Number(openingSourceRow?.balance || 0);
-  const movements = allRows
-    .filter((row) => row.kind !== 'opening')
-    .slice()
-    .sort((a, b) => a.occurred_at.localeCompare(b.occurred_at) || a.id.localeCompare(b.id));
+  // The canonical party-statement RPC already returns movements in its
+  // accounting order (date, entry number, line ID). Keep that order exactly;
+  // sorting by display IDs here could reorder same-day entries.
+  const movements = allRows.filter((row) => row.kind !== 'opening');
 
   const beforePeriod = movements.filter((row) => row.occurred_at.slice(0, 10) < period.from);
   const periodMovements = movements.filter((row) => {
