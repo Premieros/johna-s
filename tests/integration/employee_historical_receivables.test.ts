@@ -222,6 +222,14 @@ describe.skipIf(!dbUrl)('employee historical receivables', () => {
       [ids.branchA, today, monthStart],
     );
     expect(invalidPeriod.error).toContain('EMPLOYEE_RECEIVABLE_PERIOD_INVALID');
+
+    const beforeOpeningCutover = await runAs(
+      client,
+      ids.users.branch_manager,
+      `SELECT public.get_employee_receivables_period_summary($1,$2,$3) AS result`,
+      [ids.branchA, '2026-09-15', '2026-09-20'],
+    );
+    expect(beforeOpeningCutover.error).toContain('EMPLOYEE_RECEIVABLE_PERIOD_INVALID');
   });
 
 });
