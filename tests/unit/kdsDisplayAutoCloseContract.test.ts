@@ -15,8 +15,8 @@ describe('KDS one-hour display auto-close contract', () => {
   });
 
   it('does not alter the POS order, kitchen status, financial, or inventory state', () => {
-    expect(migration).not.toMatch(/UPDATE\\s+public\\.(orders|sales|order_items|order_kitchen_sends|inventory)/i);
-    expect(migration).not.toMatch(/DELETE\\s+FROM\\s+public\\./i);
+    expect(migration).not.toMatch(/UPDATE\s+public\\.(orders|sales|order_items|order_kitchen_sends|inventory)/i);
+    expect(migration).not.toMatch(/DELETE\s+FROM\s+public\\./i);
     expect(page).toContain('isKitchenQueueAutoClosed(item, now)');
     expect(page).toContain('POS order status and the sale were not changed.');
   });
