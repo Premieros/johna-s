@@ -138,3 +138,7 @@ Update this log after substantive code/test changes. Never claim deployment or p
 ## 2026-11-02 final warehouse quantity invariant
 - Candidate now rereads `raw_material_warehouse_inventory` under the held per-material advisory lock after every raw receipt/issue, and raises `STOCK_COUNT_WAREHOUSE_QUANTITY_MISMATCH` unless final warehouse quantity exactly matches the counted physical quantity. This protects against helper success responses whose actual batch state diverges. Added source-contract regression. Commit eeba05f9e7af7457c771b6c99d6de72d4d7a3d17.
 - This is NOT production-ready: legacy FIFO debts, canonical missing/zero source provenance and disposable-DB financial tests remain blocking. No changes to November count status or amounts.
+
+## 2026-11-02 deterministic abort test syntax repair
+- Corrected a malformed TypeScript integration fixture containing literal `\\n` text after its deterministic valid-first / unpriced-second line declarations. This could prevent the suite from being parsed at all. GitHub commit b4b60010f3b06c61b3cb8023934a9e0cee903f25.
+- Exact-head CI has not reported a workflow run at inspection; test pass is not claimed. No price v2 release or November customer count posting.
