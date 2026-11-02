@@ -134,3 +134,7 @@ Update this log after substantive code/test changes. Never claim deployment or p
 ## 2026-11-02 receipt ledger parity guard
 - Added fail-closed receipt quantity/value validation to the stock count candidate, using the *actual* v2 helper response fields `before_qty`, `after_qty`, `receipt_ledger_id` and the persisted inventory ledger row. An initial prototype mistakenly expected nonexistent `received` and `total_cost` response fields; corrected before release. Unit source guard added. Latest commit c6ea446e8c0a1d821167e1b1aa3772e0f754f064.
 - Still NOT FOR PRODUCTION. Existing price-source gaps, legacy debt coordinates and no verified latest-head CI prevent release and count application.
+
+## 2026-11-02 final warehouse quantity invariant
+- Candidate now rereads `raw_material_warehouse_inventory` under the held per-material advisory lock after every raw receipt/issue, and raises `STOCK_COUNT_WAREHOUSE_QUANTITY_MISMATCH` unless final warehouse quantity exactly matches the counted physical quantity. This protects against helper success responses whose actual batch state diverges. Added source-contract regression. Commit eeba05f9e7af7457c771b6c99d6de72d4d7a3d17.
+- This is NOT production-ready: legacy FIFO debts, canonical missing/zero source provenance and disposable-DB financial tests remain blocking. No changes to November count status or amounts.
