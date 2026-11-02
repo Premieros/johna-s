@@ -143,8 +143,8 @@ describe.skipIf(!dbUrl)('employee historical receivables', () => {
     const saleId = randomUUID();
     const entryNumber = `EMP-REPORT-${saleId.slice(0, 8)}`;
     const dates = await client.query(
-      `SELECT (now() AT TIME ZONE 'Africa/Cairo')::date AS today,
-              date_trunc('month', now() AT TIME ZONE 'Africa/Cairo')::date AS month_start`,
+      `SELECT ((now() AT TIME ZONE 'Africa/Cairo')::date)::text AS today,
+              (date_trunc('month', now() AT TIME ZONE 'Africa/Cairo')::date)::text AS month_start`,
     );
     const today = String(dates.rows[0].today);
     const monthStart = String(dates.rows[0].month_start);
