@@ -5,13 +5,13 @@ Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/github-pages-deploy-after-verified-main-20261101`
 Current PR: #564
 Last updated: 2026-11-02
-State: **BLOCKED**
+State: **DEPLOYED**
 
 ## Work status
 
 - Confirmed production release incident: GitHub Pages run [41432991067](https://github.com/Premieros/johna-s/actions/runs/41432991067) published `7938bc79c5ba96bee5213a8201f09393abb30042` at 11:00:34 UTC, while [Verify main 41432991040](https://github.com/Premieros/johna-s/actions/runs/41432991040) for the same SHA failed at 11:03:53 UTC.
 - Candidate PR #564 now combines the Pages release gate and the stock-count review UI/service correction so that the review fix itself cannot be independently published through the unsafe push workflow.
-- Current main workflow still has direct `push` and manual `workflow_dispatch` deploy triggers until this PR is merged; no production deployment safety claim is made yet.
+- PR #564 merged as `d72208b6e8945448ab634885130ea1d5e8b4d13e` on 2026-11-02. The merged workflow now waits for successful `Verify main` before publishing the exact latest main SHA.
 - Fresh full Verify main checks on the exact PR head are mandatory before merge. After merge, the first Pages deployment must be observed and its published SHA must equal the passing Verify main SHA.
 
 ## Guardrails
@@ -49,13 +49,15 @@ State: **BLOCKED**
 - Historical failed release evidence: Pages [41432991067](https://github.com/Premieros/johna-s/actions/runs/41432991067) succeeded before Verify [41432991040](https://github.com/Premieros/johna-s/actions/runs/41432991040) failed for the same SHA.
 - An earlier PR #564 candidate run [41400627705](https://github.com/Premieros/johna-s/actions/runs/41400627705) passed all four jobs, but was based on an older main SHA and is not sufficient for this consolidated update.
 - The first current-main PR #564 check [41502335390](https://github.com/Premieros/johna-s/actions/runs/41502335390) failed only the mandatory worklog structure test; the DB, browser and Pages continuity jobs were still running when inspected. The worklog is corrected here without weakening the test.
-- The combined candidate must pass `verify`, `db`, `browser-smoke`, and `pages-continuity` at its latest commit before merge.
+- Pre-merge exact-head Verify run [41503707643](https://github.com/Premieros/johna-s/actions/runs/41503707643) passed all four required jobs: `verify`, `db`, `browser-smoke`, and `pages-continuity`.
+- Post-merge Verify main run [41504922276](https://github.com/Premieros/johna-s/actions/runs/41504922276) passed all four jobs for merge SHA `d72208b6e8945448ab634885130ea1d5e8b4d13e`.
+- GitHub Pages deployment [41505828369](https://github.com/Premieros/johna-s/actions/runs/41505828369) completed successfully after Verify and deployed the same SHA. `build`, `production-parity`, and `deploy` all succeeded.
 
 ## Production gate
 
-- **Not merged / not deployed.** PR merge is allowed only after fresh complete Verify success for the exact candidate.
-- After merge, require a successful main Verify run first. Then confirm a Pages run is triggered afterward and reports the exact same `head_sha` / `pages_build_version`.
-- Supabase migration status is separate. This PR contains no migration and does not authorize any production database action.
+- **Merged and deployed.** PR #564 is merged and GitHub Pages run #41505828369 succeeded for the same SHA that passed post-merge Verify #41504922276.
+- Main SHA: `d72208b6e8945448ab634885130ea1d5e8b4d13e`.
+- Supabase migration status is separate. This PR contains no migration; no production database action was taken.
 
 ## Next action
 
