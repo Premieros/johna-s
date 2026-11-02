@@ -16,6 +16,7 @@ import { userFacingErrorMessage } from '@/lib/userFacingError';
 import type { EmployeeReceivablePeriodRow } from '@/lib/types';
 
 type Period = { from: string; to: string };
+type EmployeeReceivableReportRow = EmployeeReceivablePeriodRow & { id?: string };
 
 function cairoToday(): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -47,7 +48,7 @@ export function EmployeeReceivablesReportPage() {
   const initialPeriod = useMemo(() => currentMonth(today), [today]);
   const [draft, setDraft] = useState<Period>(initialPeriod);
   const [period, setPeriod] = useState<Period>(initialPeriod);
-  const [rows, setRows] = useState<EmployeeReceivablePeriodRow[]>([]);
+  const [rows, setRows] = useState<EmployeeReceivableReportRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
@@ -76,7 +77,7 @@ export function EmployeeReceivablesReportPage() {
       });
       if (readError) throw readError;
       if (!Array.isArray(data)) throw new Error('REPORT_SOURCE_INVALID');
-      setRows(data);
+      setRows(data.map((row) => ({ ...row, id: row.customer_id })));
       setLoaded(true);
     } catch (readError) {
       setRows([]);
@@ -96,7 +97,7 @@ export function EmployeeReceivablesReportPage() {
     closing: sum.closing + Number(row.period_closing_balance || 0),
   }), { opening: 0, debit: 0, credit: 0, closing: 0 }), [rows]);
 
-  const columns: Column<EmployeeReceivablePeriodRow>[] = [
+  const columns: Column<EmployeeReceivableReportRow>[] = [
     { key: 'employee', header: ar ? 'الموظف' : 'Employee', render: (row) => <span className="font-bold text-ui-text">{row.employee_name}</span> },
     { key: 'phone', header: ar ? 'الهاتف' : 'Phone', render: (row) => row.phone || '-' },
     { key: 'opening', header: ar ? 'رصيد أول الفترة' : 'Opening Balance', render: (row) => formatCurrency(Number(row.period_opening_balance || 0), currency, lang) },
@@ -154,7 +155,7 @@ export function EmployeeReceivablesReportPage() {
   };
 
   if (!can('accounts.view')) {
-    return <DesignSurface><p role="alert">{ar ? 'لا تملك صلاحية عرض ذمم الموظفين.' : 'You do not have permission to view employee receivables.'}</p></DesignSurface>;
+    return <DesignSurface testId="employee-receivables-report-forbidden"><p role="alert">{ar ? 'لا تملك صلاحية عرض ذمم الموظفين.' : 'You do not have permission to view employee receivables.'}</p></DesignSurface>;
   }
 
   return (
