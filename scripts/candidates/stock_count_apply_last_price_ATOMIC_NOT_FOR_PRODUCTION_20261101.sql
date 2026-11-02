@@ -47,6 +47,22 @@ BEGIN
       RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
     END IF;
 
+    -- Fail closed before any stock/accounting write when a counted raw
+    -- coordinate still has unsettled legacy FIFO debt. The approved-v2
+    -- movement helper also blocks this; preflight makes the blocker explicit.
+    IF EXISTS (
+      SELECT 1 FROM public.stock_count_items sci
+      JOIN public.raw_fifo_debts d
+        ON d.raw_material_id=sci.raw_material_id
+       AND d.branch_id=v_count.branch_id
+       AND d.warehouse_id=v_count.warehouse_id
+      WHERE sci.stock_count_id=p_stock_count_id
+        AND d.debt_quantity>d.settled_quantity
+    ) THEN
+      RETURN jsonb_build_object('success',false,
+        'error','LEGACY_FIFO_POSITION_NOT_CUTOVER');
+    END IF;
+
     FOR v_item IN
       SELECT *
       FROM public.stock_count_items
