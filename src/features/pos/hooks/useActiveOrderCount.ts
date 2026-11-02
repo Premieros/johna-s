@@ -115,10 +115,17 @@ export function useActiveOrderCount(branchId: string, enabled = true): number {
 
     const scheduleRefresh = () => {
       if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+      const cachedSnapshot = countCache.get(branchId);
+      const cacheRemainingMs = cachedSnapshot
+        ? Math.max(0, COUNT_CACHE_TTL_MS - (Date.now() - cachedSnapshot.loadedAt))
+        : 0;
+      // Realtime bursts may arrive for every item/order mutation. Keep the
+      // non-critical shell badge to at most one database refresh per 15s window.
+      const refreshDelayMs = Math.max(REFRESH_DEBOUNCE_MS, cacheRemainingMs);
       refreshTimer.current = window.setTimeout(() => {
         refreshTimer.current = null;
         void refresh(true);
-      }, REFRESH_DEBOUNCE_MS);
+      }, refreshDelayMs);
     };
 
     const unsubscribe = subscribePosRealtime({
