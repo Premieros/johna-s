@@ -32,6 +32,7 @@ function currentMonth(today: string): Period {
   return { from: `${today.slice(0, 7)}-01`, to: today };
 }
 
+const EMPLOYEE_RECEIVABLES_OPENING_DATE = '2026-09-16';
 const roundMoney = (value: number) => Number(value.toFixed(2));
 
 export function EmployeeReceivablesReportPage() {
@@ -52,7 +53,7 @@ export function EmployeeReceivablesReportPage() {
   const [error, setError] = useState('');
 
   const valid = Boolean(
-    draft.from && draft.to && draft.from <= draft.to && draft.to <= today,
+    draft.from && draft.to && draft.from >= EMPLOYEE_RECEIVABLES_OPENING_DATE && draft.from <= draft.to && draft.to <= today,
   );
 
   const load = useCallback(async () => {
@@ -175,11 +176,12 @@ export function EmployeeReceivablesReportPage() {
           <Button size="sm" variant="secondary" onClick={applyCurrentMonth} data-testid="employee-report-current-month">{ar ? 'الشهر الحالي' : 'Current Month'}</Button>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(160px,1fr)_minmax(160px,1fr)_auto] sm:items-end">
-          <label className="text-sm font-bold text-ui-text">{ar ? 'من تاريخ' : 'From date'}<input type="date" lang="en-GB-u-ca-gregory" dir="ltr" max={today} value={draft.from} onChange={(event) => setDraft({ ...draft, from: event.target.value, to: draft.to < event.target.value ? event.target.value : draft.to })} className="mt-1 block w-full rounded-xl border border-ui-border bg-ui-page p-2 font-normal" data-testid="employee-report-from" /></label>
-          <label className="text-sm font-bold text-ui-text">{ar ? 'إلى تاريخ' : 'To date'}<input type="date" lang="en-GB-u-ca-gregory" dir="ltr" min={draft.from} max={today} value={draft.to} onChange={(event) => setDraft({ ...draft, to: event.target.value })} className="mt-1 block w-full rounded-xl border border-ui-border bg-ui-page p-2 font-normal" data-testid="employee-report-to" /></label>
+          <label className="text-sm font-bold text-ui-text">{ar ? 'من تاريخ' : 'From date'}<input type="date" lang="en-GB-u-ca-gregory" dir="ltr" min={EMPLOYEE_RECEIVABLES_OPENING_DATE} max={today} value={draft.from} onChange={(event) => setDraft({ ...draft, from: event.target.value, to: draft.to < event.target.value ? event.target.value : draft.to })} className="mt-1 block w-full rounded-xl border border-ui-border bg-ui-page p-2 font-normal" data-testid="employee-report-from" /></label>
+          <label className="text-sm font-bold text-ui-text">{ar ? 'إلى تاريخ' : 'To date'}<input type="date" lang="en-GB-u-ca-gregory" dir="ltr" min={draft.from || EMPLOYEE_RECEIVABLES_OPENING_DATE} max={today} value={draft.to} onChange={(event) => setDraft({ ...draft, to: event.target.value })} className="mt-1 block w-full rounded-xl border border-ui-border bg-ui-page p-2 font-normal" data-testid="employee-report-to" /></label>
           <Button onClick={applyPeriod} disabled={!valid || loading} data-testid="employee-report-apply">{ar ? 'عرض التقرير' : 'Run Report'}</Button>
         </div>
         <p className="mt-3 text-xs text-ui-muted" data-testid="employee-report-period">{ar ? 'الفترة المعروضة:' : 'Report period:'} {period.from} — {period.to}</p>
+        <p className="mt-1 text-xs text-ui-muted">{ar ? 'بداية السجل الافتتاحي المعتمد للموظفين: 16 سبتمبر 2026.' : 'Employee receivables opening-data cutover: 16 September 2026.'}</p>
         {!history.unlimited && <p role="status" className="mt-2 text-xs text-ui-warning">{ar ? 'تفاصيل الفترات الأقدم تخضع لصلاحية إظهار التاريخ؛ قد تكون بعض الحركات القديمة غير ظاهرة في الإجماليات.' : 'Older period details follow financial history visibility; some older movements may not be visible in these totals.'}</p>}
       </DesignPanel>
 
