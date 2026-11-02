@@ -34,7 +34,7 @@ function currentMonth(today: string): Period {
 }
 
 const EMPLOYEE_RECEIVABLES_OPENING_DATE = '2026-09-16';
-const roundMoney = (value: number) => Number(value.toFixed(2));
+const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
 export function EmployeeReceivablesReportPage() {
   const { lang } = useLanguage();
