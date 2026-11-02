@@ -144,6 +144,7 @@ export function EmployeeReceivablesReportPage() {
       },
       currencyColumns: [labels.opening, labels.debit, labels.credit, labels.closing],
       columnWidths: { [labels.employee]: 28, [labels.phone]: 18 },
+      lang: ar ? 'ar' : 'en',
     });
   };
 
