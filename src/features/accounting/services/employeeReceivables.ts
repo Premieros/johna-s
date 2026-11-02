@@ -1,5 +1,8 @@
+import * as api from '@/api';
 import { supabase } from '@/api';
-import type { ArAgingRow } from '@/lib/types';
+import type { ArAgingRow, EmployeeReceivablePeriodRow } from '@/lib/types';
+import type { EmployeeReceivablePeriod } from './employeeReceivablePeriod';
+import { getCairoToday } from './employeeReceivablePeriod';
 
 export type EmployeeCustomer = {
   id: string;
@@ -19,6 +22,10 @@ export type EmployeeReceivableRow = EmployeeCustomer & {
   bucket_31_60: number;
   bucket_61_90: number;
   bucket_90_plus: number;
+  period_opening_balance: number;
+  period_debit: number;
+  period_credit: number;
+  period_closing_balance: number;
 };
 
 export type EmployeePaymentResult = {
@@ -27,8 +34,11 @@ export type EmployeePaymentResult = {
   detail?: string;
 };
 
-export async function loadEmployeeReceivableRows(branchId: string): Promise<EmployeeReceivableRow[]> {
-  const [customersResult, agingResult] = await Promise.all([
+export async function loadEmployeeReceivableRows(
+  branchId: string,
+  period: EmployeeReceivablePeriod,
+): Promise<EmployeeReceivableRow[]> {
+  const [customersResult, agingResult, periodResult] = await Promise.all([
     supabase
       .from('customers')
       .select('id,name,name_en,phone,email,address,notes,branch_id,customer_type')
@@ -37,25 +47,39 @@ export async function loadEmployeeReceivableRows(branchId: string): Promise<Empl
       .order('name'),
     supabase.rpc('get_employee_receivable_balances', {
       p_branch_id: branchId,
-      p_as_of: new Date().toISOString().slice(0, 10),
+      p_as_of: getCairoToday(),
+    }),
+    api.accounting.getEmployeeReceivablesPeriodSummary({
+      p_branch_id: branchId,
+      p_from_date: period.from,
+      p_to_date: period.to,
     }),
   ]);
 
   if (customersResult.error) throw customersResult.error;
   if (agingResult.error) throw agingResult.error;
+  if (periodResult.error) throw periodResult.error;
 
   const agingRows = (agingResult.data || []) as ArAgingRow[];
   const agingByCustomer = new Map(agingRows.map((row) => [row.customer_id, row]));
+  const periodRows = (periodResult.data || []) as EmployeeReceivablePeriodRow[];
+  const periodByCustomer = new Map(periodRows.map((row) => [row.customer_id, row]));
 
   return ((customersResult.data || []) as EmployeeCustomer[]).map((customer) => {
     const aging = agingByCustomer.get(customer.id);
+    const periodRow = periodByCustomer.get(customer.id);
     return {
       ...customer,
+      // Settlement stays tied to today's outstanding amount, never a historical closing balance.
       open_amount: Number(aging?.open_amount || 0),
       bucket_0_30: Number(aging?.bucket_0_30 || 0),
       bucket_31_60: Number(aging?.bucket_31_60 || 0),
       bucket_61_90: Number(aging?.bucket_61_90 || 0),
       bucket_90_plus: Number(aging?.bucket_90_plus || 0),
+      period_opening_balance: Number(periodRow?.period_opening_balance || 0),
+      period_debit: Number(periodRow?.period_debit || 0),
+      period_credit: Number(periodRow?.period_credit || 0),
+      period_closing_balance: Number(periodRow?.period_closing_balance || 0),
     };
   });
 }
