@@ -178,7 +178,7 @@ describe.skipIf(!dbUrl)('employee historical receivables', () => {
     const payment = await runAsPersist(
       client,
       ids.users.branch_manager,
-      `SELECT public.receive_employee_receivable_payment($1,$2,10,'cash',NULL,'employee report fixture payment') AS result`,
+      `SELECT public.receive_payment($1,$2,10,'cash',NULL,'employee report fixture payment') AS result`,
       [ids.custA, ids.branchA],
     );
     expect(payment.error).toBeUndefined();
