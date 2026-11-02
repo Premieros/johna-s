@@ -11,6 +11,7 @@ import type { ReportType } from '../reportFilters';
 import { permittedBasicReports, workspaceViewKey, type WorkspaceView } from '../reportWorkspace';
 
 const ConsumptionReportPage = lazy(() => import('./ConsumptionReportPage').then(module => ({ default: module.ConsumptionReportPage })));
+const EmployeeReceivablesReportPage = lazy(() => import('./EmployeeReceivablesReportPage').then(module => ({ default: module.EmployeeReceivablesReportPage })));
 
 export function ReportsCenterPage() {
   const can = useCan();
@@ -47,7 +48,7 @@ export function ReportsCenterPage() {
     const next = new URLSearchParams();
     for (const key of ['from', 'to']) { const value = params.get(key); if (value) next.set(key, value); }
     if (period) { next.set('from',period.from); next.set('to',period.to); }
-    if (target.key==='month_review') next.set('type','month_review');
+    if (target.key==='month_review' || target.key==='employee_receivables_period') next.set('type',target.key);
     else if (target.financial) { next.set('section', 'financial'); next.set('view', target.financial); }
     else if (target.type) next.set('type', target.consumptionGroup ? target.key : target.type);
     navigate(`/reports?${next}`, { replace: true });
@@ -61,7 +62,7 @@ export function ReportsCenterPage() {
   if (view.key !== requested) {
     const fallback = new URLSearchParams();
     for (const key of ['from', 'to']) { const value = params.get(key); if (value) fallback.set(key, value); }
-    if (view.key==='month_review') fallback.set('type','month_review');
+    if (view.key==='month_review' || view.key==='employee_receivables_period') fallback.set('type',view.key);
     else if (view.financial) { fallback.set('section', 'financial'); fallback.set('view', view.financial); }
     else if (view.type) fallback.set('type', view.consumptionGroup ? view.key : view.type);
     return <Navigate to={`/reports?${fallback}`} replace />;
@@ -89,7 +90,7 @@ export function ReportsCenterPage() {
               {report.views.map(item => <option key={item.key} value={item.key}>{ar ? item.ar : item.en}</option>)}
             </select>
           </label><button type="button" aria-pressed={expanded} onClick={()=>setExpanded(value=>!value)} className="rounded border border-ui-border px-3 py-2 text-sm font-bold">{ar ? (expanded?'إنهاء ملء الشاشة':'ملء الشاشة') : (expanded?'Exit full screen':'Full screen')}</button></div></div>
-        {view.key==='month_review' ? <MonthCloseReview views={reports.flatMap(item=>item.views)} onSelect={select} /> : view.type==='component_consumption' ? <Suspense fallback={<p role="status">{ar?'جارٍ فتح التقرير…':'Opening report…'}</p>}><ConsumptionReportPage key={view.key} fixedGroup={view.consumptionGroup==='unit'?'unit':undefined} /></Suspense> : view.financial ? <FinancialReportsPage hideViewPicker /> : <ReportsPage controlledReportType={view.type} key={view.key} onReportTypeChange={selectOperational} workspaceTitle={ar ? view.ar : view.en} />}
+        {view.key==='month_review' ? <MonthCloseReview views={reports.flatMap(item=>item.views)} onSelect={select} /> : view.key==='employee_receivables_period' ? <Suspense fallback={<p role="status">{ar?'جارٍ فتح التقرير…':'Opening report…'}</p>}><EmployeeReceivablesReportPage key={view.key} /></Suspense> : view.type==='component_consumption' ? <Suspense fallback={<p role="status">{ar?'جارٍ فتح التقرير…':'Opening report…'}</p>}><ConsumptionReportPage key={view.key} fixedGroup={view.consumptionGroup==='unit'?'unit':undefined} /></Suspense> : view.financial ? <FinancialReportsPage hideViewPicker /> : <ReportsPage controlledReportType={view.type} key={view.key} onReportTypeChange={selectOperational} workspaceTitle={ar ? view.ar : view.en} />}
       </main>
     </div>
   </div>;
