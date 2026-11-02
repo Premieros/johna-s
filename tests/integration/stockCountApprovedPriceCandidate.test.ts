@@ -14,7 +14,7 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
   let db: pg.Client;
   const branch=randomUUID(), warehouse=randomUUID(), actor=randomUUID();
   const raw=randomUUID(), shortRaw=randomUUID(), unpricedRaw=randomUUID(), count=randomUUID(), zeroCount=randomUUID(), zeroIssueCount=randomUUID(), latestPriceCount=randomUUID();
-  beforeAll(async () => {
+  // Force a valid receipt first and an unpriced error second, proving rollback of earlier writes.\n  const firstLine='00000000-0000-4000-8000-000000000011';\n  const failingLine='00000000-0000-4000-8000-000000000012';\n  beforeAll(async () => {
     db=openDb(url); await db.connect(); await db.query('BEGIN');
     // Install the existing unshipped v2 movement prototype ONLY inside this local
     // disposable transaction. Strip outer transaction commands to retain ROLLBACK.
@@ -44,7 +44,7 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
     await db.query("SELECT set_config('app.register_branch','off',true)");
     await db.query("UPDATE public.roles SET permissions=(COALESCE(permissions,'[]'::jsonb)||'[\"inventory.count.apply\"]'::jsonb) WHERE role='warehouse_manager'");
     await db.query("INSERT INTO public.stock_counts(id,count_number,branch_id,warehouse_id,status,count_type,created_by,approved_by,approved_at) VALUES($1,$5,$2,$3,'approved','partial',$4,$4,now())",[count,branch,warehouse,actor,'QA-ZERO-'+count.slice(0,8)]);
-    await db.query("INSERT INTO public.stock_count_items(stock_count_id,raw_material_id,system_quantity,counted_quantity,unit_cost) VALUES($1,$2,0,3,0),($1,$3,0,2,0)",[count,raw,unpricedRaw]);
+    await db.query("INSERT INTO public.stock_count_items(id,stock_count_id,raw_material_id,system_quantity,counted_quantity,unit_cost) VALUES($4,$1,$2,0,3,0),($5,$1,$3,0,2,0)",[count,raw,unpricedRaw,firstLine,failingLine]);
     await db.query("SELECT set_config('app.user_id',$1,true),set_config('request.jwt.claim.sub',$1,true)",[actor]);
     await db.query("SELECT set_config('request.jwt.claims',$1,true)",[JSON.stringify({sub:actor,role:'authenticated'})]);
     await db.query('SET LOCAL ROLE authenticated');
