@@ -184,12 +184,10 @@ export function EmployeeReceivablesReportPage() {
       </DesignPanel>
 
       {loaded && !loading && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <DesignPanel testId="employee-report-total-opening"><p className="text-xs text-ui-muted">{ar ? 'إجمالي رصيد أول الفترة' : 'Total Opening Balance'}</p><p className="mt-1 text-lg font-black text-ui-text">{formatCurrency(totals.opening, currency, lang)}</p></DesignPanel>
           <DesignPanel testId="employee-report-total-debit"><p className="text-xs text-ui-muted">{ar ? 'إجمالي المدين' : 'Total Debit'}</p><p className="mt-1 text-lg font-black text-ui-danger">{formatCurrency(totals.debit, currency, lang)}</p></DesignPanel>
           <DesignPanel testId="employee-report-total-credit"><p className="text-xs text-ui-muted">{ar ? 'إجمالي المسدد' : 'Total Paid'}</p><p className="mt-1 text-lg font-black text-ui-success">{formatCurrency(totals.credit, currency, lang)}</p></DesignPanel>
           <DesignPanel testId="employee-report-total-closing"><p className="text-xs text-ui-muted">{ar ? 'إجمالي رصيد آخر الفترة' : 'Total Closing Balance'}</p><p className="mt-1 text-lg font-black text-ui-text">{formatCurrency(totals.closing, currency, lang)}</p></DesignPanel>
-        </div>
       </div>}
       <DesignPanel>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
