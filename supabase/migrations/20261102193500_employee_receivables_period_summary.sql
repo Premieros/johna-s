@@ -33,8 +33,10 @@ BEGIN
     RAISE EXCEPTION 'PERMISSION_DENIED:accounts.view';
   END IF;
 
-  IF p_from_date IS NULL OR p_to_date IS NULL OR p_from_date > p_to_date THEN
-    RAISE EXCEPTION 'EMPLOYEE_RECEIVABLE_PERIOD_INVALID'
+  IF p_from_date IS NULL OR p_to_date IS NULL
+     OR p_from_date < DATE '2026-09-16'
+     OR p_from_date > p_to_date THEN
+    RAISE EXCEPTION 'EMPLOYEE_RECEIVABLE_PERIOD_INVALID:MIN_DATE_2026_09_16'
       USING ERRCODE = '22023';
   END IF;
 
