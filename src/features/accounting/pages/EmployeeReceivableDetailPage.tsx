@@ -9,9 +9,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useSettings } from '@/context/SettingsContext';
 import { formatCurrency } from '@/lib/format';
 import { useCan } from '@/lib/permissions';
-import { useHistoryAccess } from '@/lib/useHistoryAccess';
 import { fetchEmployeeReceivableSnapshot, type EmployeeCustomerSnapshot } from '../services/employeeReceivableDetail';
-import { buildEmployeeReceivablePeriod, createCurrentMonthEmployeeReceivablePeriod, getCairoToday, getEmployeeReceivableMinimumDate, type EmployeeReceivablePeriod } from '../services/employeeReceivablePeriod';
 
 type StatementRow = {
   id: string;
@@ -40,18 +38,6 @@ export function EmployeeReceivableDetailPage({ customerId, onBack }: Props) {
   const can = useCan();
   const { effectiveSettings } = useSettings();
   const { show } = useToast();
-  const history = useHistoryAccess();
-  const today = useMemo(() => getCairoToday(), []);
-  const minimumPeriodDate = useMemo(
-    () => getEmployeeReceivableMinimumDate(today, OPENING_DATE, history.unlimited),
-    [today, history.unlimited],
-  );
-  const initialPeriod = useMemo(
-    () => createCurrentMonthEmployeeReceivablePeriod(today, minimumPeriodDate),
-    [today, minimumPeriodDate],
-  );
-  const [period, setPeriod] = useState<EmployeeReceivablePeriod>(initialPeriod);
-  const [draftPeriod, setDraftPeriod] = useState<EmployeeReceivablePeriod>(initialPeriod);
   const [employee, setEmployee] = useState<EmployeeCustomerSnapshot | null>(null);
   const [rows, setRows] = useState<StatementRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -127,32 +113,11 @@ export function EmployeeReceivableDetailPage({ customerId, onBack }: Props) {
   }, [customerId, can, show, ar]);
   useEffect(() => { void load(); }, [load]);
 
-  const periodStatement = useMemo(() => buildEmployeeReceivablePeriod(
-    rows,
-    period,
-    ar ? 'رصيد بداية الفترة' : 'Opening balance at period start',
-    ar ? 'رصيد مرحّل' : 'Brought forward',
-  ), [rows, period, ar]);
-  const totals = { debit: periodStatement.debit, credit: periodStatement.credit };
-  const currentBalance = periodStatement.closingBalance;
-  const periodIsValid = Boolean(
-    draftPeriod.from && draftPeriod.to
-    && draftPeriod.from >= minimumPeriodDate
-    && draftPeriod.from <= draftPeriod.to
-    && draftPeriod.to <= today,
-  );
-  const applyPeriod = () => {
-    if (!periodIsValid) {
-      show(ar ? 'تحقق من تاريخ البداية والنهاية ضمن الفترة المتاحة' : 'Check the start and end dates within the available period', 'error');
-      return;
-    }
-    setPeriod(draftPeriod);
-  };
-  const applyCurrentMonth = () => {
-    const currentMonth = createCurrentMonthEmployeeReceivablePeriod(today, minimumPeriodDate);
-    setDraftPeriod(currentMonth);
-    setPeriod(currentMonth);
-  };
+  const totals = useMemo(() => rows.reduce((acc, row) => ({
+    debit: acc.debit + row.debit,
+    credit: acc.credit + row.credit,
+  }), { debit: 0, credit: 0 }), [rows]);
+  const currentBalance = rows.length ? rows[rows.length - 1].balance : 0;
 
   const kindLabel = (kind: StatementRow['kind']) => {
     if (kind === 'opening') return ar ? 'رصيد افتتاحي' : 'Opening';
@@ -180,29 +145,12 @@ export function EmployeeReceivableDetailPage({ customerId, onBack }: Props) {
         subtitle={employee ? [employee.phone, employee.email].filter(Boolean).join(' • ') : undefined}
         actions={<Button variant="secondary" size="sm" onClick={onBack}><BackIcon className="h-4 w-4" />{ar ? 'العودة لذمم الموظفين' : 'Back to receivables'}</Button>}
       />
-      <DesignPanel>
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-sm font-black text-ui-text">{ar ? 'الفترة المحاسبية' : 'Accounting period'}</p>
-            <p className="mt-1 text-xs text-ui-muted">{ar ? 'اختر الشهر الحالي أو حدد تاريخ البداية والنهاية.' : 'Choose the current month or set a custom date range.'}</p>
-          </div>
-          <Button size="sm" variant="secondary" onClick={applyCurrentMonth} data-testid="employee-period-current-month">{ar ? 'الشهر الحالي' : 'Current month'}</Button>
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(160px,1fr)_minmax(160px,1fr)_auto] sm:items-end">
-          <label className="text-sm font-bold text-ui-text">{ar ? 'من تاريخ' : 'From date'}<input type="date" lang="en-GB-u-ca-gregory" dir="ltr" data-testid="employee-period-from" min={minimumPeriodDate} max={today} value={draftPeriod.from} onChange={(event) => setDraftPeriod({ ...draftPeriod, from: event.target.value, to: draftPeriod.to < event.target.value ? event.target.value : draftPeriod.to })} className="mt-1 block w-full rounded-xl border border-ui-border bg-ui-page p-2 font-normal" /></label>
-          <label className="text-sm font-bold text-ui-text">{ar ? 'إلى تاريخ' : 'To date'}<input type="date" lang="en-GB-u-ca-gregory" dir="ltr" data-testid="employee-period-to" min={draftPeriod.from || minimumPeriodDate} max={today} value={draftPeriod.to} onChange={(event) => setDraftPeriod({ ...draftPeriod, to: event.target.value })} className="mt-1 block w-full rounded-xl border border-ui-border bg-ui-page p-2 font-normal" /></label>
-          <Button onClick={applyPeriod} disabled={!periodIsValid} data-testid="employee-period-apply">{ar ? 'عرض الفترة' : 'Apply period'}</Button>
-        </div>
-        <p className="mt-3 text-xs text-ui-muted" data-testid="employee-period-applied">{ar ? 'الفترة المعروضة:' : 'Displayed period:'} {period.from} — {period.to}</p>
-        {!history.unlimited && <p role="status" className="mt-2 text-xs text-ui-warning">{ar ? 'صلاحية التاريخ الحالية تعرض تفاصيل الحركات لآخر 7 أيام فقط، ويظهر الرصيد الأقدم كرصيد مرحّل.' : 'Your current history permission shows movement details for the last 7 days; older balance is carried forward.'}</p>}
-      </DesignPanel>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <DesignPanel><p className="text-xs text-ui-muted">{ar ? 'الرصيد أول الفترة' : 'Opening Balance'}</p><p className="mt-1 text-xl font-black text-ui-text">{formatCurrency(periodStatement.openingBalance, currency, lang)}</p></DesignPanel>
-        <DesignPanel><p className="text-xs text-ui-muted">{ar ? 'مدين خلال الفترة' : 'Debit in Period'}</p><p className="mt-1 text-xl font-black text-ui-danger">{formatCurrency(totals.debit, currency, lang)}</p></DesignPanel>
-        <DesignPanel><p className="text-xs text-ui-muted">{ar ? 'مسدد / دائن خلال الفترة' : 'Paid / Credit in Period'}</p><p className="mt-1 text-xl font-black text-ui-success">{formatCurrency(totals.credit, currency, lang)}</p></DesignPanel>
-        <DesignPanel><p className="text-xs text-ui-muted">{ar ? 'الرصيد آخر الفترة' : 'Closing Balance'}</p><p className="mt-1 flex items-center gap-2 text-xl font-black text-ui-text"><HandCoins className="h-5 w-5" />{formatCurrency(currentBalance, currency, lang)}</p></DesignPanel>
+      <div className="grid gap-3 md:grid-cols-3">
+        <DesignPanel><p className="text-xs text-ui-muted">{ar ? 'إجمالي المدين' : 'Total Debit'}</p><p className="mt-1 text-xl font-black text-ui-danger">{formatCurrency(totals.debit, currency, lang)}</p></DesignPanel>
+        <DesignPanel><p className="text-xs text-ui-muted">{ar ? 'إجمالي المسدد / الدائن' : 'Total Credit / Paid'}</p><p className="mt-1 text-xl font-black text-ui-success">{formatCurrency(totals.credit, currency, lang)}</p></DesignPanel>
+        <DesignPanel><p className="text-xs text-ui-muted">{ar ? 'الرصيد الحالي' : 'Current Balance'}</p><p className="mt-1 flex items-center gap-2 text-xl font-black text-ui-text"><HandCoins className="h-5 w-5" />{formatCurrency(currentBalance, currency, lang)}</p></DesignPanel>
       </div>
-      <DesignPanel><DataTable columns={columns} data={periodStatement.rows} loading={loading} emptyMessage={ar ? 'لا توجد حركات في الفترة المحددة' : 'No transactions in the selected period'} /></DesignPanel>
+      <DesignPanel><DataTable columns={columns} data={rows} loading={loading} emptyMessage={ar ? 'لا توجد حركات لهذا الموظف' : 'No transactions for this employee'} /></DesignPanel>
     </DesignSurface>
   );
 }
