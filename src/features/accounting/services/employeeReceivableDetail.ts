@@ -1,5 +1,6 @@
 import { supabase } from '@/api';
 import type { ArAgingRow } from '@/lib/types';
+import { getCairoToday } from './employeeReceivablePeriod';
 
 export type EmployeeCustomerSnapshot = {
   id: string;
@@ -42,7 +43,7 @@ export async function fetchEmployeeReceivableSnapshot(params: {
   if (!customerRes.data) throw new Error('EMPLOYEE_NOT_FOUND');
 
   const customer = customerRes.data as EmployeeCustomerSnapshot;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getCairoToday();
 
   const [balancesRes, statementRes] = await Promise.all([
     supabase.rpc('get_employee_receivable_balances', {
