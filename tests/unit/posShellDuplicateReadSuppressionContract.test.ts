@@ -22,6 +22,8 @@ describe('POS shell duplicate-read suppression contract', () => {
   });
 
   it('throttles non-critical badge reads across realtime bursts to the 15s cache window', () => {
+    expect(hook).toContain('const activeOrderCountReads = new Map<string, Promise<CountSnapshot>>()');
+    expect(hook).toContain('if (existing) return existing');
     expect(hook).toContain('const cachedSnapshot = countCache.get(branchId)');
     expect(hook).toContain('COUNT_CACHE_TTL_MS - (Date.now() - cachedSnapshot.loadedAt)');
     expect(hook).toContain('Math.max(REFRESH_DEBOUNCE_MS, cacheRemainingMs)');
