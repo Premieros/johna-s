@@ -19,35 +19,48 @@ type CountCacheEntry = CountSnapshot & {
 };
 
 const countCache = new Map<string, CountCacheEntry>();
+const activeOrderCountReads = new Map<string, Promise<CountSnapshot>>();
 
 async function fetchActiveOrderCount(branchId: string): Promise<CountSnapshot> {
-  const { data: orderRows, error: ordersError } = await supabase
-    .from('orders')
-    .select('id')
-    .eq('branch_id', branchId)
-    .in('status', ['open', 'held']);
+  const existing = activeOrderCountReads.get(branchId);
+  if (existing) return existing;
 
-  if (ordersError) throw ordersError;
+  const read = (async (): Promise<CountSnapshot> => {
+    const { data: orderRows, error: ordersError } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('branch_id', branchId)
+      .in('status', ['open', 'held']);
 
-  const watchedOrderIds = (orderRows || []).map((row) => row.id as string).filter(Boolean);
-  if (watchedOrderIds.length === 0) {
-    return { value: 0, watchedOrderIds: [], visibleItemIds: [] };
+    if (ordersError) throw ordersError;
+
+    const watchedOrderIds = (orderRows || []).map((row) => row.id as string).filter(Boolean);
+    if (watchedOrderIds.length === 0) {
+      return { value: 0, watchedOrderIds: [], visibleItemIds: [] };
+    }
+
+    const { data: itemRows, error: itemsError } = await supabase
+      .from('order_items')
+      .select('id,order_id,quantity')
+      .in('order_id', watchedOrderIds)
+      .gt('quantity', 0);
+
+    if (itemsError) throw itemsError;
+
+    const rows = itemRows || [];
+    return {
+      value: new Set(rows.map((row) => row.order_id as string).filter(Boolean)).size,
+      watchedOrderIds,
+      visibleItemIds: rows.map((row) => row.id as string).filter(Boolean),
+    };
+  })();
+
+  activeOrderCountReads.set(branchId, read);
+  try {
+    return await read;
+  } finally {
+    if (activeOrderCountReads.get(branchId) === read) activeOrderCountReads.delete(branchId);
   }
-
-  const { data: itemRows, error: itemsError } = await supabase
-    .from('order_items')
-    .select('id,order_id,quantity')
-    .in('order_id', watchedOrderIds)
-    .gt('quantity', 0);
-
-  if (itemsError) throw itemsError;
-
-  const rows = itemRows || [];
-  return {
-    value: new Set(rows.map((row) => row.order_id as string).filter(Boolean)).size,
-    watchedOrderIds,
-    visibleItemIds: rows.map((row) => row.id as string).filter(Boolean),
-  };
 }
 
 /**
