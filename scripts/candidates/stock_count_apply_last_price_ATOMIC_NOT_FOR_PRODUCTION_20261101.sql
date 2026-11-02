@@ -148,6 +148,18 @@ BEGIN
           END IF;
           v_rm_delta := v_rm_delta - v_value;
         END IF;
+        -- Both receipt and issue paths must leave the specific warehouse at
+        -- the physically counted quantity. Never infer this only from a
+        -- helper success flag or posted journal/ledger amounts.
+        SELECT COALESCE(quantity,0) INTO v_current
+          FROM public.raw_material_warehouse_inventory
+         WHERE raw_material_id=v_item.raw_material_id
+           AND branch_id=v_count.branch_id
+           AND warehouse_id=v_count.warehouse_id;
+        IF COALESCE(v_current,0) IS DISTINCT FROM v_item.counted_quantity THEN
+          RAISE EXCEPTION 'STOCK_COUNT_WAREHOUSE_QUANTITY_MISMATCH material % expected % actual %',
+            v_item.raw_material_id,v_item.counted_quantity,COALESCE(v_current,0);
+        END IF;
       ELSE
         SELECT COALESCE(quantity, 0)
           INTO v_current
