@@ -137,4 +137,63 @@ describe.skipIf(!dbUrl)('employee historical receivables', () => {
     expect(denied.error).toBeUndefined();
     expect(denied.rows[0]?.result).toMatchObject({ success: false, error: 'BRANCH_MISMATCH' });
   });
+
+  guarded('returns all employees with selected-period opening, debit, paid and closing balances using one branch-scoped read', async () => {
+    const historicalId = randomUUID();
+    const saleId = randomUUID();
+    const todayResult = await client.query(
+      `SELECT (now() AT TIME ZONE 'Africa/Cairo')::date AS today,
+              date_trunc('month', now() AT TIME ZONE 'Africa/Cairo')::date AS month_start`,
+    );
+    const today = String(todayResult.rows[0].today);
+    const monthStart = String(todayResult.rows[0].month_start);
+
+    await client.query(
+      `INSERT INTO public.employee_receivable_entries
+        (id, branch_id, customer_id, occurred_at, reference_number, entry_type, amount, notes)
+       VALUES ($1,$2,$3,now() - interval '40 days','PERIOD-OPEN-1','opening_balance',125,'period summary fixture')`,
+      [historicalId, ids.branchA, ids.custA],
+    );
+    await client.query(
+      `INSERT INTO public.sales
+        (id, invoice_number, customer_id, branch_id, warehouse_id, subtotal, discount_amount, tax_amount, total, paid_amount, payment_method, status, created_at)
+       VALUES ($1,$2,$3,$4,$5,75,0,0,75,0,'credit','completed',now())`,
+      [saleId, `EMP-PERIOD-${saleId.slice(0, 8)}`, ids.custA, ids.branchA, ids.whA],
+    );
+
+    const payment = await runAsPersist(
+      client,
+      ids.users.branch_manager,
+      `SELECT public.receive_employee_receivable_payment($1,$2,10,'cash',NULL,'period summary fixture') AS result`,
+      [ids.custA, ids.branchA],
+    );
+    expect(payment.error).toBeUndefined();
+    expect(payment.rows[0]?.result).toMatchObject({ success: true, open_before: 200, open_after: 190 });
+
+    const summary = await runAs(
+      client,
+      ids.users.branch_manager,
+      `SELECT public.get_employee_receivables_period_summary($1,$2,$3) AS result`,
+      [ids.branchA, monthStart, today],
+    );
+    expect(summary.error).toBeUndefined();
+    const rows = (summary.rows[0]?.result || []) as Array<Record<string, unknown>>;
+    const employee = rows.find((row) => row.customer_id === ids.custA);
+    expect(employee).toBeTruthy();
+    expect(Number(employee?.period_opening_balance)).toBe(200);
+    expect(Number(employee?.period_debit)).toBe(0);
+    expect(Number(employee?.period_credit)).toBe(10);
+    expect(Number(employee?.period_closing_balance)).toBe(190);
+    expect(rows.every((row) => typeof row.customer_id === 'string')).toBe(true);
+
+    const denied = await runAs(
+      client,
+      ids.users.branch_manager,
+      `SELECT public.get_employee_receivables_period_summary($1,$2,$3) AS result`,
+      [ids.branchB, monthStart, today],
+    );
+    expect(denied.error).toBeUndefined();
+    expect(denied.rows[0]?.result).toEqual([]);
+  });
+
 });
