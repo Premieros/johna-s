@@ -247,7 +247,12 @@ test('employee receivables statement supports current month and a custom period'
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([branch]) });
   });
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/customers**`, async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([employee]) });
+    const accept = route.request().headers()['accept'] || '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(accept.includes('application/vnd.pgrst.object+json') ? employee : [employee]),
+    });
   });
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_employee_receivable_balances**`, async (route) => {
     await route.fulfill({
@@ -264,9 +269,13 @@ test('employee receivables statement supports current month and a custom period'
     });
   });
 
-  const today = await page.evaluate(() => new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(new Date()));
+  const today = await page.evaluate(() => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+  });
   const offsetDate = (date: string, days: number) => {
     const value = new Date(`${date}T00:00:00.000Z`);
     value.setUTCDate(value.getUTCDate() + days);
