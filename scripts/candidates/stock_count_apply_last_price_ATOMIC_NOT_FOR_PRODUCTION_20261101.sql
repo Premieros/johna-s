@@ -57,6 +57,12 @@ BEGIN
       v_value := 0;
 
       IF v_item.raw_material_id IS NOT NULL THEN
+        -- Take the same canonical material/branch lock as approved-v2 issue
+        -- and receipt BEFORE reading warehouse stock. Without it a sale or
+        -- transfer can move quantity between the count snapshot and posting.
+        PERFORM pg_advisory_xact_lock(hashtextextended(
+          v_item.raw_material_id::text||':'||v_count.branch_id::text,0
+        ));
         -- Resolve as of the physical count document creation time (pending explicit
         -- physical counted_at support). Never invent a price from count snapshots.
         SELECT p.unit_cost,p.price_source
