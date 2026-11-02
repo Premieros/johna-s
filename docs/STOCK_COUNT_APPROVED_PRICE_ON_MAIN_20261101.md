@@ -125,3 +125,8 @@ Run exact-head CI, fix any integration regression, confirm accounting ledger/rep
 
 ## Mandatory update protocol
 Update this log after substantive code/test changes. Never claim deployment or post real inventory without verifying the production state.
+
+## Concurrent stock count snapshot safety — 2026-11-02
+- Found a race in candidate apply: it read raw warehouse quantity before acquiring the canonical material/branch advisory lock held by approved-v2 receipt and issue. Simultaneous sales/transfers could result in stale count variance.
+- Added the same `hashtextextended(raw_material_id::text||':'||branch_id::text,0)` transaction lock before price and warehouse reads; it remains held until transaction commits or aborts. Added source regression check. Commit 5020c16c151edf5295a4f6eb6dd7c4048db4b8f8.
+- Candidate is still NOT FOR PRODUCTION. Existing legacy FIFO debt and missing authentic zero price sources remain unresolved. Must run disposable database concurrency/legacy-debt/accounting integration and exact-head CI before deployment or posting November counts.
