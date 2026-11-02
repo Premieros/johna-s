@@ -138,7 +138,10 @@ export function KitchenDisplayPage() {
       setNow(Date.now());
       setItems(newItems);
 
-      const orderIds = [...new Set(newItems.map((item) => item.order_id).filter(Boolean))];
+      const orderIds = [...new Set(newItems
+        .filter((item) => !isKitchenQueueAutoClosed(item, Date.now()))
+        .map((item) => item.order_id)
+        .filter(Boolean))];
       if (orderIds.length === 0) {
         setOrderContext({});
         setLoadError('');
@@ -202,7 +205,8 @@ export function KitchenDisplayPage() {
   }, [branchFilter, canViewKds, load]);
 
   useEffect(() => {
-    const id = setInterval(() => { void load(); }, 30000);
+    // Realtime is the primary wake; this is a slow reconciliation fallback only.
+    const id = setInterval(() => { void load(); }, 60000);
     return () => clearInterval(id);
   }, [load]);
 
