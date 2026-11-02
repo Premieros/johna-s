@@ -283,8 +283,8 @@ test('reports center provides a standalone employee receivables period report wi
   await openRoute(page, '/reports?type=employee_receivables_period');
 
   await expect(page.getByTestId('employee-receivables-period-report')).toBeVisible();
-  await expect(page.getByText('Report Employee A')).toBeVisible();
-  await expect(page.getByText('Report Employee B')).toBeVisible();
+  await expect(page.locator('tbody').getByText('Report Employee A', { exact: true })).toBeVisible();
+  await expect(page.locator('tbody').getByText('Report Employee B', { exact: true })).toBeVisible();
   await expect(page.getByTestId('employee-report-total-opening')).toBeVisible();
   await expect(page.getByTestId('employee-report-total-debit')).toBeVisible();
   await expect(page.getByTestId('employee-report-total-credit')).toBeVisible();
