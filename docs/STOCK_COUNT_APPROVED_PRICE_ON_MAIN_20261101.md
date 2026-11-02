@@ -148,3 +148,8 @@ Update this log after substantive code/test changes. Never claim deployment or p
 - Critical distinction: catalog default zero is not proof that a user explicitly approved zero. Do NOT release the zero-catalog candidate as authoritative until that provenance rule is independently verified or corrected.
 - Added repeatable read-only audit: scripts/audit/november_count_zero_provenance_and_debt_gate_20261102.sql.
 - Candidate remains BLOCKED / DO NOT DEPLOY. No price, journal, or count data modified during this audit.
+
+## 2026-11-02 legacy-debt pre-write release guard
+- Added an explicit count-level preflight against unsettled `raw_fifo_debts` matching any target raw/branch/warehouse coordinate, before looping over raw movements. It returns `LEGACY_FIFO_POSITION_NOT_CUTOVER` without modifying customer stock or accounting, consistent with currently unshipped approved-v2 physical helpers.
+- Added a source contract test. This is a **blocking safeguard**, NOT a migration of old debts or a solution to stock posting. Last known production evidence: 72 counted material coordinates with debts in Smouha and 77 in Cleopatra; no counts applied.
+- Exact-head CI and a genuinely tested historical-debt coexistence design remain required. Never bypass this gate to meet the emergency posting deadline.
