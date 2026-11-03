@@ -7,8 +7,8 @@ export * from './permissionDefs';
 
 /**
  * Memoized permission checker for the current user.
- * Super Admin is the only implicit platform-wide bypass. Every other role,
- * including owner, resolves permissions from the DB-backed role matrix.
+ * Access is resolved only from the DB-backed capability set. The internal
+ * platform.admin capability is the sole global capability; role labels never bypass checks.
  */
 export function useCan(): (permission: Permission) => boolean {
   const { user } = useAuth();
@@ -17,8 +17,8 @@ export function useCan(): (permission: Permission) => boolean {
     (permission: Permission) => {
       const role = user?.role;
       if (!role) return false;
-      if (role === 'super_admin') return true;
-      return (rolePermissionsMap[role] ?? []).includes(permission);
+      const assigned = rolePermissionsMap[role] ?? [];
+      return assigned.includes(permission) || assigned.includes('platform.admin');
     },
     [user?.role, rolePermissionsMap]
   );
