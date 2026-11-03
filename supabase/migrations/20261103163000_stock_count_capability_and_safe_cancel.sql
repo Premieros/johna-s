@@ -238,6 +238,7 @@ BEGIN
       -- Preserve the approval audit when cancelling an approved count.
       NEW.approved_by := OLD.approved_by;
       NEW.approved_at := OLD.approved_at;
+      NEW.applied_at := OLD.applied_at;
 
     ELSIF OLD.status = 'submitted' AND NEW.status = 'rejected' THEN
       v_fallback := 'inventory.count.reject';
