@@ -14,6 +14,12 @@ describe('KDS one-hour display auto-close contract', () => {
     expect(migration).not.toContain('MIN(ai.queue_at)');
   });
 
+  it('preserves only unsatisfied kitchen quantity after a served baseline', () => {
+    expect(migration).toContain('(oks.sent_quantity - COALESCE(ksb.served_quantity, 0)) AS quantity');
+    expect(migration).toContain('LEFT JOIN public.order_kitchen_served_quantities ksb');
+    expect(migration).toContain('COALESCE(oks.sent_quantity, 0) > COALESCE(ksb.served_quantity, 0)');
+  });
+
   it('does not alter the POS order, kitchen status, financial, or inventory state', () => {
     expect(migration).not.toContain('UPDATE public.orders');
     expect(migration).not.toContain('UPDATE public.sales');
