@@ -421,7 +421,6 @@ export function hasPermission(
   permission: Permission
 ): boolean {
   if (!role) return false;
-  if (role === 'super_admin') return true;
   const list = rolePermissionsMap?.[role] ?? [];
-  return list.includes(permission);
+  return list.includes(permission) || list.includes('platform.admin');
 }
