@@ -90,6 +90,10 @@ export function ReportsCenterPage() {
               {report.views.map(item => <option key={item.key} value={item.key}>{ar ? item.ar : item.en}</option>)}
             </select>
           </label><button type="button" aria-pressed={expanded} onClick={()=>setExpanded(value=>!value)} className="rounded border border-ui-border px-3 py-2 text-sm font-bold">{ar ? (expanded?'إنهاء ملء الشاشة':'ملء الشاشة') : (expanded?'Exit full screen':'Full screen')}</button></div></div>
+        {view.key === 'month_review' && report.views.some(item => item.key === 'period_close_raw') &&
+          <button type="button" className="rounded bg-ui-primary px-4 py-2 text-ui-primary-fg" onClick={() => { const target = report.views.find(item => item.key === 'period_close_raw'); if (target) select(target); }}>
+            {ar ? 'فتح تقرير الإقفال المفصل' : 'Open detailed period close report'}
+          </button>}
         {view.key==='period_close_raw' ? <PeriodCloseReport /> : view.key==='month_review' ? <MonthCloseReview views={reports.flatMap(item=>item.views)} onSelect={select} /> : view.type==='component_consumption' ? <Suspense fallback={<p role="status">{ar?'جارٍ فتح التقرير…':'Opening report…'}</p>}><ConsumptionReportPage key={view.key} fixedGroup={view.consumptionGroup==='unit'?'unit':undefined} /></Suspense> : view.financial ? <FinancialReportsPage hideViewPicker /> : <ReportsPage controlledReportType={view.type} key={view.key} onReportTypeChange={selectOperational} workspaceTitle={ar ? view.ar : view.en} />}
       </main>
     </div>

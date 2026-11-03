@@ -8,7 +8,13 @@ export type OperationalReportPage = {
   metrics?: Record<string, number>;
 };
 
+export type PeriodCloseMaterial = {
+  id: string; name: string; code: string; price: number; source: string | null;
+  opening: number | null; closing: number | null; purchase: number; transfer: number;
+};
+
 export type PeriodCloseRaw = {
+  materials?: PeriodCloseMaterial[];
   valued_at: string; opening_complete: boolean; closing_complete: boolean;
   opening: number; closing: number; purchase: number; transfer: number; unpriced: number;
 };
