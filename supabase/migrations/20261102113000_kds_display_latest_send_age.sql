@@ -66,7 +66,7 @@ BEGIN
       o.notes AS onotes,
       COALESCE(oks.sent_at, o.kitchen_sent_at, o.created_at) AS queue_at,
       oi.id AS item_id,
-      oks.sent_quantity AS quantity,
+      (oks.sent_quantity - COALESCE(ksb.served_quantity, 0)) AS quantity,
       oi.notes AS item_notes,
       oi.modifiers_snapshot,
       p.name AS product_name,
@@ -75,6 +75,9 @@ BEGIN
     FROM public.orders o
     JOIN public.order_items oi ON oi.order_id = o.id
     JOIN public.order_kitchen_sends oks ON oks.order_item_id = oi.id
+    LEFT JOIN public.order_kitchen_served_quantities ksb
+      ON ksb.order_id = o.id
+     AND ksb.order_item_id = oi.id
     JOIN public.products p ON p.id = oi.product_id
     LEFT JOIN public.categories c
       ON c.id = p.category_id
@@ -87,7 +90,7 @@ BEGIN
       -- Payment completion must not remove unfinished kitchen work from KDS.
       AND o.status IN ('open', 'held', 'completed')
       AND o.kitchen_status IN ('sent', 'cooking', 'ready')
-      AND COALESCE(oks.sent_quantity, 0) > 0
+      AND COALESCE(oks.sent_quantity, 0) > COALESCE(ksb.served_quantity, 0)
   ),
   legacy_empty_orders AS (
     SELECT
