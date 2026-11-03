@@ -62,7 +62,7 @@ async function mockAuthenticatedApp(page: Page) {
   });
 
 
-  await page.route(new RegExp(`${SUPABASE_ORIGIN.replace('.', '\\\\.')}/rest/v1/roles(?:\\\\?.*)?$ `.trim()), async (route) => {
+  await page.route(`${SUPABASE_ORIGIN}/rest/v1/roles**`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
