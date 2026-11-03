@@ -1,14 +1,15 @@
 import { fireEvent, render, screen, waitFor, act } from '@testing-library/react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import type { PosRealtimeEvent } from '@/features/pos/services/posRealtime';
 import { KitchenDisplayPage } from '@/features/inventory/pages/KitchenDisplayPage';
-const mocks=vi.hoisted(()=>({ rpc:vi.fn(), history:vi.fn(), setStatus:vi.fn(), context:vi.fn(), finishEmpty:vi.fn(), branch:'a',user:{id:'u'},can:vi.fn(()=>true), refresh:()=>{} }));
+const mocks=vi.hoisted(()=>({ rpc:vi.fn(), history:vi.fn(), setStatus:vi.fn(), context:vi.fn(), finishEmpty:vi.fn(), branch:'a',user:{id:'u'},can:vi.fn(()=>true), refresh:()=>{}, shouldRefresh:undefined as ((event:PosRealtimeEvent)=>boolean)|undefined }));
 vi.mock('@/api',()=>({supabase:{rpc:mocks.rpc}}));
 vi.mock('@/api/domains/catalog',()=>({catalog:{getKitchenOrderContext:mocks.context,getKitchenCompletedHistory:mocks.history,setKitchenStatus:mocks.setStatus,finishEmptyKitchenOrder:mocks.finishEmpty}}));
 vi.mock('@/context/AuthContext',()=>({useAuth:()=>({user:mocks.user})}));
 vi.mock('@/context/LanguageContext',()=>({useLanguage:()=>({lang:'en'})}));
 vi.mock('@/lib/useBranchFilter',()=>({useBranchFilter:()=>mocks.branch}));
 vi.mock('@/lib/permissions',()=>({useCan:()=>mocks.can}));
-vi.mock('@/features/pos/services/posRealtime',()=>({subscribePosRealtime:({onEvent}:{onEvent:()=>void})=>{mocks.refresh=onEvent;return ()=>{};}}));
+vi.mock('@/features/pos/services/posRealtime',()=>({subscribePosRealtime:({onEvent,shouldRefresh}:{onEvent:()=>void;shouldRefresh?:(event:PosRealtimeEvent)=>boolean})=>{mocks.refresh=onEvent;mocks.shouldRefresh=shouldRefresh;return ()=>{};}}));
 vi.mock('@/components/design/DesignSurface',()=>({DesignSurface:({children}:{children:React.ReactNode})=><div>{children}</div>,DesignPageHeader:()=>null}));
 const queueRow=(id:string, seconds:number)=>({order_id:id,order_number:id,station:'main',kitchen_status:'sent',created_at:new Date(Date.now()-seconds*1000).toISOString(),elapsed_seconds:seconds,items:[]});
 beforeEach(()=>{
@@ -21,6 +22,28 @@ beforeEach(()=>{
 });
 afterEach(()=>{delete (document as unknown as {hidden?:boolean}).hidden;vi.useRealTimers();});
 describe('KDS unfinished queue visibility',()=>{
+ it('ignores item updates for orders outside the kitchen queue while accepting sends and unknown deletes',async()=>{
+  render(<KitchenDisplayPage/>);
+  await screen.findByText('#RECENT');
+  const itemEvent=(orderId:string):PosRealtimeEvent=>({table:'order_items',eventType:'UPDATE',newRow:{order_id:orderId},oldRow:{}});
+  expect(mocks.shouldRefresh?.(itemEvent('OTHER'))).toBe(false);
+  expect(mocks.shouldRefresh?.(itemEvent('RECENT'))).toBe(true);
+  expect(mocks.shouldRefresh?.({...itemEvent('OTHER'),table:'order_kitchen_sends'})).toBe(true);
+  expect(mocks.shouldRefresh?.({table:'order_items',eventType:'DELETE',newRow:{},oldRow:{id:'unknown'}})).toBe(true);
+ });
+ it('submits one status change per order while its response is pending',async()=>{
+  let resolve!: () => void;
+  mocks.setStatus.mockImplementationOnce(()=>new Promise<void>(done=>{resolve=done;}));
+  render(<KitchenDisplayPage/>);
+  const [first, other]=await screen.findAllByRole('button',{name:'Start Cooking'});
+  fireEvent.click(first);
+  fireEvent.click(first);
+  expect(first).toBeDisabled();
+  expect(other).toBeEnabled();
+  expect(mocks.setStatus).toHaveBeenCalledExactlyOnceWith('RECENT','cooking');
+  await act(async()=>{resolve();});
+  await waitFor(()=>expect(screen.getAllByRole('button',{name:'Start Cooking'})[0]).toBeEnabled());
+ });
  it('stops ten background polls and refreshes current state on return',async()=>{
   vi.useFakeTimers();let hidden=false;Object.defineProperty(document,'hidden',{configurable:true,get:()=>hidden});
   render(<KitchenDisplayPage/>);await act(async()=>{await Promise.resolve();await Promise.resolve();});
@@ -89,6 +112,10 @@ describe('KDS unfinished queue visibility',()=>{
   expect(screen.getByTestId('kds-auto-closed')).toHaveTextContent('#AUTO-CLOSED');
   expect(screen.getByTestId('kds-auto-closed')).toHaveTextContent('Auto-closed in the kitchen display after one hour');
   expect(screen.queryByText('#ALMOST')).not.toBeInTheDocument();
+  const calls=mocks.rpc.mock.calls.length;
+  await act(async()=>{vi.advanceTimersByTime(1000);});
+  expect(screen.getByTestId('kds-auto-closed')).toHaveTextContent('#ALMOST');
+  expect(mocks.rpc).toHaveBeenCalledTimes(calls);
   expect(mocks.setStatus).not.toHaveBeenCalled();
  });
  it('shows completed read errors and retry, with no misleading successful empty history',async()=>{

@@ -70,11 +70,15 @@ export function KitchenDisplayPage() {
   const prevCountRef = useRef(0);
   const scopeKey = `${branchFilter || ''}:${user?.id || ''}:${canViewKds}`;
   const scopeRef = useRef(scopeKey);
+  const statusWrites = useRef(new Set<string>());
+  const [pendingStatusWrites, setPendingStatusWrites] = useState<ReadonlySet<string>>(new Set());
+  const watchedKitchenOrders = useRef<ReadonlySet<string>>(new Set());
   const queueRead = useRef(0);
   const stationRead = useRef(0);
   const coalesceQueue = useRef(createRefreshCoalescer());
   useLayoutEffect(() => {
     scopeRef.current = scopeKey;
+    watchedKitchenOrders.current = new Set();
     ++queueRead.current;
     ++stationRead.current;
     setItems([]); setOrderContext({}); setStations([]); setStation(''); setLoadError('');
@@ -137,6 +141,7 @@ export function KitchenDisplayPage() {
       prevCountRef.current = newItems.length;
       setNow(Date.now());
       setItems(newItems);
+      watchedKitchenOrders.current = new Set(newItems.map((item) => item.order_id));
 
       const orderIds = [...new Set(newItems
         .filter((item) => !isKitchenQueueAutoClosed(item, Date.now()))
@@ -200,7 +205,18 @@ export function KitchenDisplayPage() {
 
   useEffect(() => {
     if (!branchFilter || !canViewKds) return;
-    const unsubscribe = subscribePosRealtime({ branchId: branchFilter, onEvent: () => { void load(); }, debounceMs: 500 });
+    const unsubscribe = subscribePosRealtime({
+      branchId: branchFilter,
+      onEvent: () => { void load(); },
+      shouldRefresh: (event) => {
+        if (event.table !== 'order_items') return true;
+        const orderId = event.newRow.order_id ?? event.oldRow.order_id;
+        // New sends have their own branch-scoped event. Unknown payloads
+        // (including deletes with only a primary key) still reconcile.
+        return typeof orderId !== 'string' || !orderId || watchedKitchenOrders.current.has(orderId);
+      },
+      debounceMs: 500,
+    });
     return unsubscribe;
   }, [branchFilter, canViewKds, load]);
 
@@ -215,16 +231,23 @@ export function KitchenDisplayPage() {
       setLoadError(userFacingErrorMessage('POS_KDS_UPDATE_REQUIRED', ar ? 'ar' : 'en'));
       return;
     }
+    const key = `${scopeKey}:${orderId}`;
+    if (statusWrites.current.has(key)) return;
+    statusWrites.current.add(key);
+    setPendingStatusWrites(new Set(statusWrites.current));
     try {
       await catalog.setKitchenStatus(orderId, status);
       if (scopeRef.current !== scopeKey) return;
       setLoadError('');
-      void load();
+      await load();
     } catch (error) {
       // Keep the last known KDS cards visible, but never make a failed action
       // look successful or silent.
       if (scopeRef.current !== scopeKey) return;
       setLoadError(userFacingErrorMessage(error, ar ? 'ar' : 'en'));
+    } finally {
+      statusWrites.current.delete(key);
+      setPendingStatusWrites(new Set(statusWrites.current));
     }
   };
 
@@ -358,9 +381,9 @@ export function KitchenDisplayPage() {
               {!item.items.length && <p className="mb-3 text-xs text-ui-muted">{ar ? 'لا توجد أصناف مطبخ متبقية في هذا الطلب' : 'No kitchen items remain in this order'}</p>}
               {isVoidedEmpty && canFinishEmpty && <button disabled={finishingOrder != null} onClick={() => void finishEmpty(item.order_id)} className="w-full rounded-xl bg-ui-muted px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50">{finishingOrder === item.order_id ? (ar ? 'جاري الإنهاء...' : 'Finishing...') : (ar ? 'إنهاء الطلب الملغي الخالي من الأصناف' : 'Finish empty voided order')}</button>}
               {canUpdateKds && !isVoidedEmpty && <div className="flex gap-2 border-t border-ui-border pt-3">
-                {item.kitchen_status === 'sent' && <button onClick={() => void handleKitchenStatus(item.order_id, 'cooking')} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-ui-warning text-white py-2.5 px-3 text-sm font-bold active:scale-95 transition-all min-h-11"><ChefHat className="h-5 w-5" /> {ar ? 'بدء التحضير' : 'Start Cooking'}</button>}
-                {item.kitchen_status === 'cooking' && <button onClick={() => void handleKitchenStatus(item.order_id, 'ready')} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-ui-success text-white py-2.5 px-3 text-sm font-bold active:scale-95 transition-all min-h-11"><CheckCircle2 className="h-5 w-5" /> {ar ? 'جاهز للتقديم' : 'Mark Ready'}</button>}
-                {item.kitchen_status === 'ready' && <button onClick={() => void handleKitchenStatus(item.order_id, 'served')} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-ui-info text-white py-2.5 px-3 text-sm font-bold active:scale-95 transition-all min-h-11"><UtensilsCrossed className="h-5 w-5" /> {ar ? 'تم التقديم' : 'Served'}</button>}
+                {item.kitchen_status === 'sent' && <button disabled={pendingStatusWrites.has(`${scopeKey}:${item.order_id}`)} onClick={() => void handleKitchenStatus(item.order_id, 'cooking')} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-ui-warning text-white py-2.5 px-3 text-sm font-bold active:scale-95 transition-all min-h-11"><ChefHat className="h-5 w-5" /> {ar ? 'بدء التحضير' : 'Start Cooking'}</button>}
+                {item.kitchen_status === 'cooking' && <button disabled={pendingStatusWrites.has(`${scopeKey}:${item.order_id}`)} onClick={() => void handleKitchenStatus(item.order_id, 'ready')} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-ui-success text-white py-2.5 px-3 text-sm font-bold active:scale-95 transition-all min-h-11"><CheckCircle2 className="h-5 w-5" /> {ar ? 'جاهز للتقديم' : 'Mark Ready'}</button>}
+                {item.kitchen_status === 'ready' && <button disabled={pendingStatusWrites.has(`${scopeKey}:${item.order_id}`)} onClick={() => void handleKitchenStatus(item.order_id, 'served')} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-ui-info text-white py-2.5 px-3 text-sm font-bold active:scale-95 transition-all min-h-11"><UtensilsCrossed className="h-5 w-5" /> {ar ? 'تم التقديم' : 'Served'}</button>}
               </div>}
             </div>
             );
