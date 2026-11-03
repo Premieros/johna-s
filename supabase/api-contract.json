@@ -558,6 +558,14 @@
       ]
     },
     {
+      "name": "get_employee_receivables_period_summary",
+      "params": [
+        "branch_id",
+        "from_date",
+        "to_date"
+      ]
+    },
+    {
       "name": "get_expense_routing_rules",
       "params": [
         "branch_id"

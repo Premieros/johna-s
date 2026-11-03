@@ -440,3 +440,13 @@ export interface TrialBalanceSummary {
   total_credit: number;
   balanced: boolean;
 }
+
+export interface EmployeeReceivablePeriodRow {
+  customer_id: string;
+  employee_name: string;
+  phone: string | null;
+  period_opening_balance: number;
+  period_debit: number;
+  period_credit: number;
+  period_closing_balance: number;
+}

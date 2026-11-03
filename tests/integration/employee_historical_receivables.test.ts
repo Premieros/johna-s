@@ -37,7 +37,11 @@ describe.skipIf(!dbUrl)('employee historical receivables', () => {
   const guarded = (name: string, fn: () => Promise<void>) =>
     it(name, async (ctx: { skip?: () => unknown }) => {
       if (!imp) return typeof ctx.skip === 'function' ? ctx.skip() : undefined;
-      await fn();
+      await client.query('SAVEPOINT employee_case');
+      try { await fn(); } finally {
+        await client.query('ROLLBACK TO SAVEPOINT employee_case');
+        await client.query('RELEASE SAVEPOINT employee_case');
+      }
     });
 
   guarded('combines opening/historical debt with future credit sales in all aging views and settles it first through aggregate collection', async () => {
@@ -137,4 +141,101 @@ describe.skipIf(!dbUrl)('employee historical receivables', () => {
     expect(denied.error).toBeUndefined();
     expect(denied.rows[0]?.result).toMatchObject({ success: false, error: 'BRANCH_MISMATCH' });
   });
+
+  guarded('builds a read-only report row with correct period opening, debit, paid and closing totals', async () => {
+    const openingId = randomUUID();
+    const inPeriodId = randomUUID();
+    const saleId = randomUUID();
+    const entryNumber = `EMP-REPORT-${saleId.slice(0, 8)}`;
+    const dates = await client.query(
+      `SELECT ((now() AT TIME ZONE 'Africa/Cairo')::date)::text AS today,
+              (date_trunc('month', now() AT TIME ZONE 'Africa/Cairo')::date)::text AS month_start`,
+    );
+    const today = String(dates.rows[0].today);
+    const monthStart = String(dates.rows[0].month_start);
+
+    await client.query(
+      `INSERT INTO public.employee_receivable_entries
+        (id, branch_id, customer_id, occurred_at, reference_number, entry_type, amount, notes)
+       VALUES ($1,$2,$3,now() - interval '40 days','EMP-REPORT-OPEN','opening_balance',125,'report fixture')`,
+      [openingId, ids.branchA, ids.custA],
+    );
+    await client.query(
+      `INSERT INTO public.sales
+        (id, invoice_number, customer_id, branch_id, warehouse_id, subtotal, discount_amount, tax_amount, total, paid_amount, payment_method, status, created_at)
+       VALUES ($1,$2,$3,$4,$5,75,0,0,75,0,'credit','completed',now())`,
+      [saleId, entryNumber, ids.custA, ids.branchA, ids.whA],
+    );
+    await client.query(`INSERT INTO public.employee_receivable_entries (id,branch_id,customer_id,occurred_at,reference_number,entry_type,amount) VALUES ($1,$2,$3,now(),'EMP-REPORT-CHARGE','historical_charge',20)`, [inPeriodId, ids.branchA, ids.custA]);
+    const journalEntryId = randomUUID();
+    await client.query(
+      `INSERT INTO public.journal_entries
+        (id, entry_number, branch_id, entry_date, reference_type, reference_id, reference_number, description)
+       VALUES ($1,$2,$3,$4,'sale',$5,$2,'Employee report fixture sale')`,
+      [journalEntryId, entryNumber, ids.branchA, monthStart, saleId],
+    );
+    await client.query(
+      `INSERT INTO public.journal_entry_lines
+        (journal_entry_id, account_id, debit, credit, customer_id, note)
+       VALUES ($1,$2,75,0,$3,'Employee report fixture sale')`,
+      [journalEntryId, ids.coaPoolA[0], ids.custA],
+    );
+
+    const payment = await runAsPersist(
+      client,
+      ids.users.branch_manager,
+      `SELECT public.receive_employee_receivable_payment($1,$2,10,'cash','employee report fixture payment') AS result`,
+      [ids.custA, ids.branchA],
+    );
+    expect(payment.error).toBeUndefined();
+    expect(payment.rows[0]?.result).toMatchObject({ success: true, open_before: 220, open_after: 210 });
+
+    const report = await runAs(
+      client,
+      ids.users.branch_manager,
+      `SELECT public.get_employee_receivables_period_summary($1,$2,$3) AS result`,
+      [ids.branchA, monthStart, today],
+    );
+    expect(report.error).toBeUndefined();
+    const rows = (report.rows[0]?.result || []) as Array<Record<string, unknown>>;
+    const employee = rows.find((row) => row.customer_id === ids.custA);
+    expect(employee).toBeTruthy();
+    expect(Number(employee?.period_opening_balance)).toBe(125);
+    expect(Number(employee?.period_debit)).toBe(95);
+    expect(Number(employee?.period_credit)).toBe(10);
+    expect(Number(employee?.period_closing_balance)).toBe(210);
+
+    const branchDenied = await runAs(
+      client,
+      ids.users.branch_manager,
+      `SELECT public.get_employee_receivables_period_summary($1,$2,$3) AS result`,
+      [ids.branchB, monthStart, today],
+    );
+    expect(branchDenied.error).toContain('BRANCH_MISMATCH');
+
+    const permissionDenied = await runAs(
+      client,
+      ids.users.cashier,
+      `SELECT public.get_employee_receivables_period_summary($1,$2,$3) AS result`,
+      [ids.branchA, monthStart, today],
+    );
+    expect(permissionDenied.error).toContain('PERMISSION_DENIED:accounts.view');
+
+    const invalidPeriod = await runAs(
+      client,
+      ids.users.branch_manager,
+      `SELECT public.get_employee_receivables_period_summary($1,$2,$3) AS result`,
+      [ids.branchA, today, monthStart],
+    );
+    expect(invalidPeriod.error).toContain('EMPLOYEE_RECEIVABLE_PERIOD_INVALID');
+
+    const beforeOpeningCutover = await runAs(
+      client,
+      ids.users.branch_manager,
+      `SELECT public.get_employee_receivables_period_summary($1,$2,$3) AS result`,
+      [ids.branchA, '2026-09-15', '2026-09-20'],
+    );
+    expect(beforeOpeningCutover.error).toContain('EMPLOYEE_RECEIVABLE_PERIOD_INVALID');
+  });
+
 });

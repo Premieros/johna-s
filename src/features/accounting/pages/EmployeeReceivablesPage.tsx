@@ -1,3 +1,4 @@
+import { EmployeeReceivablesPeriodReport } from '../components/EmployeeReceivablesPeriodReport';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FileText, HandCoins, Plus, UserRound } from 'lucide-react';
 import { Button } from '@/components/Button';
@@ -27,6 +28,7 @@ export function EmployeeReceivablesPage() {
   const { branches } = useBranches();
   const { effectiveSettings } = useSettings();
   const { show } = useToast();
+  const [showPeriodReport, setShowPeriodReport] = useState(false);
   const [selectedBranchId, setSelectedBranchId] = useState(branchFilter || '');
   const effectiveBranchId = branchFilter || selectedBranchId;
   const currency = effectiveSettings(effectiveBranchId || null)?.currency || 'EGP';
@@ -167,6 +169,13 @@ export function EmployeeReceivablesPage() {
       </DesignPanel>
 
       {!effectiveBranchId ? <DesignPanel><div className="py-8 text-center text-sm text-ui-muted">{ar ? 'اختر الفرع لعرض ذمم الموظفين.' : 'Select a branch to view employee receivables.'}</div></DesignPanel> : <DesignPanel><DataTable columns={columns} data={filtered} loading={loading} emptyMessage={ar ? 'لا توجد حسابات موظفين' : 'No employee accounts'} /></DesignPanel>}
+
+      {can('accounts.view') && effectiveBranchId && <DesignPanel>
+        <Button size="sm" variant="secondary" aria-expanded={showPeriodReport} onClick={() => setShowPeriodReport((open) => !open)}>
+          {showPeriodReport ? (ar ? 'إخفاء تقرير الفترة' : 'Hide Period Report') : (ar ? 'تقرير ذمم الموظفين حسب الفترة' : 'Employee Receivables by Period')}
+        </Button>
+        {showPeriodReport && <EmployeeReceivablesPeriodReport key={effectiveBranchId} branchId={effectiveBranchId} />}
+      </DesignPanel>}
 
       <Modal open={employeeModalOpen} onClose={() => setEmployeeModalOpen(false)} title={ar ? 'إضافة موظف' : 'Add Employee'}>
         <div className="space-y-4">
