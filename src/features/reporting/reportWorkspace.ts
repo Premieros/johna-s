@@ -26,6 +26,9 @@ export const BASIC_REPORTS: BasicReport[] = [
     op('raw_material_consumption', 'حركة واستهلاك الخامات', 'Material movements & consumption'), financial('inventory_movement', 'كشف حركة صنف', 'Item statement'),
     op('low_stock', 'النواقص', 'Shortages'), op('production_waste', 'الهالك', 'Waste'),
   ] },
+  { key: 'employee_receivables', ar: 'ذمم الموظفين', en: 'Employee Receivables', descriptionAr: 'تقرير أرصدة وحركات الموظفين خلال فترة محددة مع الإجماليات', descriptionEn: 'Employee balances and movements for a selected period, with totals', views: [
+    { key: 'employee_receivables_period', ar: 'تقرير ذمم الموظفين حسب الفترة', en: 'Employee receivables by period', permissions: ['accounts.view'] },
+  ] },
   { key: 'collections', ar: 'التحصيل والأرصدة', en: 'Collections & Balances', descriptionAr: 'طرق الدفع والخزائن والبنوك والعملاء والموردون', descriptionEn: 'Payment methods, treasuries, banks, customers and suppliers', views: [
     op('sales_by_payment', 'طرق الدفع', 'Payment methods'), op('daily_closing_range', 'ملخص التحصيل اليومي', 'Daily collections'),
     financial('treasury_statement', 'كشف الخزنة أو البنك', 'Treasury / bank statement'), financial('party_statement', 'كشف عميل أو مورد', 'Customer / supplier statement'),

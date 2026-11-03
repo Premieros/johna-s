@@ -224,3 +224,83 @@ test('user journey: redirect aliases resolve without blank pages', async ({ page
     await openRoute(page, alias);
   }
 });
+
+test('reports center provides a standalone employee receivables period report with totals', async ({ page }) => {
+  await mockAuthenticatedApp(page);
+
+  const branchId = '30000000-0000-0000-0000-000000000001';
+  const branch = { id: branchId, name: 'Employee Report Branch', is_active: true };
+  const requests: Array<{ p_branch_id: string; p_from_date: string; p_to_date: string }> = [];
+
+  await page.route(`${SUPABASE_ORIGIN}/rest/v1/branches**`, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([branch]) });
+  });
+  await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_employee_receivables_period_summary**`, async (route) => {
+    const body = route.request().postDataJSON() as { p_branch_id: string; p_from_date: string; p_to_date: string };
+    requests.push(body);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          customer_id: '40000000-0000-0000-0000-000000000001',
+          employee_name: 'Report Employee A',
+          phone: '01000000001',
+          period_opening_balance: 100,
+          period_debit: 50,
+          period_credit: 20,
+          period_closing_balance: 130,
+        },
+        {
+          customer_id: '40000000-0000-0000-0000-000000000002',
+          employee_name: 'Report Employee B',
+          phone: '01000000002',
+          period_opening_balance: 200,
+          period_debit: 30,
+          period_credit: 10,
+          period_closing_balance: 220,
+        },
+      ]),
+    });
+  });
+
+  const today = await page.evaluate(() => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+  });
+  const offsetDate = (date: string, days: number) => {
+    const value = new Date(`${date}T00:00:00.000Z`);
+    value.setUTCDate(value.getUTCDate() + days);
+    return value.toISOString().slice(0, 10);
+  };
+  const customFrom = offsetDate(today, -5);
+  const customTo = offsetDate(today, -3);
+
+  await login(page);
+  await openRoute(page, '/reports?type=employee_receivables_period');
+
+  await expect(page.getByTestId('employee-receivables-period-report')).toBeVisible();
+  await expect(page.locator('tbody').getByText('Report Employee A', { exact: true })).toBeVisible();
+  await expect(page.locator('tbody').getByText('Report Employee B', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('employee-report-total-opening')).toBeVisible();
+  await expect(page.getByTestId('employee-report-total-debit')).toBeVisible();
+  await expect(page.getByTestId('employee-report-total-credit')).toBeVisible();
+  await expect(page.getByTestId('employee-report-total-closing')).toBeVisible();
+  await expect(page.getByTestId('employee-report-export')).toBeEnabled();
+
+  const from = page.getByTestId('employee-report-from');
+  const to = page.getByTestId('employee-report-to');
+  await expect(from).toHaveValue(`${today.slice(0, 7)}-01`);
+  await expect(to).toHaveValue(today);
+  await from.fill(customFrom);
+  await to.fill(customTo);
+  await page.getByTestId('employee-report-apply').click();
+
+  await expect(page.getByTestId('employee-report-period')).toContainText(`${customFrom} — ${customTo}`);
+  await expect.poll(() => requests.some((item) =>
+    item.p_branch_id === branchId && item.p_from_date === customFrom && item.p_to_date === customTo
+  )).toBe(true);
+});
