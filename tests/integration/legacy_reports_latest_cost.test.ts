@@ -23,6 +23,8 @@ describe.skipIf(!local)('installed agent report pages and latest raw cost — ow
   await db.query("INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,reference_number,priced_at) VALUES($1,$2,17,'LATEST-CONSUMPTION',clock_timestamp())",[raw,ids.branchA]);
   for(const material of [raw,missing]) await db.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,batch_number) VALUES($1,$2,$3,-2,999,-1998,'sale','sale',$4,$5)",[material,ids.branchA,ids.whA,ids.saleA,randomUUID()]);
   await db.query("INSERT INTO public.raw_material_inventory(raw_material_id,branch_id,quantity,avg_cost) VALUES($1,$2,-3,999) ON CONFLICT(raw_material_id,branch_id) DO UPDATE SET quantity=-3,avg_cost=999",[raw,ids.branchA]);
+  // The physical batch is authoritative; the branch row above is a compatibility mirror.
+  await db.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,source_type) VALUES($1,$2,$3,-3,999,'adjustment')",[raw,ids.branchA,ids.whA]);
   // Fixed real branch is isolated to this localhost transaction, no production call.
   await db.query("INSERT INTO public.branches(id,name) VALUES($1,'Smouha report fixture')",[smouha]);
  },60000);
