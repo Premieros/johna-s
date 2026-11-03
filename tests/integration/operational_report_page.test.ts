@@ -168,8 +168,9 @@ describe.skipIf(!dbUrl)('operational pages retain direct caller RLS totals', () 
   it('uses shared stock aggregates for balances and low-stock, retaining negative quantities and branch RLS', async () => {
     await client.query('SAVEPOINT stock_source');
     try {
+      const stockRaw = (await client.query("INSERT INTO public.raw_materials(branch_id,code,name) VALUES($1,gen_random_uuid()::text,'Stock parity fixture') RETURNING id",[ids.branchA])).rows[0].id;
       await client.query(`INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,source_type)
-        VALUES($1,$2,$3,-3,10,'opening')`,[ids.rm,ids.branchA,ids.whA]);
+        VALUES($1,$2,$3,-3,10,'opening')`,[stockRaw,ids.branchA,ids.whA]);
       const result=await runAs(client,ids.users.cashier,
         `SELECT public.get_operational_stock_source($1,NULL,false) AS detail,
           public.get_operational_stock_source($1,NULL,true) AS low`,[ids.branchA]);
@@ -181,6 +182,14 @@ describe.skipIf(!dbUrl)('operational pages retain direct caller RLS totals', () 
       expect(detail.rawRows.reduce((sum,row)=>sum+Number(row.quantity),0)).toBe(direct.rows[0].qty);
       expect(low.rawBalances.reduce((sum,row)=>sum+Number(row.quantity),0)).toBe(direct.rows[0].qty);
       expect(detail.rawRows.some(row=>Number(row.quantity)<0)).toBe(true);
+      // A lagging branch cache must not create a different displayed balance.
+      await client.query(`INSERT INTO public.raw_material_inventory(raw_material_id,branch_id,quantity,avg_cost)
+        VALUES($1,$2,999,0) ON CONFLICT(raw_material_id,branch_id) DO UPDATE SET quantity=999`,[stockRaw,ids.branchA]);
+      const valuation=await runAs(client,ids.users.super_admin,
+        'SELECT stock_quantity::float AS qty FROM public.get_raw_material_latest_valuation($1) WHERE raw_material_id=$2',
+        [ids.branchA,stockRaw]);
+      expect(valuation.error).toBeUndefined();
+      expect(valuation.rows[0].qty).toBe(detail.rawRows.filter(row=>row.raw_material_id===stockRaw).reduce((sum,row)=>sum+Number(row.quantity),0));
       const foreign=await runAs(client,ids.users.cashier_b,
         'SELECT public.get_operational_stock_source($1,NULL,false) AS value',[ids.branchA]);
       expect((foreign.rows[0].value as typeof detail).rawRows).toEqual([]);
