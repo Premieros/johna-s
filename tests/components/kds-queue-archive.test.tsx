@@ -21,6 +21,19 @@ beforeEach(()=>{
 });
 afterEach(()=>{delete (document as unknown as {hidden?:boolean}).hidden;vi.useRealTimers();});
 describe('KDS unfinished queue visibility',()=>{
+ it('submits one status change per order while its response is pending',async()=>{
+  let resolve!: () => void;
+  mocks.setStatus.mockImplementationOnce(()=>new Promise<void>(done=>{resolve=done;}));
+  render(<KitchenDisplayPage/>);
+  const [first, other]=await screen.findAllByRole('button',{name:'Start Cooking'});
+  fireEvent.click(first);
+  fireEvent.click(first);
+  expect(first).toBeDisabled();
+  expect(other).toBeEnabled();
+  expect(mocks.setStatus).toHaveBeenCalledExactlyOnceWith('RECENT','cooking');
+  await act(async()=>{resolve();});
+  await waitFor(()=>expect(screen.getAllByRole('button',{name:'Start Cooking'})[0]).toBeEnabled());
+ });
  it('stops ten background polls and refreshes current state on return',async()=>{
   vi.useFakeTimers();let hidden=false;Object.defineProperty(document,'hidden',{configurable:true,get:()=>hidden});
   render(<KitchenDisplayPage/>);await act(async()=>{await Promise.resolve();await Promise.resolve();});
