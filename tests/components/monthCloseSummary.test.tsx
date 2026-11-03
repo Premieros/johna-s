@@ -1,3 +1,4 @@
+vi.mock('@/lib/permissions', () => ({ useCan: () => () => true }));
 import { fireEvent,render,screen } from '@testing-library/react';
 import { beforeEach,describe,expect,it,vi } from 'vitest';
 const calls=vi.hoisted(()=>({metrics:vi.fn(),cost:vi.fn()}));

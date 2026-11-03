@@ -1,3 +1,5 @@
+import { useCan } from '@/lib/permissions';
+import { exportToExcelAdvanced } from '@/lib/excel';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { reporting } from '@/api';
 import { useAuth } from '@/context/AuthContext';
@@ -61,10 +63,31 @@ export function MonthCloseReview({ views,onSelect }: { views: WorkspaceView[]; o
   }
   setSummary({scope:requestScope,rows,unpriced:consumption?.summary.unpriced_count??0,missingRecipes:consumption?.summary.missing_recipe_count??0,invalidUnits:consumption?.summary.invalid_unit_count??0,complete:consumption?.summary.complete!==false});setBusy(false);
  }
+ const canExport = useCan()('reports.export');
+ const [exportError, setExportError] = useState<{scope:string;message:string} | null>(null);
+ async function exportReview() {
+  if (!canExport || !summary || summary.scope !== scope || busy) return;
+  const item = ar ? 'البند' : 'Item';
+  const amount = ar ? 'القيمة' : 'Amount';
+  const note = ar ? 'الحالة' : 'Status';
+  try {
+   setExportError(null);
+   await exportToExcelAdvanced({
+    data: summary.rows.map(row => ({ [item]: ar ? row.ar : row.en, [amount]: row.value,
+     [note]: row.error ? userFacingErrorMessage(row.error, lang) : row.value === null ? (ar ? 'لم تُحسب النتيجة' : 'Not calculated') : '' })),
+    columns: [item,amount,note], currencyColumns: [amount], filename: `month-review-${month}`,
+    sheetName: ar ? 'مراجعة الشهر' : 'Month review', subtitle: `${period.from} — ${period.to}`, lang,
+    sourceNote: ar ? `ملخص تقديري · خامات بلا سعر: ${summary.unpriced} · وصفات ناقصة: ${summary.missingRecipes} · وحدات غير صالحة: ${summary.invalidUnits}`
+     : `Estimated summary · Unpriced materials: ${summary.unpriced} · Missing recipes: ${summary.missingRecipes} · Unresolved units: ${summary.invalidUnits}`,
+   });
+  } catch (error) { setExportError({scope,message:userFacingErrorMessage(error,lang)}); }
+ }
  return <section className="space-y-3" data-testid="month-close-review">
   <div className="flex flex-wrap items-center gap-3"><label className="font-bold">{ar?'شهر المراجعة':'Review month'} <input type="month" value={month} onChange={event=>setMonth(event.target.value)} className="rounded border border-ui-border bg-ui-surface p-2" /></label><p className="text-sm text-ui-muted">{ar?'افتح كل تقرير للفترة نفسها وراجع نتائجه. هذه قائمة مراجعة، وليست شهادة باكتمال الإغلاق.':'Open each report for the same period and review its results. This is a checklist, not confirmation of a completed close.'}</p></div>
   {!history.unlimited && <p role="alert" className="rounded bg-ui-warning-soft p-3">{ar?'صلاحية التاريخ الحالي قد تحدّ من البيانات الظاهرة؛ يلزم الاطلاع الكامل على الشهر قبل اعتماده.':'Your history permission may limit visible data. Complete month visibility is required before approval.'}</p>}
   <button type="button" disabled={!valid||busy} onClick={()=>void loadSummary()} className="rounded bg-ui-primary px-4 py-2 font-bold text-ui-primary-fg disabled:opacity-50">{busy?(ar?'جارٍ تحميل الملخص…':'Loading summary…'):(ar?'عرض ملخص الشهر':'Show month summary')}</button>
+  {canExport && <button type="button" disabled={busy || summary?.scope !== scope} onClick={() => void exportReview()} className="rounded border border-ui-border px-4 py-2 font-bold disabled:opacity-50">{ar?'تصدير Excel':'Export Excel'}</button>}
+  {exportError?.scope === scope && <p role="alert">{exportError.message}</p>}
   {summary?.scope===scope && <div className="overflow-auto rounded border border-ui-border"><p className="p-3 text-sm">{period.from} — {period.to} · {ar?'ملخص تشغيلي؛ التحصيل ليس ربحًا. الاستهلاك تقديري بالوصفات والأسعار الحالية وقد يتغير بعد التسعير؛ التكلفة المحاسبية من القيود المرحلة. هذه المراجعة لا تقفل الشهر.':'Operational summary: collection is not profit. Consumption uses current recipes and prices and may change after repricing; accounting cost comes from posted journals. This review does not lock the month.'}</p><table className="w-full text-sm"><tbody>{summary.rows.map(row=><tr key={row.en} className="border-t border-ui-border"><th className="p-3 text-start">{ar?row.ar:row.en}</th><td className="p-3 tabular-nums">{row.value===null?(ar?'غير متاح':'Unavailable'):new Intl.NumberFormat(lang,{minimumFractionDigits:2,maximumFractionDigits:2}).format(row.value)}{row.error!=null&&<p role="alert" className="text-ui-danger">{userFacingErrorMessage(row.error,lang)}</p>}</td></tr>)}</tbody></table>{(summary.missingRecipes>0||summary.invalidUnits>0)&&<p role="alert" className="p-3 text-ui-warning">{ar?'تكلفة الاستهلاك جزئية؛ لا تعتمد عليها لحساب الربح قبل استكمال الوصفات والوحدات.':'Consumption cost is partial; complete recipes and units before relying on it for profit.'} {ar?'وصفات ناقصة:':'Missing recipes:'} {summary.missingRecipes} · {ar?'وحدات غير صالحة:':'Unresolved units:'} {summary.invalidUnits}</p>}{!summary.complete&&!summary.missingRecipes&&!summary.invalidUnits&&!summary.unpriced&&<p role="alert" className="p-3 text-ui-warning">{ar?'تعذر تأكيد اكتمال تكلفة الاستهلاك؛ أعد عرض التقرير قبل الاعتماد عليها لحساب الربح.':'Consumption cost completeness could not be confirmed. Refresh the report before relying on it for profit.'}</p>}{summary.unpriced>0&&<p role="alert" className="p-3 text-ui-warning">{ar?'خامات بلا سعر محسوبة بصفر في التكلفة والربح التقديري. قد يتغير التقدير بعد تسعيرها:':'Materials without prices counted as zero in cost and estimated profit. The estimate may change after pricing:'} {summary.unpriced}</p>}</div>}
   <table className="w-full text-sm"><thead className="bg-ui-page-alt"><tr><th className="p-3 text-start">{ar?'المراجعة المطلوبة':'Required review'}</th><th className="p-3 text-start">{ar?'ما الذي تراجعه؟':'What to check'}</th><th className="p-3">{ar?'التقرير':'Report'}</th></tr></thead><tbody>{steps.map(step=>{const view=views.find(item=>item.key===step.key);return <tr key={step.key} className="border-b border-ui-border odd:bg-ui-surface"><td className="p-3 font-bold">{ar?step.ar:step.en}</td><td className="p-3 text-ui-muted">{ar?step.noteAr:step.noteEn}</td><td className="p-3 text-center">{view?<button type="button" disabled={!valid} className="rounded border border-ui-border px-3 py-2 font-bold text-ui-primary disabled:opacity-50" onClick={()=>onSelect(view,period)}>{ar?'فتح التقرير':'Open report'}</button>:<span>{ar?'غير متاح لصلاحياتك':'Not permitted'}</span>}</td></tr>;})}</tbody></table>
  </section>;
