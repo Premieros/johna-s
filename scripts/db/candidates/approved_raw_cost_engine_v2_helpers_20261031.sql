@@ -14,6 +14,7 @@ SET search_path TO 'public','pg_temp'
 AS $fn$
 DECLARE
   v_price record;
+  v_cost_basis text:='approved_last_known';
   v_batch record;
   v_qty numeric(18,6);
   v_take numeric(18,6);
@@ -50,10 +51,16 @@ BEGIN
   SELECT * INTO v_price FROM private.latest_approved_raw_prices(
     p_branch_id,ARRAY[p_raw_material_id],v_now)
   WHERE raw_material_id=p_raw_material_id;
-  IF v_price.unit_cost IS NULL OR v_price.unit_cost<=0
-    OR v_price.priced_at IS NULL
+  IF COALESCE(v_price.unit_cost,0)<=0 THEN
+    v_cost_basis:='unpriced_zero';
+    v_price.unit_cost:=0;
+    v_price.price_source:='unpriced';
+    v_price.priced_at:=NULL;
+    v_price.reference_number:=NULL;
+  ELSIF v_price.priced_at IS NULL
+    OR v_price.price_source IS NULL
     OR v_price.price_source NOT IN ('purchase','pricing','stock_count') THEN
-    RETURN jsonb_build_object('success',false,'error','APPROVED_RAW_PRICE_UNAVAILABLE');
+    RETURN jsonb_build_object('success',false,'error','APPROVED_RAW_PRICE_INVALID');
   END IF;
   SELECT COALESCE(SUM(quantity),0) INTO v_before
     FROM public.raw_material_batches
@@ -83,7 +90,7 @@ BEGIN
       p_raw_material_id,p_branch_id,p_warehouse_id,v_batch.batch_number,-v_take,
       v_price.unit_cost,-v_take*v_price.unit_cost,v_running,v_running-v_take,
       p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,
-      'approved_last_known',v_price.price_source,v_price.priced_at,
+      v_cost_basis,v_price.price_source,v_price.priced_at,
       v_price.reference_number,v_now
     );
     v_running:=v_running-v_take;
@@ -123,7 +130,7 @@ BEGIN
       p_raw_material_id,p_branch_id,p_warehouse_id,v_batch_no,-v_qty,
       v_price.unit_cost,-v_qty*v_price.unit_cost,v_running,v_running-v_qty,
       p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,
-      'approved_last_known',v_price.price_source,v_price.priced_at,
+      v_cost_basis,v_price.price_source,v_price.priced_at,
       v_price.reference_number,v_now
     ) RETURNING id INTO v_ledger_id;
   END IF;
@@ -300,3 +307,4 @@ REVOKE ALL ON FUNCTION private.raw_issue_approved_v2(
 REVOKE ALL ON FUNCTION private.raw_receive_approved_v2(
  uuid,uuid,uuid,numeric,numeric,text,text,uuid,text,uuid
 ) FROM PUBLIC,anon,authenticated,service_role;
+

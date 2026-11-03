@@ -28,14 +28,22 @@ BEGIN
     ALTER TABLE public.inventory_ledger ADD CONSTRAINT inventory_ledger_approved_price_invariant
     CHECK (
       approved_cost_basis IS NULL OR (
-        approved_cost_basis='approved_last_known'
-        AND raw_material_id IS NOT NULL
-        AND approved_price_source IN('purchase','pricing','stock_count')
-        AND approved_price_at IS NOT NULL
+        raw_material_id IS NOT NULL
         AND approved_cost_recorded_at IS NOT NULL
-        AND approved_price_at<=approved_cost_recorded_at
-        AND unit_cost>0
-        AND abs(total_cost - quantity*unit_cost)<=0.005
+        AND unit_cost IS NOT NULL AND total_cost IS NOT NULL
+        AND (
+          (approved_cost_basis='approved_last_known'
+           AND approved_price_source IS NOT NULL
+           AND approved_price_source IN('purchase','pricing','stock_count')
+           AND approved_price_at IS NOT NULL
+           AND approved_price_at<=approved_cost_recorded_at
+           AND unit_cost>0 AND abs(total_cost - quantity*unit_cost)<=0.005)
+          OR
+          (approved_cost_basis='unpriced_zero'
+           AND approved_price_source IS NOT DISTINCT FROM 'unpriced'
+           AND approved_price_at IS NULL AND approved_price_ref IS NULL
+           AND unit_cost=0 AND total_cost=0)
+        )
       )
     ) NOT VALID;
   END IF;
@@ -80,3 +88,4 @@ WHERE source_type='approved_shortage_aggregate';
 -- No new tables / background queues / public RPCs / privileges.
 -- NO canonical writer is redirected by this standalone candidate.
 COMMIT;
+
