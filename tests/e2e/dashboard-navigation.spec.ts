@@ -380,7 +380,7 @@ test.describe('dashboard and navigation actions', () => {
       await expect(page.getByText('#RECENT-KDS', { exact: true })).toBeVisible();
       await expect(page.getByText('#VOIDED-KDS', { exact: true })).toBeVisible();
       expect(historyReads.length).toBe(historyCount);
-      await page.getByRole('tab', { name: /تجاوزت 40 دقيقة|Over 40 minutes/ }).click();
+      await page.getByRole('tab', { name: /تأخير 40–60 دقيقة|Overdue 40–60 min/ }).click();
       await expect(page.getByText('#VOIDED-KDS', { exact: true })).toBeVisible();
       await page.getByRole('button', { name: /إنهاء الطلب الملغي الخالي من الأصناف|Finish empty voided order/ }).click();
       await expect(page.getByText('#VOIDED-KDS', { exact: true })).toHaveCount(0);
