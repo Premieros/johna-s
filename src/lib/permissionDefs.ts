@@ -54,7 +54,7 @@ export type Permission =
   | 'users.view' | 'users.manage'
   | 'audit.view'
   | 'settings.manage'
-  | 'branches.manage';
+  | 'branches.manage' | 'platform.admin';
 
 export const ALL_PERMISSIONS: Permission[] = [
   'dashboard.view', 'history.unlimited',
