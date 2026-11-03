@@ -44,6 +44,25 @@ AS $function$
   );
 $function$;
 
+-- Keep the historical RLS helper name for compatibility, but authorize by
+-- the internal capability rather than comparing users.role to a role label.
+CREATE OR REPLACE FUNCTION public.is_super_admin()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.users u
+    JOIN public.roles r ON r.role = u.role AND r.is_active = true
+    WHERE u.id = auth.uid()
+      AND u.is_active = true
+      AND COALESCE(r.permissions, '[]'::jsonb) ? 'platform.admin'
+  );
+$function$;
+
 CREATE OR REPLACE FUNCTION public.reject_stock_count(
   p_stock_count_id uuid,
   p_reason text DEFAULT NULL::text
