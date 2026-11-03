@@ -53,7 +53,7 @@ describe('raw FIFO debt health guardrails contract', () => {
     expect(migration).not.toContain('_raw_add(');
   });
 
-  it('surfaces debt health on-screen and in the Excel profile', () => {
+  it('keeps retired debt diagnostics out of current valuation and Excel', () => {
     for (const label of [
       'Outstanding FIFO Debt',
       'FIFO Debt Rows',
@@ -64,8 +64,8 @@ describe('raw FIFO debt health guardrails contract', () => {
       'Last Purchase Receipt',
       'Debt Status',
     ]) {
-      expect(page).toContain(label);
-      expect(excel).toContain(label);
+      expect(page).not.toContain(label);
+      expect(excel).not.toContain(label);
     }
   });
 });

@@ -25,7 +25,7 @@ describe('latest-approved material price reader contract', () => {
     const api = readFileSync('src/api/domains/costing.ts', 'utf8');
     expect(page).toContain('loadRawLatestPriceRows');
     expect(page).toContain('getRawMaterialCostOverview');
-    expect(api).toContain("rpc('get_raw_material_latest_valuation', p)");
+    expect(api).toContain("rpc('get_raw_material_latest_valuation', p, signal)");
     expect(page).not.toMatch(/\b(loadRawCurrentPrices|loadRawFifoCosts)\b/);
   });
   it('sales reports use immutable kitchen cost snapshots rather than current price readers', () => {
