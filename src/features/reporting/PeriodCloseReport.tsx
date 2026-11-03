@@ -10,7 +10,7 @@ import { todayISO } from '@/lib/format';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 
-type Summary = { raw: PeriodCloseRaw; sales: number; purchases: number; expenses: number; consumption: number | null; unpriced: number };
+type Summary = { raw: PeriodCloseRaw; sales: number; purchases: number; expenses: number; consumption: number | null; unpriced: number; missingRecipes: number; invalidUnits: number; unattributed: number; partial: boolean; recipeError?: string };
 
 export function PeriodCloseReport() {
   const { lang } = useLanguage();
@@ -53,11 +53,12 @@ export function PeriodCloseReport() {
       const recipe = await reporting.getSoldRecipeConsumptionReport({ p_branch_id: branch, p_from_date: from, p_to_date: to,
         p_group_by: 'material', p_search: '', p_page: 0, p_page_size: 1 }, controller.signal);
       const costs = recipe.data?.summary;
-      const usable = costs && !recipe.error && Number.isFinite(costs.total) &&
-        !costs.missing_recipe_count && !costs.invalid_unit_count && !costs.unattributed_count &&
-        (costs.complete || (costs.unpriced_count > 0 && costs.missing_recipe_count === 0 && costs.invalid_unit_count === 0));
+      const usable = costs && !recipe.error && Number.isFinite(costs.total);
       if (!controller.signal.aborted) setState({ scope, data: { raw: response.data, sales, purchases, expenses,
-        consumption: usable ? costs.total : null, unpriced: costs?.unpriced_count ?? 0 } });
+        consumption: usable ? costs.total : null, unpriced: costs?.unpriced_count ?? 0,
+        missingRecipes: costs?.missing_recipe_count ?? 0, invalidUnits: costs?.invalid_unit_count ?? 0,
+        unattributed: costs?.unattributed_count ?? 0, partial: Boolean(costs && !costs.complete),
+        recipeError: usable ? undefined : userFacingErrorMessage(recipe.error ?? new Error('REPORT_SOURCE_INVALID'), lang) } });
     } catch (error) {
       if (!controller.signal.aborted) setState({ scope, error: userFacingErrorMessage(error, lang) });
     }
@@ -92,6 +93,11 @@ export function PeriodCloseReport() {
     {current?.error && <p role="alert">{current.error}</p>}
     {data && <div className="overflow-auto">
       <p>{ar ? 'تقييم الخامات بآخر سعر معتمد بتاريخ' : 'Raw stock valued at latest approved prices as of'} {new Date(data.raw.valued_at).toLocaleString(lang, { timeZone: 'Africa/Cairo' })}</p>
+      {data.recipeError && <p role="alert">{ar ? 'تعذر تحميل تكلفة الاستهلاك:' : 'Could not load consumption cost:'} {data.recipeError}</p>}
+      {(data.missingRecipes > 0 || data.invalidUnits > 0 || data.unattributed > 0 || (data.partial && !data.unpriced)) && <p role="status">
+        {ar ? 'التكلفة والربح تقديريان حسب البيانات المدخلة. لاستكمال النتيجة راجع:' : 'Cost and profit reflect the recorded data. To complete the estimate, review:'}
+        {' '}{ar ? 'وصفات ناقصة' : 'Missing recipes'}: {data.missingRecipes} · {ar ? 'وحدات غير مضبوطة' : 'Unresolved units'}: {data.invalidUnits} · {ar ? 'بنود غير مرتبطة' : 'Unattributed lines'}: {data.unattributed}
+      </p>}
       {data.unpriced > 0 && <p role="status">{ar ? 'خامات استهلاك المبيعات بلا سعر محسوبة بصفر:' : 'Unpriced sales-consumption materials counted at zero:'} {data.unpriced}</p>}
       {data.raw.unpriced > 0 && <p role="status">{ar ? 'خامات بلا سعر محسوبة بصفر:' : 'Unpriced materials counted at zero:'} {data.raw.unpriced}</p>}
       <h2 className="mt-4 font-bold">{ar ? 'تفاصيل بنود الإقفال' : 'Period close details'}</h2>
@@ -104,13 +110,13 @@ export function PeriodCloseReport() {
         <thead className="sticky top-0 bg-ui-surface"><tr><th className="p-3 text-start">{ar ? 'البيان' : 'Item'}</th><th>{ar ? 'القيمة (جنيه)' : 'Value (EGP)'}</th><th>{ar ? 'من صافي المبيعات' : '% of net sales'}</th></tr></thead>
         <tbody>{rows.map(([label, english, value]) => <tr key={english} className="border-t border-ui-border">
           <th className="sticky start-0 bg-ui-surface p-3 text-start">{ar ? label : english}</th>
-          <td className="p-3 text-center tabular-nums">{value === null ? (english === 'Opening raw stock count' ? (ar ? 'لا يوجد جرد كامل مُرحّل لأول المدة' : 'No complete applied opening count') : english === 'Closing raw stock count' ? (ar ? 'لا يوجد جرد كامل مُرحّل لآخر المدة' : 'No complete applied closing count') : (ar ? 'تكلفة استهلاك المبيعات غير متاحة' : 'Sales consumption cost is unavailable')) : format.format(value)}</td>
+          <td className="p-3 text-center tabular-nums">{value === null ? (english === 'Opening raw stock count' ? (ar ? 'لا يوجد جرد كامل مُرحّل لأول المدة' : 'No complete applied opening count') : english === 'Closing raw stock count' ? (ar ? 'لا يوجد جرد كامل مُرحّل لآخر المدة' : 'No complete applied closing count') : (ar ? 'تعذر تحميل تكلفة الاستهلاك' : 'Consumption cost could not be loaded')) : format.format(value)}</td>
           <td className="p-3 text-center tabular-nums">{value === null || data.sales === 0 ? '—' : format.format(value / data.sales * 100) + '%'}</td>
         </tr>)}</tbody>
       </table>
       </div>}
       {detail !== 'materials' && detail !== 'result' && branch && <PeriodCloseDocuments key={scope + detail} kind={detail} branch={branch} from={from} to={to} />}
-      {detail === 'materials' && (!raw?.materials ? <p role="status">{ar ? 'تفاصيل الخامات غير متاحة حاليًا.' : 'Material details are currently unavailable.'}</p> : <>
+      {detail === 'materials' && (!raw?.materials ? <p role="status">{ar ? 'لم تصل تفاصيل الخامات؛ أعد عرض التقرير.' : 'Material details were not returned; run the report again.'}</p> : <>
         <p>{ar ? 'كل حركة تعرض الكمية ثم القيمة بآخر سعر معتمد. إذا غاب الجرد أو لم تُدرج الخامة فيه، يظهر السبب في نفس الخانة.' : 'Each movement shows quantity and then value at the latest approved price. Missing counts are labelled in the table.'}</p>
         <div className="max-h-[65vh] overflow-auto"><table className="w-full text-sm">
           <thead className="sticky top-0 z-10 bg-ui-surface"><tr>{(ar ? ['الخامة', 'آخر سعر', 'مصدر السعر', 'أول المدة', 'صافي الشراء', 'صافي التحويل', 'آخر المدة'] : ['Material', 'Latest price', 'Price source', 'Opening', 'Net purchases', 'Net transfers', 'Closing']).map(label => <th className="p-2 text-start" key={label}>{label}</th>)}</tr></thead>
