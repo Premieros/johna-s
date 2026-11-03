@@ -54,7 +54,7 @@ export type Permission =
   | 'users.view' | 'users.manage'
   | 'audit.view'
   | 'settings.manage'
-  | 'branches.manage';
+  | 'branches.manage' | 'platform.admin';
 
 export const ALL_PERMISSIONS: Permission[] = [
   'dashboard.view', 'history.unlimited',
@@ -214,6 +214,7 @@ export const PERMISSION_LABELS: Record<Permission, { ar: string; en: string }> =
   'audit.view': { ar: 'عرض سجل العمليات', en: 'View Audit Log' },
   'settings.manage': { ar: 'إدارة الإعدادات', en: 'Manage Settings' },
   'branches.manage': { ar: 'إدارة الفروع', en: 'Manage Branches' },
+  'platform.admin': { ar: 'صلاحية إدارة المنصة (داخلية)', en: 'Platform administration (internal)' },
 };
 
 export interface PermissionGroup {
@@ -421,7 +422,6 @@ export function hasPermission(
   permission: Permission
 ): boolean {
   if (!role) return false;
-  if (role === 'super_admin') return true;
   const list = rolePermissionsMap?.[role] ?? [];
-  return list.includes(permission);
+  return list.includes(permission) || list.includes('platform.admin');
 }

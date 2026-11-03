@@ -15,6 +15,8 @@ describe.skipIf(skip)('raw-material stock count regression', () => {
   const warehouseA = randomUUID();
   const userA = randomUUID();
   const role = `qa_stock_count_${randomUUID().slice(0, 8)}`;
+  const applyOnlyUser = randomUUID();
+  const applyOnlyRole = `qa_count_apply_${randomUUID().slice(0, 8)}`;
   const rawA = randomUUID();
   const rawB = randomUUID();
   const productA = randomUUID();
@@ -64,11 +66,21 @@ describe.skipIf(skip)('raw-material stock count regression', () => {
        VALUES ($1,'جرد اختبار','Stock count QA','["inventory.count.create","inventory.count.approve","inventory.count.reject","inventory.count.apply"]'::jsonb,'global',true)`,
       [role],
     );
+    await client.query(
+      `INSERT INTO public.roles(role,name_ar,name_en,permissions,scope,is_active)
+       VALUES ($1,'تطبيق الجرد فقط','Stock Count Apply Only','[\"inventory.view\",\"inventory.count.apply\"]'::jsonb,'global',true)`,
+      [applyOnlyRole],
+    );
     await client.query(`ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard`);
     await client.query(
       `INSERT INTO public.users(id,email,full_name,role,branch_id,is_active)
        VALUES ($1,$2,'Stock Count QA',$3,$4,true)`,
       [userA, `${randomUUID()}@test.local`, role, branchA],
+    );
+    await client.query(
+      `INSERT INTO public.users(id,email,full_name,role,branch_id,is_active)
+       VALUES ($1,$2,'Stock Count Apply Only',$3,$4,true)`,
+      [applyOnlyUser, `${randomUUID()}@test.local`, applyOnlyRole, branchA],
     );
     await client.query(`ALTER TABLE public.users ENABLE TRIGGER trg_users_role_guard`);
     await client.query(
@@ -125,6 +137,90 @@ describe.skipIf(skip)('raw-material stock count regression', () => {
     expect(byName.get('reject_stock_count')).not.toContain('inventory.count.approve');
     expect(byName.get('apply_stock_count')).toContain('inventory.count.apply');
     expect(byName.get('apply_stock_count')).not.toContain('inventory.count.approve');
+  });
+
+
+  it('cancels only an approved-unapplied count with apply capability and preserves approval audit', async () => {
+    const stockCountId = randomUUID();
+    const approvedAt = new Date('2026-10-31T12:30:00.000Z');
+
+    await client.query(
+      `INSERT INTO public.stock_counts(
+         id,branch_id,warehouse_id,status,count_type,approved_by,approved_at,applied_at
+       ) VALUES ($1,$2,$3,'approved','cycle',$4,$5,NULL)`,
+      [stockCountId, branchA, warehouseA, userA, approvedAt],
+    );
+
+    // Direct UPDATE must not bypass the mandatory cancellation reason.
+    await client.query('SAVEPOINT direct_count_cancel');
+    let directUpdateError: unknown;
+    try {
+      await asUser(applyOnlyUser, async () => {
+        await client.query(
+          `UPDATE public.stock_counts SET status='rejected' WHERE id=$1`,
+          [stockCountId],
+        );
+      });
+    } catch (error) {
+      directUpdateError = error;
+    }
+    await client.query('ROLLBACK TO SAVEPOINT direct_count_cancel');
+    expect(String(directUpdateError)).toContain('CANCELLATION_REASON_REQUIRED');
+
+    const cancelled = await asUser(applyOnlyUser, async () => {
+      const result = await client.query<{ result: RpcResult }>(
+        `SELECT public.reject_stock_count($1,'count entered in error') AS result`,
+        [stockCountId],
+      );
+      return result.rows[0].result;
+    });
+    expect(cancelled).toMatchObject({
+      success: true,
+      stock_count_id: stockCountId,
+      approved_unapplied_cancelled: true,
+    });
+
+    const saved = await client.query<{
+      status: string;
+      rejection_reason: string | null;
+      approved_by: string | null;
+      approved_at: Date | null;
+      applied_at: Date | null;
+    }>(
+      `SELECT status,rejection_reason,approved_by,approved_at,applied_at
+       FROM public.stock_counts WHERE id=$1`,
+      [stockCountId],
+    );
+    expect(saved.rows[0].status).toBe('rejected');
+    expect(saved.rows[0].rejection_reason).toBe('count entered in error');
+    expect(saved.rows[0].approved_by).toBe(userA);
+    expect(saved.rows[0].approved_at?.toISOString()).toBe(approvedAt.toISOString());
+    expect(saved.rows[0].applied_at).toBeNull();
+  });
+
+  it('refuses cancellation when the approved count already has an applied marker', async () => {
+    const stockCountId = randomUUID();
+    await client.query(
+      `INSERT INTO public.stock_counts(
+         id,branch_id,warehouse_id,status,count_type,approved_by,approved_at,applied_at
+       ) VALUES ($1,$2,$3,'approved','cycle',$4,now(),now())`,
+      [stockCountId, branchA, warehouseA, userA],
+    );
+
+    const result = await asUser(applyOnlyUser, async () => {
+      const response = await client.query<{ result: RpcResult }>(
+        `SELECT public.reject_stock_count($1,'must not reverse applied count') AS result`,
+        [stockCountId],
+      );
+      return response.rows[0].result;
+    });
+    expect(result).toMatchObject({ success: false, error: 'COUNT_HAS_POSTED_EFFECTS' });
+
+    const current = await client.query<{ status: string }>(
+      `SELECT status FROM public.stock_counts WHERE id=$1`,
+      [stockCountId],
+    );
+    expect(current.rows[0].status).toBe('approved');
   });
 
   it('creates and applies a raw-material count once', async () => {

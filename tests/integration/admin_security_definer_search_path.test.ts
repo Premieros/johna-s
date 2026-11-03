@@ -70,7 +70,9 @@ describe.skipIf(!dbUrl)('admin SECURITY DEFINER hardening', () => {
     const byName = new Map(rows.rows.map((row) => [row.name, row.definition]));
 
     expect(byName.get('is_super_admin')).toContain('auth.uid()');
-    expect(byName.get('is_super_admin')).toContain("role = 'super_admin'");
+    expect(byName.get('is_super_admin')).toContain('r.permissions');
+    expect(byName.get('is_super_admin')).toContain("? 'platform.admin'");
+    expect(byName.get('is_super_admin')).not.toContain("role = 'super_admin'");
 
     for (const name of ['admin_data_delete_section', 'admin_data_seed_all']) {
       expect(byName.get(name), `${name} Super Admin guard`).toContain('public.is_super_admin()');
