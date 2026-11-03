@@ -487,7 +487,7 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'TRANSACTION_FAILED', 'detail', SQLERRM);
   END;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.create_user(p_email text, p_password text, p_full_name text DEFAULT NULL::text, p_role text DEFAULT 'cashier'::text, p_branch_id uuid DEFAULT NULL::uuid, p_is_active boolean DEFAULT true, p_username text DEFAULT NULL::text)
@@ -661,7 +661,7 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RETURN jsonb_build_object('success', false, 'error', 'UNKNOWN_ERROR', 'detail', SQLERRM);
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.delete_user(p_user_id uuid)
@@ -711,7 +711,7 @@ EXCEPTION WHEN OTHERS THEN
   IF SQLERRM='LAST_ADMIN' THEN RETURN jsonb_build_object('success',false,'error','LAST_ADMIN'); END IF;
   RETURN jsonb_build_object('success',false,'error','DELETE_BLOCKED');
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.guard_user_role_changes()
@@ -839,7 +839,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.is_platform_admin()
@@ -911,7 +911,7 @@ BEGIN
     )
   );
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.protect_last_admin()
@@ -1009,7 +1009,7 @@ BEGIN
       AND p.requires_authorization = true
   );
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.set_user_branch_access(p_user_id uuid, p_branch_ids uuid[])
@@ -1091,7 +1091,7 @@ BEGIN
 
   RETURN jsonb_build_object('success', true, 'user_id', p_user_id, 'branch_ids', p_branch_ids);
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.update_user_password(p_user_id uuid, p_new_password text)
@@ -1126,7 +1126,7 @@ BEGIN
   RETURN jsonb_build_object('success',true);
 EXCEPTION WHEN OTHERS THEN RETURN jsonb_build_object('success',false,'error','UNKNOWN_ERROR','detail',SQLERRM);
 END;
-$function$
+$function$;
 
 
 COMMIT;
