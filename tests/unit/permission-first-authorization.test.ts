@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { hasPermission } from '@/lib/permissionDefs';
+import type { Permission } from '@/lib/permissionDefs';
 import type { Role } from '@/lib/types';
 
 describe('permission-first authorization', () => {
   it('uses the assigned capability set for arbitrary role labels', () => {
     const customRole = 'custom-label-that-has-no-special-meaning' as Role;
-    const permissions = {
+    const permissions: Record<string, Permission[]> = {
       [customRole]: ['inventory.view'],
     };
     expect(hasPermission(customRole, permissions, 'inventory.view')).toBe(true);
@@ -37,7 +38,7 @@ describe('permission-first authorization', () => {
       expect(end).toBeGreaterThan(start);
       const definition = migration.slice(start, end);
       expect(definition).toContain("? 'platform.admin'");
-      expect(definition).not.toMatch(/u\\.role\\s*=\\s*'super_admin'/);
+      expect(definition).not.toMatch(/u\.role\s*=\s*'super_admin'/);
     }
   });
 });
