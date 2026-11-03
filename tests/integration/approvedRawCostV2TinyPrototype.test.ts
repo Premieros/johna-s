@@ -63,11 +63,21 @@ describe.skipIf(!disposable)('approved-cost v2 minimal-storage internal prototyp
       [raw,branch,warehouse,n,cost,newRef()]);
     return r[0].result;
   }
-  it('never guesses a cost when no approved price exists',async()=>{
-    const r=await issue(2);
-    expect(r).toMatchObject({success:false,error:'APPROVED_RAW_PRICE_UNAVAILABLE'});
-    expect(await whQty()).toBe(0);
-    expect(await legacyDebts()).toBe(0);
+  it('records zero for a missing approved price without inventing a source or debt',async()=>{
+    await db.query('SAVEPOINT unpriced_issue');
+    try {
+      expect(await issue(2)).toMatchObject({success:true,avg_cost:0,oversold:2,approved_price_source:'unpriced'});
+      expect(await whQty()).toBe(-2);
+      expect(await legacyDebts()).toBe(0);
+      const ledger=await q(
+        `SELECT unit_cost::numeric=0 AS zero_cost,total_cost::numeric=0 AS zero_total,
+          approved_cost_basis,approved_price_at,approved_price_ref
+         FROM public.inventory_ledger WHERE raw_material_id=$1 AND quantity<0`,[raw]);
+      expect(ledger).toEqual([{zero_cost:true,zero_total:true,approved_cost_basis:'unpriced_zero',approved_price_at:null,approved_price_ref:null}]);
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT unpriced_issue');
+      await db.query('RELEASE SAVEPOINT unpriced_issue');
+    }
   });
   it('freezes as-of approved price, aggregates shortages without FIFO debts, and journals only net receipt differences',async()=>{
     await db.query(
@@ -141,3 +151,4 @@ describe.skipIf(!disposable)('approved-cost v2 minimal-storage internal prototyp
     expect(movements[0].n).toBe(3);
   },30000);
 });
+
