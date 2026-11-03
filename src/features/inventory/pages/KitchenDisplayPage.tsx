@@ -72,11 +72,13 @@ export function KitchenDisplayPage() {
   const scopeRef = useRef(scopeKey);
   const statusWrites = useRef(new Set<string>());
   const [pendingStatusWrites, setPendingStatusWrites] = useState<ReadonlySet<string>>(new Set());
+  const watchedKitchenOrders = useRef<ReadonlySet<string>>(new Set());
   const queueRead = useRef(0);
   const stationRead = useRef(0);
   const coalesceQueue = useRef(createRefreshCoalescer());
   useLayoutEffect(() => {
     scopeRef.current = scopeKey;
+    watchedKitchenOrders.current = new Set();
     ++queueRead.current;
     ++stationRead.current;
     setItems([]); setOrderContext({}); setStations([]); setStation(''); setLoadError('');
@@ -139,6 +141,7 @@ export function KitchenDisplayPage() {
       prevCountRef.current = newItems.length;
       setNow(Date.now());
       setItems(newItems);
+      watchedKitchenOrders.current = new Set(newItems.map((item) => item.order_id));
 
       const orderIds = [...new Set(newItems
         .filter((item) => !isKitchenQueueAutoClosed(item, Date.now()))
@@ -202,7 +205,18 @@ export function KitchenDisplayPage() {
 
   useEffect(() => {
     if (!branchFilter || !canViewKds) return;
-    const unsubscribe = subscribePosRealtime({ branchId: branchFilter, onEvent: () => { void load(); }, debounceMs: 500 });
+    const unsubscribe = subscribePosRealtime({
+      branchId: branchFilter,
+      onEvent: () => { void load(); },
+      shouldRefresh: (event) => {
+        if (event.table !== 'order_items') return true;
+        const orderId = event.newRow.order_id ?? event.oldRow.order_id;
+        // New sends have their own branch-scoped event. Unknown payloads
+        // (including deletes with only a primary key) still reconcile.
+        return typeof orderId !== 'string' || !orderId || watchedKitchenOrders.current.has(orderId);
+      },
+      debounceMs: 500,
+    });
     return unsubscribe;
   }, [branchFilter, canViewKds, load]);
 
