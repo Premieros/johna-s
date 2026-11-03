@@ -214,6 +214,7 @@ export const PERMISSION_LABELS: Record<Permission, { ar: string; en: string }> =
   'audit.view': { ar: 'عرض سجل العمليات', en: 'View Audit Log' },
   'settings.manage': { ar: 'إدارة الإعدادات', en: 'Manage Settings' },
   'branches.manage': { ar: 'إدارة الفروع', en: 'Manage Branches' },
+  'platform.admin': { ar: 'صلاحية إدارة المنصة (داخلية)', en: 'Platform administration (internal)' },
 };
 
 export interface PermissionGroup {
