@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-24T17:16:40.662Z",
+  "generated_at": "2026-11-03T19:51:16.220Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -752,6 +752,14 @@
         "party_id",
         "side",
         "to_date"
+      ]
+    },
+    {
+      "name": "get_period_close_raw_report",
+      "params": [
+        "branch_id",
+        "from",
+        "to"
       ]
     },
     {
