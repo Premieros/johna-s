@@ -38,7 +38,7 @@ describe('costing latest raw-material price contract', () => {
     expect(page).toContain('Current stock snapshot; separate from period cost');
     expect(page).toContain("isAr ? 'مصدر السعر' : 'Price source'");
     expect(page).toContain("isAr ? 'تاريخ السعر' : 'Price date'");
-    expect(api).toContain("rpc('get_raw_material_latest_valuation', p)");
+    expect(api).toContain("rpc('get_raw_material_latest_valuation', p, signal)");
     expect(api).toContain("rpc('get_raw_material_cost_history', p)");
   });
 });
