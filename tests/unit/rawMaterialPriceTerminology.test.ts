@@ -8,13 +8,13 @@ describe('raw material price terminology contract', () => {
   it('presents the costing-center authoritative raw cost as the canonical raw price', () => {
     expect(reports).toContain('سعر الخامة المعتمد (مركز التكلفة)');
     expect(reports).toContain('Canonical Raw Cost (Costing Center)');
-    expect(reports).toContain('row.latest_authoritative_cost');
+    expect(reports).toContain('row.latest_cost');
   });
 
-  it('labels FIFO average as inventory valuation, not as the canonical raw price', () => {
-    expect(reports).toContain('متوسط تكلفة المخزون المتبقي FIFO');
-    expect(reports).toContain('Remaining Inventory FIFO Average Cost');
-    expect(excel).toContain('متوسط تكلفة المخزون المتبقي FIFO');
+  it('keeps FIFO averages out of current valuation', () => {
+    expect(reports).not.toContain('متوسط تكلفة المخزون المتبقي FIFO');
+    expect(reports).not.toContain('Remaining Inventory FIFO Average Cost');
+    expect(excel).not.toContain('متوسط تكلفة المخزون المتبقي FIFO');
     expect(excel).not.toContain("pick(lang, 'تكلفة الوحدة الحالية FIFO', 'Current FIFO Unit Cost')");
   });
 });

@@ -98,7 +98,7 @@ describe('reports domain boundary', () => {
   it('keeps the existing report page calling typed domain methods', () => {
     expect(page).toContain('reporting.getDayClosingRangeReport');
     expect(page).toContain('reporting.getRawMaterialConsumptionReport');
-    expect(page).toContain('reporting.getCurrentRawMaterialValuation');
+    expect(page).toContain('costing.getRawMaterialCostOverview');
     expect(page).toContain('reporting.getRawMaterialFinancialReport');
     expect(page).toContain('reporting.getSalesComponentReconciliationReport');
   });
