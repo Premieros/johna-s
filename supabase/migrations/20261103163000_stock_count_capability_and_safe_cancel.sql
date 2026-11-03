@@ -850,7 +850,7 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
   SELECT public.is_super_admin();
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.login_as_user(p_target_user_id uuid, p_reason text DEFAULT NULL::text, p_ip text DEFAULT NULL::text, p_device text DEFAULT NULL::text)
  RETURNS jsonb
@@ -966,7 +966,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.requires_work_authorization(p_user_id uuid, p_branch_id uuid)
  RETURNS boolean
