@@ -22,7 +22,7 @@ export function PeriodCloseReport() {
   const [to, setTo] = useState(todayISO);
   const scope = JSON.stringify([branch, user?.id, permissions, from, to]);
   const [state, setState] = useState<{ scope: string; pending?: boolean; error?: string; data?: Summary }>();
-  const [detail, setDetail] = useState<'materials' | DocumentKind>('materials');
+  const [detail, setDetail] = useState<'result' | 'materials' | DocumentKind>('result');
   const current = state?.scope === scope ? state : undefined;
   const request = useRef<AbortController | null>(null);
   useEffect(() => () => request.current?.abort(), [scope]);
@@ -87,22 +87,24 @@ export function PeriodCloseReport() {
       <p>{ar ? 'تقييم الخامات بآخر سعر معتمد بتاريخ' : 'Raw stock valued at latest approved prices as of'} {new Date(data.raw.valued_at).toLocaleString(lang, { timeZone: 'Africa/Cairo' })}</p>
       {consumption === null && <p role="status">{ar ? 'الإقفال مبدئي: يلزم جرد كامل مُرحّل في أول وآخر المدة للمخازن المشمولة.' : 'Preliminary: applied full counts are required at both boundaries for the warehouses in scope.'}</p>}
       {data.raw.unpriced > 0 && <p role="status">{ar ? 'خامات بلا سعر محسوبة بصفر:' : 'Unpriced materials counted at zero:'} {data.raw.unpriced}</p>}
+      <h2 className="mt-4 font-bold">{ar ? 'تفاصيل بنود الإقفال' : 'Period close details'}</h2>
+      <div className="flex flex-wrap gap-2 py-2">
+        {([['result', 'نتيجة الإقفال', 'Closing result'], ['materials', 'تفاصيل الخامات', 'Material details'], ['sales', 'فواتير المبيعات', 'Sales invoices'], ['purchases', 'فواتير المشتريات', 'Purchase invoices'], ['expenses', 'مستندات المصروفات', 'Expense documents']] as const).map(([key, label, english]) =>
+          <button key={key} type="button" aria-pressed={detail === key} className="rounded border border-ui-border px-3 py-2 aria-pressed:bg-ui-primary aria-pressed:text-ui-primary-fg" onClick={() => setDetail(key)}>{ar ? label : english}</button>)}
+      </div>
+      {detail === 'result' && <div className="overflow-auto">
       <table className="w-full text-sm">
         <thead className="sticky top-0 bg-ui-surface"><tr><th className="p-3 text-start">{ar ? 'البيان' : 'Item'}</th><th>{ar ? 'القيمة (جنيه)' : 'Value (EGP)'}</th><th>{ar ? 'من صافي المبيعات' : '% of net sales'}</th></tr></thead>
         <tbody>{rows.map(([label, english, value]) => <tr key={english} className="border-t border-ui-border">
           <th className="sticky start-0 bg-ui-surface p-3 text-start">{ar ? label : english}</th>
-          <td className="p-3 text-center tabular-nums">{value === null ? '—' : format.format(value)}</td>
+          <td className="p-3 text-center tabular-nums">{value === null ? (english === 'Opening raw stock count' ? (ar ? 'لا يوجد جرد كامل مُرحّل لأول المدة' : 'No complete applied opening count') : english === 'Closing raw stock count' ? (ar ? 'لا يوجد جرد كامل مُرحّل لآخر المدة' : 'No complete applied closing count') : (ar ? 'يتطلب اكتمال الجرد' : 'Requires complete stock counts')) : format.format(value)}</td>
           <td className="p-3 text-center tabular-nums">{value === null || data.sales === 0 ? '—' : format.format(value / data.sales * 100) + '%'}</td>
         </tr>)}</tbody>
       </table>
-      <h2 className="mt-4 font-bold">{ar ? 'تفاصيل بنود الإقفال' : 'Period close details'}</h2>
-      <div className="flex flex-wrap gap-2 py-2">
-        {([['materials', 'الجرد وحركة الخامات والاستهلاك', 'Counts, movements and consumption'], ['sales', 'فواتير المبيعات', 'Sales invoices'], ['purchases', 'فواتير المشتريات', 'Purchase invoices'], ['expenses', 'مستندات المصروفات', 'Expense documents']] as const).map(([key, label, english]) =>
-          <button key={key} type="button" aria-pressed={detail === key} className="rounded border border-ui-border px-3 py-2 aria-pressed:bg-ui-primary aria-pressed:text-ui-primary-fg" onClick={() => setDetail(key)}>{ar ? label : english}</button>)}
-      </div>
-      {detail !== 'materials' && branch && <PeriodCloseDocuments key={scope + detail} kind={detail} branch={branch} from={from} to={to} />}
+      </div>}
+      {detail !== 'materials' && detail !== 'result' && branch && <PeriodCloseDocuments key={scope + detail} kind={detail} branch={branch} from={from} to={to} />}
       {detail === 'materials' && (!raw?.materials ? <p role="status">{ar ? 'تفاصيل الخامات غير متاحة حاليًا.' : 'Material details are currently unavailable.'}</p> : <>
-        <p>{ar ? 'كل حركة تعرض الكمية ثم القيمة بآخر سعر معتمد. الشرطة تعني أن الخامة غير مدرجة في الجرد.' : 'Each movement shows quantity and then value at the latest approved price. A dash means the material is not listed in the count.'}</p>
+        <p>{ar ? 'كل حركة تعرض الكمية ثم القيمة بآخر سعر معتمد. إذا غاب الجرد أو لم تُدرج الخامة فيه، يظهر السبب في نفس الخانة.' : 'Each movement shows quantity and then value at the latest approved price. Missing counts are labelled in the table.'}</p>
         <div className="max-h-[65vh] overflow-auto"><table className="w-full text-sm">
           <thead className="sticky top-0 z-10 bg-ui-surface"><tr>{(ar ? ['الخامة', 'آخر سعر', 'مصدر السعر', 'أول المدة', 'صافي الشراء', 'صافي التحويل', 'آخر المدة', 'الاستهلاك'] : ['Material', 'Latest price', 'Price source', 'Opening', 'Net purchases', 'Net transfers', 'Closing', 'Consumption']).map(label => <th className="p-2 text-start" key={label}>{label}</th>)}</tr></thead>
           <tbody>{raw.materials.map(material => {
@@ -112,7 +114,7 @@ export function PeriodCloseReport() {
             return <tr key={material.id} className="border-t border-ui-border">
               <th className="sticky start-0 bg-ui-surface p-2 text-start">{material.name} <small>{material.code}</small></th>
               <td className="p-2">{format.format(price)}</td><td className="p-2">{label}</td>
-              {[opening, purchase, transfer, closing, used].map((quantity, index) => <td key={index} className="whitespace-nowrap p-2 tabular-nums">{quantity === null ? '—' : <>{new Intl.NumberFormat(lang, { maximumFractionDigits: 4 }).format(quantity)}<br />{format.format(quantity * price)}</>}</td>)}
+              {[opening, purchase, transfer, closing, used].map((quantity, index) => <td key={index} className="whitespace-nowrap p-2 tabular-nums">{quantity === null ? (index === 4 ? (ar ? 'يتطلب اكتمال الجرد' : 'Requires complete counts') : (ar ? 'لا توجد كمية جرد' : 'No counted quantity')) : <>{new Intl.NumberFormat(lang, { maximumFractionDigits: 4 }).format(quantity)}<br />{format.format(quantity * price)}</>}</td>)}
             </tr>;
           })}</tbody>
         </table></div>
