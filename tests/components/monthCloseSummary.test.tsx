@@ -42,7 +42,8 @@ describe('explicit month review summary',()=>{
   expect(warning.textContent).toContain('Materials without prices counted as zero');
   expect(warning.textContent).toContain('24');
   expect(warning.textContent).not.toContain('complete recipes and units');
-  expect(screen.getByText('Estimated margin after current recipe cost').closest('tr')?.textContent).toContain('Unavailable');
+  expect(screen.getByText('Estimated margin after current recipe cost').closest('tr')?.textContent).toContain('80.00');
+  expect(screen.getByText('Estimated result after posted expenses, before other adjustments').closest('tr')?.textContent).toContain('75.00');
   expect(calls.cost).toHaveBeenCalledTimes(1);
  });
  it('keeps failed or null amounts unavailable and never queries costing without its permission',async()=>{
