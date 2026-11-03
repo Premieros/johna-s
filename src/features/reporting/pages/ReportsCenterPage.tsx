@@ -48,7 +48,7 @@ export function ReportsCenterPage() {
     const next = new URLSearchParams();
     for (const key of ['from', 'to']) { const value = params.get(key); if (value) next.set(key, value); }
     if (period) { next.set('from',period.from); next.set('to',period.to); }
-    if (target.key==='month_review') next.set('type','month_review');
+    if (target.key==='month_review' || target.key==='period_close_raw') next.set('type',target.key);
     else if (target.financial) { next.set('section', 'financial'); next.set('view', target.financial); }
     else if (target.type) next.set('type', target.consumptionGroup ? target.key : target.type);
     navigate(`/reports?${next}`, { replace: true });
@@ -62,7 +62,7 @@ export function ReportsCenterPage() {
   if (view.key !== requested) {
     const fallback = new URLSearchParams();
     for (const key of ['from', 'to']) { const value = params.get(key); if (value) fallback.set(key, value); }
-    if (view.key==='month_review') fallback.set('type','month_review');
+    if (view.key==='month_review' || view.key==='period_close_raw') fallback.set('type',view.key);
     else if (view.financial) { fallback.set('section', 'financial'); fallback.set('view', view.financial); }
     else if (view.type) fallback.set('type', view.consumptionGroup ? view.key : view.type);
     return <Navigate to={`/reports?${fallback}`} replace />;

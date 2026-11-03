@@ -72,6 +72,15 @@ describe('basic report navigation', () => {
     expect(document.body.style.overflow).not.toBe('hidden');
   });
 
+  it('opens the consolidated period close from the primary reports menu', () => {
+    permissions.add('reports.financial');
+    permissions.add('reports.costing');
+    open();
+    fireEvent.click(navigation().getByRole('button', { name: 'Month-end Review' }));
+    expect(screen.getByRole('button', { name: 'Run report' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Report view' })).toHaveValue('period_close_raw');
+  });
+
   it('opens the same selected month in a review report without claiming completion', () => {
     open('/reports?type=month_review');
     expect(screen.getByTestId('month-close-review')).toBeTruthy();
