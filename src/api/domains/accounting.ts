@@ -1,5 +1,5 @@
 import type { ApiResult, JournalLineInput } from '../types';
-import type { RpcResult, TreasuryBalance, TreasurySource, TrialBalanceRow, JournalDto, JournalPageDto, ArAgingRow, ApAgingRow, ReconciliationDetail } from '@/lib/types';
+import type { RpcResult, TreasuryBalance, TreasurySource, TrialBalanceRow, JournalDto, JournalPageDto, ArAgingRow, ApAgingRow, ReconciliationDetail, EmployeeReceivablePeriodRow } from '@/lib/types';
 import { rpc } from '../rpc';
 
 export const accounting = {
@@ -89,6 +89,7 @@ export const accounting = {
   }): ApiResult<RpcResult & { id?: string; journal_entry_id?: string }> { return rpc('set_supplier_opening_balance', p); },
   linkEmployeeCreditAccount(p: { p_customer_id: string; p_employee_id: string; p_branch_id: string }): ApiResult<RpcResult> { return rpc('link_employee_credit_account', p); },
   getEmployeeCreditBalances(p: { p_branch_id: string }): ApiResult<unknown> { return rpc('get_employee_credit_balances', p); },
+  getEmployeeReceivablesPeriodSummary(p: { p_branch_id: string; p_from_date: string; p_to_date: string }): ApiResult<EmployeeReceivablePeriodRow[]> { return rpc('get_employee_receivables_period_summary', p); },
   receivePayment(p: { p_customer_id: string; p_branch_id: string | null; p_amount: number; p_payment_method: string; p_sale_id: string | null; p_notes: string | null }): ApiResult<RpcResult> { return rpc('receive_payment', p); },
   receiveEmployeeCreditPayment(p: { p_employee_id: string; p_branch_id: string; p_amount: number; p_payment_method: string; p_sale_id: string | null; p_notes: string | null }): ApiResult<RpcResult> { return rpc('receive_employee_credit_payment', p); },
   paySupplier(p: { p_supplier_id: string; p_branch_id: string | null; p_amount: number; p_payment_method: string; p_purchase_id: string | null; p_notes: string | null }): ApiResult<RpcResult> { return rpc('pay_supplier', p); },
