@@ -7,7 +7,7 @@ describe('permission-first authorization', () => {
   it('uses the assigned capability set for arbitrary role labels', () => {
     const customRole = 'custom-label-that-has-no-special-meaning' as Role;
     const permissions = {
-      [customRole]: ['inventory.view'] as const,
+      [customRole]: ['inventory.view'],
     };
     expect(hasPermission(customRole, permissions, 'inventory.view')).toBe(true);
     expect(hasPermission(customRole, permissions, 'inventory.count.apply')).toBe(false);
