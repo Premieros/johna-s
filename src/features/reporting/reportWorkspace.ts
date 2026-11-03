@@ -33,6 +33,7 @@ export const BASIC_REPORTS: BasicReport[] = [
     financial('aging_summary', 'ملخص الذمم بتاريخ', 'Receivables & payables as of date'), op('financial_reconciliation', 'مطابقة التحصيل', 'Collection reconciliation'),
   ] },
   { key: 'month_close', ar: 'مراجعة إغلاق الشهر', en: 'Month-end Review', descriptionAr: 'مراجعة المبيعات والتحصيل والمخزون والتكلفة والقوائم المالية قبل الإغلاق', descriptionEn: 'Review sales, collections, inventory, costs and financial statements before closing', views: [
+    { key: 'period_close_raw', ar: 'إقفال الفترة بآخر سعر', en: 'Period close at latest prices', permissions: ['reports.view', 'reports.costing', 'reports.financial'] },
     { key: 'month_review', ar: 'خطوات مراجعة الشهر', en: 'Month review checklist', permissions: ['reports.view'] },
     op('sales_costs', 'تكلفة وربح المباع', 'Sold-item cost and profit'), op('profit', 'ملخص الربح المحاسبي', 'Accounting profit summary'), op('raw_material_financial', 'ملخص تكلفة الخامات', 'Material cost summary'),
     financial('income', 'قائمة الدخل', 'Income statement'), financial('balance_sheet', 'الميزانية بتاريخ', 'Balance sheet as of date'),
