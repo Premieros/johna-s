@@ -10,7 +10,7 @@ import { todayISO } from '@/lib/format';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 
-type Summary = { raw: PeriodCloseRaw; sales: number; purchases: number; expenses: number };
+type Summary = { raw: PeriodCloseRaw; sales: number; purchases: number; expenses: number; consumption: number | null; unpriced: number };
 
 export function PeriodCloseReport() {
   const { lang } = useLanguage();
@@ -50,7 +50,14 @@ export function PeriodCloseReport() {
       const sales = await financial('sales', 'Net Sales');
       const purchases = await financial('purchases', 'Net Purchases');
       const expenses = await financial('expenses', 'Amount');
-      if (!controller.signal.aborted) setState({ scope, data: { raw: response.data, sales, purchases, expenses } });
+      const recipe = await reporting.getSoldRecipeConsumptionReport({ p_branch_id: branch, p_from_date: from, p_to_date: to,
+        p_group_by: 'material', p_search: '', p_page: 0, p_page_size: 1 }, controller.signal);
+      const costs = recipe.data?.summary;
+      const usable = costs && !recipe.error && Number.isFinite(costs.total) &&
+        !costs.missing_recipe_count && !costs.invalid_unit_count && !costs.unattributed_count &&
+        (costs.complete || (costs.unpriced_count > 0 && costs.missing_recipe_count === 0 && costs.invalid_unit_count === 0));
+      if (!controller.signal.aborted) setState({ scope, data: { raw: response.data, sales, purchases, expenses,
+        consumption: usable ? costs.total : null, unpriced: costs?.unpriced_count ?? 0 } });
     } catch (error) {
       if (!controller.signal.aborted) setState({ scope, error: userFacingErrorMessage(error, lang) });
     }
@@ -58,7 +65,7 @@ export function PeriodCloseReport() {
 
   const data = current?.data;
   const raw = data?.raw;
-  const consumption = raw?.opening_complete && raw.closing_complete ? raw.opening + raw.purchase + raw.transfer - raw.closing : null;
+  const consumption = data?.consumption ?? null;
   const cost = data && consumption !== null ? consumption + data.expenses : null;
   const format = new Intl.NumberFormat(lang, { maximumFractionDigits: 2, minimumFractionDigits: 2 });
   const rows: [string, string, number | null][] = data ? [
@@ -67,7 +74,7 @@ export function PeriodCloseReport() {
     ['صافي مشتريات الخامات بآخر سعر', 'Net raw purchases at latest prices', data.raw.purchase],
     ['صافي تحويلات الخامات بآخر سعر', 'Net raw transfers at latest prices', data.raw.transfer],
     ['جرد آخر المدة – الخامات', 'Closing raw stock count', raw?.closing_complete ? raw.closing : null],
-    ['استهلاك الخامات حسب الجرد', 'Raw consumption by count', consumption],
+    ['تكلفة استهلاك صافي المبيعات', 'Net sales consumption cost', consumption],
     ['صافي فواتير المشتريات', 'Net invoiced purchases', data.purchases],
     ['المصروفات المرحلة', 'Posted expenses', data.expenses],
     ['فواتير المشتريات والمصروفات (للمراجعة)', 'Invoiced purchases and expenses (reference)', data.purchases + data.expenses],
@@ -85,11 +92,11 @@ export function PeriodCloseReport() {
     {current?.error && <p role="alert">{current.error}</p>}
     {data && <div className="overflow-auto">
       <p>{ar ? 'تقييم الخامات بآخر سعر معتمد بتاريخ' : 'Raw stock valued at latest approved prices as of'} {new Date(data.raw.valued_at).toLocaleString(lang, { timeZone: 'Africa/Cairo' })}</p>
-      {consumption === null && <p role="status">{ar ? 'الإقفال مبدئي: يلزم جرد كامل مُرحّل في أول وآخر المدة للمخازن المشمولة.' : 'Preliminary: applied full counts are required at both boundaries for the warehouses in scope.'}</p>}
+      {data.unpriced > 0 && <p role="status">{ar ? 'خامات استهلاك المبيعات بلا سعر محسوبة بصفر:' : 'Unpriced sales-consumption materials counted at zero:'} {data.unpriced}</p>}
       {data.raw.unpriced > 0 && <p role="status">{ar ? 'خامات بلا سعر محسوبة بصفر:' : 'Unpriced materials counted at zero:'} {data.raw.unpriced}</p>}
       <h2 className="mt-4 font-bold">{ar ? 'تفاصيل بنود الإقفال' : 'Period close details'}</h2>
       <div className="flex flex-wrap gap-2 py-2">
-        {([['result', 'نتيجة الإقفال', 'Closing result'], ['materials', 'تفاصيل الخامات', 'Material details'], ['sales', 'فواتير المبيعات', 'Sales invoices'], ['purchases', 'فواتير المشتريات', 'Purchase invoices'], ['expenses', 'مستندات المصروفات', 'Expense documents']] as const).map(([key, label, english]) =>
+        {([['result', 'نتيجة الإقفال', 'Closing result'], ['materials', 'مراجعة المخزون', 'Inventory review'], ['sales', 'فواتير المبيعات', 'Sales invoices'], ['purchases', 'فواتير المشتريات', 'Purchase invoices'], ['expenses', 'مستندات المصروفات', 'Expense documents']] as const).map(([key, label, english]) =>
           <button key={key} type="button" aria-pressed={detail === key} className="rounded border border-ui-border px-3 py-2 aria-pressed:bg-ui-primary aria-pressed:text-ui-primary-fg" onClick={() => setDetail(key)}>{ar ? label : english}</button>)}
       </div>
       {detail === 'result' && <div className="overflow-auto">
@@ -97,7 +104,7 @@ export function PeriodCloseReport() {
         <thead className="sticky top-0 bg-ui-surface"><tr><th className="p-3 text-start">{ar ? 'البيان' : 'Item'}</th><th>{ar ? 'القيمة (جنيه)' : 'Value (EGP)'}</th><th>{ar ? 'من صافي المبيعات' : '% of net sales'}</th></tr></thead>
         <tbody>{rows.map(([label, english, value]) => <tr key={english} className="border-t border-ui-border">
           <th className="sticky start-0 bg-ui-surface p-3 text-start">{ar ? label : english}</th>
-          <td className="p-3 text-center tabular-nums">{value === null ? (english === 'Opening raw stock count' ? (ar ? 'لا يوجد جرد كامل مُرحّل لأول المدة' : 'No complete applied opening count') : english === 'Closing raw stock count' ? (ar ? 'لا يوجد جرد كامل مُرحّل لآخر المدة' : 'No complete applied closing count') : (ar ? 'يتطلب اكتمال الجرد' : 'Requires complete stock counts')) : format.format(value)}</td>
+          <td className="p-3 text-center tabular-nums">{value === null ? (english === 'Opening raw stock count' ? (ar ? 'لا يوجد جرد كامل مُرحّل لأول المدة' : 'No complete applied opening count') : english === 'Closing raw stock count' ? (ar ? 'لا يوجد جرد كامل مُرحّل لآخر المدة' : 'No complete applied closing count') : (ar ? 'تكلفة استهلاك المبيعات غير متاحة' : 'Sales consumption cost is unavailable')) : format.format(value)}</td>
           <td className="p-3 text-center tabular-nums">{value === null || data.sales === 0 ? '—' : format.format(value / data.sales * 100) + '%'}</td>
         </tr>)}</tbody>
       </table>
@@ -106,15 +113,14 @@ export function PeriodCloseReport() {
       {detail === 'materials' && (!raw?.materials ? <p role="status">{ar ? 'تفاصيل الخامات غير متاحة حاليًا.' : 'Material details are currently unavailable.'}</p> : <>
         <p>{ar ? 'كل حركة تعرض الكمية ثم القيمة بآخر سعر معتمد. إذا غاب الجرد أو لم تُدرج الخامة فيه، يظهر السبب في نفس الخانة.' : 'Each movement shows quantity and then value at the latest approved price. Missing counts are labelled in the table.'}</p>
         <div className="max-h-[65vh] overflow-auto"><table className="w-full text-sm">
-          <thead className="sticky top-0 z-10 bg-ui-surface"><tr>{(ar ? ['الخامة', 'آخر سعر', 'مصدر السعر', 'أول المدة', 'صافي الشراء', 'صافي التحويل', 'آخر المدة', 'الاستهلاك'] : ['Material', 'Latest price', 'Price source', 'Opening', 'Net purchases', 'Net transfers', 'Closing', 'Consumption']).map(label => <th className="p-2 text-start" key={label}>{label}</th>)}</tr></thead>
+          <thead className="sticky top-0 z-10 bg-ui-surface"><tr>{(ar ? ['الخامة', 'آخر سعر', 'مصدر السعر', 'أول المدة', 'صافي الشراء', 'صافي التحويل', 'آخر المدة'] : ['Material', 'Latest price', 'Price source', 'Opening', 'Net purchases', 'Net transfers', 'Closing']).map(label => <th className="p-2 text-start" key={label}>{label}</th>)}</tr></thead>
           <tbody>{raw.materials.map(material => {
             const { opening, closing, purchase, transfer, price, source } = material;
-            const used = consumption === null || opening === null || closing === null ? null : opening + purchase + transfer - closing;
             const label = source === 'purchase' ? (ar ? 'شراء' : 'Purchase') : source === 'pricing' ? (ar ? 'تسعير' : 'Pricing') : source === 'stock_count' ? (ar ? 'جرد مُرحّل' : 'Applied count') : source ?? (ar ? 'بلا سعر' : 'Unpriced');
             return <tr key={material.id} className="border-t border-ui-border">
               <th className="sticky start-0 bg-ui-surface p-2 text-start">{material.name} <small>{material.code}</small></th>
               <td className="p-2">{format.format(price)}</td><td className="p-2">{label}</td>
-              {[opening, purchase, transfer, closing, used].map((quantity, index) => <td key={index} className="whitespace-nowrap p-2 tabular-nums">{quantity === null ? (index === 4 ? (ar ? 'يتطلب اكتمال الجرد' : 'Requires complete counts') : (ar ? 'لا توجد كمية جرد' : 'No counted quantity')) : <>{new Intl.NumberFormat(lang, { maximumFractionDigits: 4 }).format(quantity)}<br />{format.format(quantity * price)}</>}</td>)}
+              {[opening, purchase, transfer, closing].map((quantity, index) => <td key={index} className="whitespace-nowrap p-2 tabular-nums">{quantity === null ? (ar ? 'لا توجد كمية جرد' : 'No counted quantity') : <>{new Intl.NumberFormat(lang, { maximumFractionDigits: 4 }).format(quantity)}<br />{format.format(quantity * price)}</>}</td>)}
             </tr>;
           })}</tbody>
         </table></div>
