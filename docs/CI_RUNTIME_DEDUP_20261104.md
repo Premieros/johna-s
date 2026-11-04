@@ -1,13 +1,13 @@
 # CI runtime and duplicate-work repair
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `perf/ci-runtime-dedup-20261104`
-Current PR: `606`
+Branch: `docs/ci-runtime-release-evidence-20261104`
+Current PR: `607`
 Last updated: 2026-11-04
-State: **DEPLOYED**
+State: **BLOCKED**
 
 ## Work status
-#606 is merged as65c4f247dd26db533682267a10a9e4ab75a64739. The CI configuration is active on main and all postmerge checks and verified Pages publication succeeded. No restaurant application or production database behavior was changed.
+#606 is merged as65c4f247dd26db533682267a10a9e4ab75a64739. The CI configuration is active on main and all postmerge checks and verified Pages publication succeeded. No restaurant application or production database behavior was changed. Follow-up #607 hardens rename classification: use --no-renames so moving runtime code into a Markdown documentation path cannot hide the source deletion. Its full exact-head verification and release remain pending.
 
 ## Guardrails
 All2054 original frontend tests remain; the suite is now2062 with8 new CI safety cases. All136 browser cases and database/security/RLS/business assertions remain. Database files remain serial in disposable GitHub CI Postgres. No production transactions, SQL migration, price-source change, printer change, paid upgrade or dependency upgrade.
@@ -37,7 +37,7 @@ Scope safety covers multi-commit code-then-doc pushes, unknown paths, manual/zer
 Runtime code/config changes still require the complete exact-head verification and trusted current-main Pages gate. Documentation-only updates require successful native worklog/scope checks and do not rebuild or republish the app.
 
 ## Next action
-The release is complete. This documentation-only follow-up also exercises the short docs path. The latest published application remains the last verified runtime source. Rollback reverts #606 CI/test/config files only, with no database or restaurant data reversal.
+The #606 release is complete. Finish and verify the #607 rename guard before the documentation-only follow-up. The latest published application remains the last verified runtime source. Rollback reverts #606 CI/test/config files only, with no database or restaurant data reversal.
 
 ## Mandatory update protocol
 Record actual run IDs and timings. Never equate isolated test timing with whole-system restaurant performance, hide failures, remove operational/security coverage, or parallelize shared DB fixtures.

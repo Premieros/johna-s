@@ -63,5 +63,8 @@ it('classifies the whole pushed range, including code followed by a documentatio
     expect(run(code)).toMatchObject({runtime:false,paths:['docs/a.md']});
     expect(run(code,'workflow_dispatch').runtime).toBe(true);
     expect(run('0'.repeat(40)).runtime).toBe(true);
+    const beforeRename = git('rev-parse','HEAD');
+    git('mv','src/a.ts','docs/moved.md'); commit();
+    expect(run(beforeRename)).toMatchObject({runtime:true,paths:['docs/moved.md','src/a.ts']});
   } finally {rmSync(dir,{recursive:true,force:true});}
 });

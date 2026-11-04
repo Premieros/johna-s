@@ -31,7 +31,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     let runtime = true;
     // No base (manual run/new branch) => full verification, never a guessed skip.
     if (/^[a-f0-9]{40}$/.test(base) && !/^0+$/.test(base)) {
-      paths = execFileSync('git', ['diff', '--name-only', '-z', base, 'HEAD'], { encoding: 'utf8' }).split('\0').filter(Boolean);
+      paths = execFileSync('git', ['diff', '--no-renames', '--name-only', '-z', base, 'HEAD'], { encoding: 'utf8' }).split('\0').filter(Boolean);
       runtime = classifyPaths(paths, process.env.GITHUB_EVENT_NAME);
     }
     const plan = { version: 1, sha, event: process.env.GITHUB_EVENT_NAME, runtime, paths };
