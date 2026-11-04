@@ -10,7 +10,7 @@ DECLARE
   take_qty numeric;
   absorbed numeric:=0;
 BEGIN
-  SELECT * INTO STRICT r FROM public.inventory_ledger WHERE id=p_receipt_id;
+  SELECT * INTO STRICT r FROM public.inventory_ledger WHERE id=p_receipt_id FOR UPDATE;
   IF r.reference_type IS DISTINCT FROM 'stock_count' OR r.raw_material_id IS NULL OR r.quantity<=0 THEN
     RAISE EXCEPTION 'COUNT_RECEIPT_REQUIRED';
   END IF;
@@ -20,7 +20,12 @@ BEGIN
      IS DISTINCT FROM ROW(r.raw_material_id,r.branch_id,r.warehouse_id,r.batch_number) THEN
     RAISE EXCEPTION 'COUNT_RECEIPT_BATCH_MISMATCH';
   END IF;
-  remaining:=least(b.quantity,r.quantity);
+  -- A receipt can be retried after partially settling multiple debts. Its total
+  -- absorbed quantity must never exceed its original physical quantity.
+  SELECT greatest(0,least(b.quantity,r.quantity-COALESCE(sum(s.quantity),0)))
+    INTO remaining FROM public.raw_fifo_settlements s
+    WHERE s.receipt_ledger_id=r.id;
+  IF b.quantity<0 THEN RAISE EXCEPTION 'COUNT_RECEIPT_BATCH_NEGATIVE'; END IF;
   FOR d IN
     SELECT f.id,f.oversold_batch_id,f.debt_quantity-f.settled_quantity AS outstanding
     FROM public.raw_fifo_debts f

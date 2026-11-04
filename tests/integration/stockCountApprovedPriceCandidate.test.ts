@@ -14,7 +14,7 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
   let db: pg.Client;
   const branch=randomUUID(), warehouse=randomUUID(), actor=randomUUID();
   const raw=randomUUID(), shortRaw=randomUUID(), unpricedRaw=randomUUID(), count=randomUUID(), zeroCount=randomUUID(), zeroIssueCount=randomUUID(), latestPriceCount=randomUUID();
-  // Force a valid receipt first and an unpriced error second, proving rollback of earlier writes.
+  // Both priced and default-zero materials must share the atomic posting path.
   const firstLine='00000000-0000-4000-8000-000000000011';
   const failingLine='00000000-0000-4000-8000-000000000012';
   beforeAll(async () => {
@@ -37,8 +37,7 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
     await db.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active) VALUES($1,$2,'Zero cost raw',$3,0,true)",[raw,'QA-'+raw.slice(0,8),branch]);
     await db.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active) VALUES($1,$2,'FIFO cost test raw',$3,0,true)",[shortRaw,'QA-'+shortRaw.slice(0,8),branch]);
     await db.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active) VALUES($1,$2,'Unpriced raw',$3,0,true)",[unpricedRaw,'QA-'+unpricedRaw.slice(0,8),branch]);
-    // No historical zero price can be inferred if the catalog value was updated after the count.
-    // A future catalog timestamp suppresses zero fallback for as-of count reads.
+    // Updating catalog metadata must not suppress the default zero price.
     await db.query("UPDATE public.raw_materials SET updated_at=now()+interval '1 day' WHERE id=$1",[unpricedRaw]);
     const initial=(await db.query("SELECT public._raw_add($1,$2,$3,5,12,NULL,NULL,NULL,'adjustment','qa_seed',NULL,NULL,NULL) r",[shortRaw,branch,warehouse])).rows[0].r;
     if (!initial?.success) throw new Error('QA_INITIAL_RAW_ADD_FAILED '+JSON.stringify(initial));
@@ -158,24 +157,30 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
     expect(Number(balance.quantity)).toBe(1);
   });
 
-  it('offsets only pre-count negative quantity without repricing sales and does not repeat', async () => {
+  it.each([23,10])('offsets pre-count negative quantity for receipt %s without repricing or repetition', async (receiptQty) => {
     await db.query('RESET ROLE');
     await db.query('SAVEPOINT quantity_offset');
     try {
       await db.query(readFileSync('scripts/db/candidates/stock_count_offset_legacy_quantity_NOT_FOR_PRODUCTION.sql','utf8'));
       const material=randomUUID(), negative=randomUUID(), receiptBatch=randomUUID(), laterBatch=randomUUID();
       const doc=randomUUID(), time='2026-11-01T07:00:00Z';
-      await db.query("INSERT INTO public.raw_materials(id,branch_id,code,name,default_cost) VALUES($1,$2,$1::text,'Offset fixture',0)",[material,branch]);
-      await db.query("INSERT INTO public.raw_material_batches(id,raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type) VALUES($1,$4,$5,$6,'NEG-QA',-19,10,'kitchen_send_oversold'),($2,$4,$5,$6,'REC-QA',23,10,'stock_count'),($3,$4,$5,$6,'LATER-QA',-8,10,'kitchen_send_oversold')",[negative,receiptBatch,laterBatch,material,branch,warehouse]);
+      await db.query("INSERT INTO public.raw_materials(id,branch_id,code,name,default_cost) VALUES($1::uuid,$2,$1::uuid::text,'Offset fixture',0)",[material,branch]);
+      await db.query("INSERT INTO public.raw_material_batches(id,raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type) VALUES($1,$4,$5,$6,'NEG-QA',-19,10,'kitchen_send_oversold'),($2,$4,$5,$6,'REC-QA',$7,10,'stock_count'),($3,$4,$5,$6,'LATER-QA',-8,10,'kitchen_send_oversold')",[negative,receiptBatch,laterBatch,material,branch,warehouse,receiptQty]);
       const sale=(await db.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,created_at) VALUES($1,$2,$3,-19,10,-190,'sale','sale',$4,'2026-10-31') RETURNING id",[material,branch,warehouse,randomUUID()])).rows[0].id;
       await db.query("INSERT INTO public.raw_fifo_debts(source_ledger_id,raw_material_id,branch_id,warehouse_id,oversold_batch_id,debt_quantity,source_created_at) VALUES($1,$2,$3,$4,$5,19,'2026-10-31')",[sale,material,branch,warehouse,negative]);
-      const receipt=(await db.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,created_at) VALUES($1,$2,$3,'REC-QA',23,10,230,'adjustment','stock_count',$4,$5) RETURNING id",[material,branch,warehouse,doc,time])).rows[0].id;
+      const receipt=(await db.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,created_at) VALUES($1,$2,$3,'REC-QA',$6,10,$6::numeric*10,'adjustment','stock_count',$4,$5) RETURNING id",[material,branch,warehouse,doc,time,receiptQty])).rows[0].id;
+      await db.query('SAVEPOINT invalid_negative');
+      await db.query('UPDATE public.raw_material_batches SET quantity=-1 WHERE id=$1',[negative]);
+      await expect(db.query('SELECT private.offset_stock_count_legacy_quantity($1,$2)',[receipt,receiptBatch])).rejects.toThrow('COUNT_NEGATIVE_BATCH_UNRECONCILED');
+      await db.query('ROLLBACK TO SAVEPOINT invalid_negative');
+      await db.query('RELEASE SAVEPOINT invalid_negative');
+      expect(Number((await db.query('SELECT count(*) n FROM public.raw_fifo_settlements WHERE receipt_ledger_id=$1',[receipt])).rows[0].n)).toBe(0);
       const applied=(await db.query('SELECT private.offset_stock_count_legacy_quantity($1,$2) qty',[receipt,receiptBatch])).rows[0];
-      expect(Number(applied.qty)).toBe(19);
+      expect(Number(applied.qty)).toBe(Math.min(19,receiptQty));
       const retry=(await db.query('SELECT private.offset_stock_count_legacy_quantity($1,$2) qty',[receipt,receiptBatch])).rows[0];
       expect(Number(retry.qty)).toBe(0);
       const balance=(await db.query("SELECT sum(quantity) qty FROM public.raw_material_batches WHERE raw_material_id=$1",[material])).rows[0];
-      expect(Number(balance.qty)).toBe(-4);
+      expect(Number(balance.qty)).toBe(-27+receiptQty);
       expect(Number((await db.query("SELECT total_cost FROM public.inventory_ledger WHERE id=$1",[sale])).rows[0].total_cost)).toBe(-190);
       expect(Number((await db.query("SELECT quantity FROM public.raw_material_batches WHERE id=$1",[laterBatch])).rows[0].quantity)).toBe(-8);
     } finally {
