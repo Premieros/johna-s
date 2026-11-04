@@ -11,7 +11,7 @@ import { useAuth } from '@/context/AuthContext';
  * Deliberately disabled until a separate AGENT project and site key exist.
  */
 const SUPPORT_ORIGIN = 'https://premieros-agent-support-public.vercel.app';
-const PUBLIC_KEY = (import.meta.env.VITE_AGENT_SUPPORT_WIDGET_KEY || '').trim();
+// Public embed identifier for Johna-S only, not an API secret.\n// An Actions variable may override it without requiring code changes.\nconst PUBLIC_KEY = (import.meta.env.VITE_AGENT_SUPPORT_WIDGET_KEY || '8e299da0ef520017d2c74c4e688109dd0dda3b48cee20f2d').trim();
 const KEY_FORMAT = /^[a-f0-9]{48}$/;
 
 export function AgentCustomerSupport() {
