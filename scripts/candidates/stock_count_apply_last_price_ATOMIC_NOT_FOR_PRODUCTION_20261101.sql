@@ -100,7 +100,21 @@ BEGIN
     -- Count lines and all stock coordinates are locked before taking the
     -- shared snapshots. No per-item full movement-history/price query follows.
     PERFORM 1 FROM public.stock_count_items WHERE stock_count_id=p_stock_count_id ORDER BY id FOR UPDATE;
-    SELECT jsonb_object_agg(p.raw_material_id::text,to_jsonb(p)) INTO v_prices
+    -- Validate every negative lot once, not once per lot or per receipt.
+    IF EXISTS (
+      WITH materials AS MATERIALIZED (SELECT raw_material_id FROM public.stock_count_items WHERE stock_count_id=p_stock_count_id),
+      debt AS MATERIALIZED (
+        SELECT d.raw_material_id,d.oversold_batch_id,sum(d.debt_quantity-d.settled_quantity) qty
+        FROM public.raw_fifo_debts d JOIN materials m USING(raw_material_id)
+        WHERE d.branch_id=v_count.branch_id AND d.warehouse_id=v_count.warehouse_id AND d.settled_quantity<d.debt_quantity
+        GROUP BY d.raw_material_id,d.oversold_batch_id
+      ), negative AS MATERIALIZED (
+        SELECT b.raw_material_id,b.id,b.quantity FROM public.raw_material_batches b JOIN materials m USING(raw_material_id)
+        WHERE b.branch_id=v_count.branch_id AND b.warehouse_id=v_count.warehouse_id AND b.quantity<0
+      ) SELECT 1 FROM negative b FULL JOIN debt d ON d.raw_material_id=b.raw_material_id AND d.oversold_batch_id=b.id
+        WHERE b.id IS NULL OR d.oversold_batch_id IS NULL OR -b.quantity IS DISTINCT FROM d.qty
+    ) THEN RAISE EXCEPTION 'COUNT_LEGACY_QUANTITY_UNRECONCILED'; END IF;
+    SELECT jsonb_object_agg(p.raw_material_id::text,to_jsonb(p)||jsonb_build_object('quantity_verified',true,'defer_quantity_offset',true)) INTO v_prices
       FROM private.stock_count_raw_price(v_count.branch_id,
         ARRAY(SELECT raw_material_id FROM public.stock_count_items WHERE stock_count_id=p_stock_count_id),v_valuation_at) p;
     WITH materials AS MATERIALIZED (

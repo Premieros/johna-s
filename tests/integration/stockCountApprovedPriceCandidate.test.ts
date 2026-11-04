@@ -29,6 +29,7 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
       .replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,'');
     await db.query(release);
     await db.query(readFileSync('supabase/migrations/20261104070332_batch_historical_count_reads.sql','utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
+    await db.query(readFileSync('supabase/migrations/20261104072139_linear_count_debt_validation.sql','utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
     await db.query("INSERT INTO public.branches(id,name) VALUES($1,'Latest price QA')",[branch]);
     await db.query("INSERT INTO public.warehouses(id,branch_id,name,is_active) VALUES($1,$2,'Latest price QA WH',true)",[warehouse,branch]);
     await db.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active) VALUES($1,$2,'Zero cost raw',$3,0,true)",[raw,'QA-'+raw.slice(0,8),branch]);
@@ -260,6 +261,15 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
       const journal=(await db.query('SELECT sum(debit) debit,sum(credit) credit FROM public.journal_entry_lines WHERE journal_entry_id=$1',[applied.journal_entry_id])).rows[0];
       expect(Number(journal.debit)).toBe(230);
       expect(Number(journal.credit)).toBe(230);
+      // A purchase that arrives before compatibility cleanup must not reprice
+      // pre-count sales. Then quantity-only cleanup preserves net stock.
+      const laterReceipt=(await db.query("SELECT public._raw_add($1,$2,$3,10,30,NULL,NULL,NULL,'purchase','qa_receipt',$4,NULL,NULL) r",[material,branch,warehouse,randomUUID()])).rows[0].r;
+      expect(laterReceipt.success,JSON.stringify(laterReceipt)).toBe(true);
+      expect(Number((await db.query("SELECT sum(total_cost) value FROM public.inventory_ledger WHERE raw_material_id=$1 AND reference_type='sale'",[material])).rows[0].value)).toBe(-270);
+      const pair=(await db.query("SELECT l.id receipt,b.id batch FROM public.inventory_ledger l JOIN public.raw_material_batches b ON b.raw_material_id=l.raw_material_id AND b.branch_id=l.branch_id AND b.warehouse_id=l.warehouse_id AND b.batch_number=l.batch_number WHERE l.reference_type='stock_count' AND l.reference_id=$1",[doc])).rows[0];
+      expect(Number((await db.query('SELECT private.offset_stock_count_legacy_quantity($1,$2) qty',[pair.receipt,pair.batch])).rows[0].qty)).toBe(9);
+      expect(Number((await db.query('SELECT private.offset_stock_count_legacy_quantity($1,$2) qty',[pair.receipt,pair.batch])).rows[0].qty)).toBe(0);
+      expect(Number((await db.query('SELECT sum(quantity) qty FROM public.raw_material_batches WHERE raw_material_id=$1',[material])).rows[0].qty)).toBe(6);
     } finally {
       await db.query('ROLLBACK TO SAVEPOINT integrated_count');
       await db.query('RELEASE SAVEPOINT integrated_count');

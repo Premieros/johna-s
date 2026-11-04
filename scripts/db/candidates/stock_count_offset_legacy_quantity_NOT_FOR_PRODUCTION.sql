@@ -4,19 +4,15 @@ CREATE OR REPLACE FUNCTION private.validate_count_legacy_quantity(p_raw uuid,p_b
 RETURNS void LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
 BEGIN
   IF EXISTS (
-    SELECT 1 FROM public.raw_material_batches b
-    LEFT JOIN LATERAL (SELECT sum(d.debt_quantity-d.settled_quantity) qty
-      FROM public.raw_fifo_debts d WHERE d.oversold_batch_id=b.id
-      AND d.raw_material_id=p_raw AND d.branch_id=p_branch AND d.warehouse_id=p_warehouse
-      AND d.settled_quantity<d.debt_quantity) debts ON true
-    WHERE b.raw_material_id=p_raw AND b.branch_id=p_branch AND b.warehouse_id=p_warehouse
-      AND b.quantity<0 AND -b.quantity IS DISTINCT FROM COALESCE(debts.qty,0)
-  ) OR EXISTS (
-    SELECT 1 FROM public.raw_fifo_debts d LEFT JOIN public.raw_material_batches b ON b.id=d.oversold_batch_id
-    WHERE d.raw_material_id=p_raw AND d.branch_id=p_branch AND d.warehouse_id=p_warehouse
-      AND d.settled_quantity<d.debt_quantity
-      AND (b.id IS NULL OR b.quantity>=0 OR b.raw_material_id IS DISTINCT FROM p_raw
-        OR b.branch_id IS DISTINCT FROM p_branch OR b.warehouse_id IS DISTINCT FROM p_warehouse)
+    WITH debt AS MATERIALIZED (
+      SELECT oversold_batch_id,sum(debt_quantity-settled_quantity) qty
+      FROM public.raw_fifo_debts WHERE raw_material_id=p_raw AND branch_id=p_branch
+        AND warehouse_id=p_warehouse AND settled_quantity<debt_quantity GROUP BY oversold_batch_id
+    ), negative AS MATERIALIZED (
+      SELECT id,quantity FROM public.raw_material_batches WHERE raw_material_id=p_raw
+        AND branch_id=p_branch AND warehouse_id=p_warehouse AND quantity<0
+    ) SELECT 1 FROM negative b FULL JOIN debt d ON d.oversold_batch_id=b.id
+      WHERE b.id IS NULL OR d.oversold_batch_id IS NULL OR -b.quantity IS DISTINCT FROM d.qty
   ) THEN RAISE EXCEPTION 'COUNT_LEGACY_QUANTITY_UNRECONCILED'; END IF;
 END;
 $$;
@@ -29,9 +25,12 @@ RETURNS numeric LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE
   r public.inventory_ledger%ROWTYPE;
   b public.raw_material_batches%ROWTYPE;
-  d record;
   remaining numeric;
-  take_qty numeric;
+  inserted_n bigint;
+  debt_n bigint;
+  batch_n bigint;
+  expected_batch_n bigint;
+  estimate_n bigint;
   absorbed numeric:=0;
 BEGIN
   SELECT * INTO STRICT r FROM public.inventory_ledger WHERE id=p_receipt_id FOR UPDATE;
@@ -50,38 +49,47 @@ BEGIN
     INTO remaining FROM public.raw_fifo_settlements s
     WHERE s.receipt_ledger_id=r.id;
   IF b.quantity<0 THEN RAISE EXCEPTION 'COUNT_RECEIPT_BATCH_NEGATIVE'; END IF;
-  FOR d IN
-    SELECT f.id,f.oversold_batch_id,f.debt_quantity-f.settled_quantity AS outstanding
-    FROM public.raw_fifo_debts f
-    WHERE f.raw_material_id=r.raw_material_id AND f.branch_id=r.branch_id
+  IF remaining<=0 THEN RETURN 0; END IF;
+  WITH locked AS MATERIALIZED (
+    SELECT f.id,f.oversold_batch_id,f.source_created_at,f.debt_quantity-f.settled_quantity outstanding
+    FROM public.raw_fifo_debts f WHERE f.raw_material_id=r.raw_material_id AND f.branch_id=r.branch_id
       AND f.warehouse_id=r.warehouse_id AND f.source_created_at<=r.created_at
       AND f.settled_quantity<f.debt_quantity
-    ORDER BY f.source_created_at,f.id FOR UPDATE
-  LOOP
-    EXIT WHEN remaining<=0;
-    take_qty:=least(remaining,d.outstanding);
+      AND NOT EXISTS(SELECT 1 FROM public.raw_fifo_settlements s WHERE s.debt_id=f.id AND s.receipt_ledger_id=r.id)
+    ORDER BY f.source_created_at,f.id LIMIT greatest(1,least(500,coalesce(nullif(current_setting('app.stock_count_cleanup_limit',true),''),'500')::integer)) FOR UPDATE
+  ), allocation AS MATERIALIZED (
+    SELECT id,oversold_batch_id,greatest(0,least(outstanding,remaining-coalesce(
+      sum(outstanding) OVER(ORDER BY source_created_at,id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING),0))) take_qty
+    FROM locked
+  ), inserted AS (
     INSERT INTO public.raw_fifo_settlements(debt_id,receipt_ledger_id,receipt_batch_id,quantity,unit_cost,total_cost)
-    VALUES(d.id,r.id,b.id,take_qty,0,0)
-    ON CONFLICT(debt_id,receipt_ledger_id) DO NOTHING;
-    IF NOT FOUND THEN CONTINUE; END IF;
-    UPDATE public.raw_material_batches n SET quantity=n.quantity+take_qty
-      WHERE n.id=d.oversold_batch_id AND n.raw_material_id=r.raw_material_id
-        AND n.branch_id=r.branch_id AND n.warehouse_id=r.warehouse_id
-        AND n.quantity<=-take_qty;
-    IF NOT FOUND THEN RAISE EXCEPTION 'COUNT_NEGATIVE_BATCH_UNRECONCILED'; END IF;
-    UPDATE public.raw_fifo_debts SET settled_quantity=settled_quantity+take_qty,updated_at=clock_timestamp()
-      WHERE id=d.id;
-    -- Finalize the legacy provisional quantity without replacing its frozen
-    -- cost. Otherwise settled debt could retain a fictitious open estimate.
-    UPDATE public.raw_fifo_debt_price_estimates
-      SET zero_cost_finalized_quantity=zero_cost_finalized_quantity+least(take_qty,remaining_estimated_quantity),
-          remaining_estimated_quantity=greatest(remaining_estimated_quantity-take_qty,0),
-          updated_at=clock_timestamp()
-      WHERE debt_id=d.id AND remaining_estimated_quantity>0;
-    remaining:=remaining-take_qty;
-    absorbed:=absorbed+take_qty;
-  END LOOP;
-  UPDATE public.raw_material_batches SET quantity=quantity-absorbed WHERE id=b.id AND absorbed>0;
+    SELECT id,r.id,b.id,take_qty,0,0 FROM allocation WHERE take_qty>0
+    ON CONFLICT(debt_id,receipt_ledger_id) DO NOTHING RETURNING debt_id,quantity
+  ), batch_allocation AS MATERIALIZED (
+    SELECT a.oversold_batch_id,sum(i.quantity) qty FROM inserted i JOIN allocation a ON a.id=i.debt_id
+    GROUP BY a.oversold_batch_id
+  ), batches_updated AS (
+    UPDATE public.raw_material_batches n SET quantity=n.quantity+a.qty FROM batch_allocation a
+    WHERE n.id=a.oversold_batch_id AND n.raw_material_id=r.raw_material_id AND n.branch_id=r.branch_id
+      AND n.warehouse_id=r.warehouse_id AND n.quantity<=-a.qty RETURNING n.id
+  ), debts_updated AS (
+    UPDATE public.raw_fifo_debts d SET settled_quantity=d.settled_quantity+i.quantity,updated_at=clock_timestamp()
+    FROM inserted i WHERE d.id=i.debt_id AND d.settled_quantity+i.quantity<=d.debt_quantity RETURNING d.id
+  ), estimates_updated AS (
+    UPDATE public.raw_fifo_debt_price_estimates e
+      SET zero_cost_finalized_quantity=e.zero_cost_finalized_quantity+least(i.quantity,e.remaining_estimated_quantity),
+          remaining_estimated_quantity=greatest(e.remaining_estimated_quantity-i.quantity,0),updated_at=clock_timestamp()
+    FROM inserted i WHERE e.debt_id=i.debt_id AND e.remaining_estimated_quantity>0 RETURNING e.debt_id
+  ) SELECT coalesce(sum(i.quantity),0),count(*),(SELECT count(*) FROM debts_updated),
+      (SELECT count(*) FROM batches_updated),(SELECT count(*) FROM batch_allocation),(SELECT count(*) FROM estimates_updated)
+    INTO absorbed,inserted_n,debt_n,batch_n,expected_batch_n,estimate_n FROM inserted i;
+  IF debt_n<>inserted_n OR batch_n<>expected_batch_n THEN
+    RAISE EXCEPTION 'COUNT_NEGATIVE_BATCH_UNRECONCILED';
+  END IF;
+  IF absorbed>0 THEN
+    UPDATE public.raw_material_batches SET quantity=quantity-absorbed WHERE id=b.id AND quantity>=absorbed;
+    IF NOT FOUND THEN RAISE EXCEPTION 'COUNT_RECEIPT_BATCH_NEGATIVE'; END IF;
+  END IF;
   RETURN absorbed;
 END;
 $$;

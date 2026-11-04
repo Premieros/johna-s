@@ -45,7 +45,9 @@ BEGIN
   END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended(p_raw_material_id::text||':'||p_branch_id::text,0));
   IF p_reference_type='stock_count' THEN
-    PERFORM private.validate_count_legacy_quantity(p_raw_material_id,p_branch_id,p_warehouse_id);
+    IF coalesce((p_frozen_price->>'quantity_verified')::boolean,false) IS NOT TRUE THEN
+      PERFORM private.validate_count_legacy_quantity(p_raw_material_id,p_branch_id,p_warehouse_id);
+    END IF;
   ELSE
   IF EXISTS(SELECT 1 FROM public.raw_fifo_debts d
     WHERE d.raw_material_id=p_raw_material_id
@@ -240,7 +242,9 @@ BEGIN
   END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended(p_raw_material_id::text||':'||p_branch_id::text,0));
   IF p_reference_type='stock_count' THEN
-    PERFORM private.validate_count_legacy_quantity(p_raw_material_id,p_branch_id,p_warehouse_id);
+    IF coalesce((p_frozen_price->>'quantity_verified')::boolean,false) IS NOT TRUE THEN
+      PERFORM private.validate_count_legacy_quantity(p_raw_material_id,p_branch_id,p_warehouse_id);
+    END IF;
   ELSE
   IF EXISTS(SELECT 1 FROM public.raw_fifo_debts d WHERE d.raw_material_id=p_raw_material_id
     AND d.warehouse_id=p_warehouse_id AND d.branch_id=p_branch_id
@@ -328,7 +332,7 @@ BEGIN
     CASE WHEN p_reference_type='stock_count' THEN v_now ELSE NULL END
   ) RETURNING id INTO v_receipt_ledger;
 
-  IF p_reference_type='stock_count' THEN
+  IF p_reference_type='stock_count' AND coalesce((p_frozen_price->>'defer_quantity_offset')::boolean,false) IS NOT TRUE THEN
     PERFORM private.offset_stock_count_legacy_quantity(v_receipt_ledger,v_receipt_batch);
   END IF;
   v_posted_variance:=round(v_variance,2);

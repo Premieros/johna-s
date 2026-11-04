@@ -21,6 +21,7 @@ DECLARE
   v_res jsonb;
   v_had_estimate boolean;
   v_total_settled numeric(18,6):=0;
+  v_count_cutoff timestamptz;
   v_total_value numeric(18,6):=0;
   v_total_adjustment numeric(18,6):=0;
 BEGIN
@@ -47,6 +48,14 @@ BEGIN
   END IF;
 
   v_available:=LEAST(v_receipt.quantity,GREATEST(v_batch.quantity,0));
+
+  -- An applied physical count freezes the cost of the consumption it covers,
+  -- even while quantity-only legacy cleanup is being drained in small batches.
+  SELECT max(c.created_at) INTO v_count_cutoff
+  FROM public.stock_count_items i JOIN public.stock_counts c ON c.id=i.stock_count_id
+  WHERE i.raw_material_id=v_receipt.raw_material_id AND c.branch_id=v_receipt.branch_id
+    AND c.warehouse_id=v_receipt.warehouse_id AND c.status='applied' AND c.created_at<=v_receipt.created_at;
+
 
   FOR v_debt IN
     SELECT d.*
@@ -93,10 +102,15 @@ BEGIN
       CONTINUE;
     END IF;
 
-    IF v_source.approved_cost_basis='approved_last_known' THEN
+    IF v_source.approved_cost_basis='approved_last_known'
+       OR (v_count_cutoff IS NOT NULL AND v_source.created_at<=v_count_cutoff) THEN
       -- New approved-price movements keep their original valuation forever.
       v_actual_value:=0; v_delta:=0; v_new_total:=v_source.total_cost;
       UPDATE public.raw_fifo_settlements SET unit_cost=0,total_cost=0 WHERE id=v_settlement_id;
+      UPDATE public.raw_fifo_debt_price_estimates
+        SET zero_cost_finalized_quantity=zero_cost_finalized_quantity+least(v_take,remaining_estimated_quantity),
+            remaining_estimated_quantity=greatest(remaining_estimated_quantity-v_take,0),updated_at=clock_timestamp()
+        WHERE debt_id=v_debt.id AND remaining_estimated_quantity>0;
     ELSE
     v_had_estimate:=false;
     v_estimate_take:=0;
@@ -158,7 +172,8 @@ BEGIN
     SET quantity=GREATEST(quantity-v_take,0)
     WHERE id=v_batch.id;
 
-    IF v_source.approved_cost_basis IS DISTINCT FROM 'approved_last_known' THEN
+    IF v_source.approved_cost_basis IS DISTINCT FROM 'approved_last_known'
+       AND NOT (v_count_cutoff IS NOT NULL AND v_source.created_at<=v_count_cutoff) THEN
     UPDATE public.inventory_ledger
     SET total_cost=v_new_total,
         unit_cost=CASE
