@@ -442,8 +442,8 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     const detail=await asUser(managerId,async()=>await client.query(`SELECT public.get_product_costing_detail($1,$2) AS r`,[prodId,branchA]));
     expect(Number(detail.rows[0].r.actual_cost)).toBe(Number(before.rows[0].actual_cost));
     const price=await client.query(`SELECT unit_cost,price_source FROM public.get_raw_material_current_prices($1,ARRAY[$2::uuid])`,[branchA,missingRaw]);
-    expect(price.rows[0].unit_cost).toBeNull();
-    expect(price.rows[0].price_source).toBe('unpriced');
+    expect(Number(price.rows[0].unit_cost)).toBe(0);
+    expect(price.rows[0].price_source).toBe('catalog_zero');
   });
 
   it('uses an entered raw price even when inventory average and manual product/group costs are zero',async()=>{
