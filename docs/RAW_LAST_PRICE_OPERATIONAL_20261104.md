@@ -1,15 +1,16 @@
 # Operational last-price cutover
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `feat/raw-last-price-operational-20261104`
-Current PR: #602
+Branch: `fix/raw-last-price-partial-cutover-20261104`
+Current PR: #603
 Last updated: 2026-11-04
 State: **BLOCKED**
 
 ## Work status
-Continue from deployed #601. Owner authorization includes verified merge and
-application. Implement and verify the whole raw writer lifecycle before routing
-live sales through it. No new production activation has occurred in this stage.
+#602 is merged, applied and published. Smouha is fully on the new raw path;
+185 stock coordinates have been converted with quantity and source-cost proofs.
+Finish the single remaining Cleopatra partial source through the verified
+converter-only admission patch. Owner authorization includes merge/application.
 
 ## Guardrails
 Preserve deployed count00008/00009 and #601. Use the existing approved-price
@@ -74,11 +75,10 @@ old-debt reconciliation and balanced financial journals all pass. An inactive
 candidate is not completion or live deployment.
 
 ## Next action
-Finish exact-head CI for #602, recheck live legacy snapshots, merge and apply the
-single reviewed operational migration, then convert each negative coordinate in
-bounded owner-authorized transactions. Finalize both branches only after no
-unconverted negative positions remain; enable the new-branch default last.
-No live writer routing has been changed yet.
+Finish exact-head CI for the converter-only partial patch, merge/apply it,
+convert the remaining Cleopatra coordinate with source-cost and quantity checks,
+finalize Cleopatra, and enable automatic new-branch defaults only after both
+branches have no unconverted legacy positions. Preserve the live Smouha path.
 
 ## Coordinated release package
 `20261104111802_raw_last_price_operational_cutover.sql` guards the exact24
@@ -150,3 +150,30 @@ so restricted purchase-history access cannot change the receiver price. Existing
 financial-context readers retain their prior visibility. An actual restricted
 operator purchase-source test covers both quote and approval; historical transfer
 rollback is rehearsed on its exact older reader call without weakening guards.
+
+## Production update — #602 and final partial admission
+#602 merged asb6af68c111ccd5361f3a7f25464a4ab06d78fabf. Exact PR CI41824803650,
+post-merge Verify41825590321 and Pages41826469641 all succeeded. Production
+migration20261104142855 `raw_last_price_operational_cutover` applied successfully.
+185 coordinates converted in small transactions, preserving net quantities and
+source-ledger money hashes;1666 legacy debt rows archived without changing their
+settled quantity. Smouha branch default is enabled. Send-core fingerprint remains
+09abdc1c2c47a48cc61d1dc3a310fe13. No synthetic live orders/printer jobs were created.
+
+One Cleopatra material has a partial legacy source: debt0.04, settled0.01,
+source unit12.06, source total-0.48. Its applied settlement records exactly0.4824
+at48.24 per unit. The remaining recognized monetary basis is0, not the weighted
+source unit cost times0.03. New admission requires exact source/debt quantity,
+all settlement statuses applied, matching settled quantity, matching rounded
+recorded money and matching weighted source price. Pending or mismatched evidence
+is rejected. Other unsupported partial cases remain blocked.
+
+The patch changes only the owner-only converter. It never rewrites the original
+ledger, settlement history, journals or runtime raw writers. Tests reproduce the
+actual numeric shape, preserve every historical row, prove future receipts post
+only current variance, and rehearse strict-converter rollback/reapply. Cleopatra
+branch default and automatic future-branch defaults remain pending this patch.
+
+Partial patch verification:53/53 focused checks across5 files pass in2.57s;
+includes invalid-evidence rejection and strict-converter rollback/reapply.
+Application/test typechecks, changed-file lint and whitespace checks pass.
