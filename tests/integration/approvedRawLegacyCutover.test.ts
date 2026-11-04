@@ -51,6 +51,48 @@ describe.skipIf(!local)('bounded audited legacy raw position cutover, owned roll
    expect(await qty(material)).toBe(0);
   } finally {await db.query('ROLLBACK TO priced_count_conversion');await db.query('RELEASE priced_count_conversion');}
  });
+ it('preserves a partly settled legacy source only when applied receipts explain its recorded cost exactly',async()=>{
+  await db.query('SAVEPOINT legacy_partial');
+  try {
+   const material=randomUUID(),event=randomUUID();
+   await db.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active) VALUES($1::uuid,$1::text,'Partial carry proof',$2,0,true)",[material,ids.branchA]);
+   const item=(await db.query('SELECT id FROM public.order_items WHERE order_id=$1 ORDER BY id LIMIT 1',[ids.rows.orders.own])).rows[0].id;
+   await db.query("INSERT INTO public.order_kitchen_inventory_events(id,branch_id,warehouse_id,order_id,order_item_id,sent_quantity,total_cost,snapshot_version,component_snapshot) VALUES($1,$2,$3,$4,$5,1,0,2,jsonb_build_array(jsonb_build_object('raw_material_id',$6::uuid,'quantity',0.04)))",[event,ids.branchA,ids.whA,ids.rows.orders.own,item,material]);
+   await db.query("INSERT INTO public.order_kitchen_inventory_effects(event_id,branch_id,warehouse_id,target_type,target_id,quantity,total_cost) VALUES($1,$2,$3,'raw_material',$4,0.04,0)",[event,ids.branchA,ids.whA,material]);
+   expect((await db.query("SELECT public._raw_remove_fifo($1,$2,$3,0.04,'kitchen_send','kitchen_send',$4,'QA-PARTIAL',NULL,true) r",[material,ids.branchA,ids.whA,event])).rows[0].r.success).toBe(true);
+   const receipt=(await db.query("SELECT public._raw_add($1,$2,$3,0.01,48.24,'QA-OLD-RECEIPT',NULL,NULL,'purchase_receipt','qa_old_receipt',$4,'QA-OLD-RECEIPT',NULL) r",[material,ids.branchA,ids.whA,randomUUID()])).rows[0].r;
+   expect(receipt.success,JSON.stringify(receipt)).toBe(true);
+   const before=(await db.query('SELECT d.id,d.debt_quantity,d.settled_quantity,s.id source_id,s.quantity,s.unit_cost,s.total_cost FROM public.raw_fifo_debts d JOIN public.inventory_ledger s ON s.id=d.source_ledger_id WHERE d.raw_material_id=$1',[material])).rows[0];
+   expect(Number(before.debt_quantity)).toBe(0.04);expect(Number(before.settled_quantity)).toBe(0.01);
+   expect(Number(before.unit_cost)).toBe(12.06);expect(Number(before.total_cost)).toBe(-0.48);
+   const settlements=(await db.query('SELECT quantity,total_cost,reconciliation_status FROM public.raw_fifo_settlements WHERE debt_id=$1',[before.id])).rows;
+   expect(settlements).toHaveLength(1);expect(settlements[0].reconciliation_status).toBe('applied');
+   for(const alter of ["UPDATE public.raw_fifo_settlements SET reconciliation_status='pending' WHERE debt_id=$1","UPDATE public.inventory_ledger SET total_cost=-0.50 WHERE id=(SELECT source_ledger_id FROM public.raw_fifo_debts WHERE id=$1)"]) {
+    await db.query('SAVEPOINT partial_invalid');await db.query(alter,[before.id]);
+    await expect(db.query('SELECT private.activate_raw_last_price_coordinate($1,$2,$3,-0.03,1,0.03)',[ids.branchA,ids.whA,material])).rejects.toThrow('CUTOVER_PARTIAL_POSITION_REQUIRES_RECONCILIATION');
+    await db.query('ROLLBACK TO partial_invalid');await db.query('RELEASE partial_invalid');
+   }
+   const journalCount=(await db.query('SELECT count(*)::int n FROM public.journal_entries WHERE branch_id=$1',[ids.branchA])).rows[0].n;
+   const converted=(await db.query('SELECT private.activate_raw_last_price_coordinate($1,$2,$3,-0.03,1,0.03) r',[ids.branchA,ids.whA,material])).rows[0].r;
+   expect(converted).toMatchObject({success:true,frozen_basis:0,shortage_quantity:0.03,partial_legacy_debts_preserved:1});
+   expect(await qty(material)).toBe(-0.03);
+   expect((await db.query('SELECT count(*)::int n FROM public.journal_entries WHERE branch_id=$1',[ids.branchA])).rows[0].n).toBe(journalCount);
+   expect((await db.query('SELECT d.id,d.debt_quantity,d.settled_quantity,s.id source_id,s.quantity,s.unit_cost,s.total_cost FROM public.raw_fifo_debts d JOIN public.inventory_ledger s ON s.id=d.source_ledger_id WHERE d.raw_material_id=$1',[material])).rows[0]).toEqual(before);
+   expect((await db.query("SELECT public._raw_remove_fifo($1,$2,$3,0.01,'kitchen_send','qa_new_partial',$4,'QA-NEW-PARTIAL',NULL,true) r",[material,ids.branchA,ids.whA,randomUUID()])).rows[0].r.success).toBe(true);
+   const final=(await db.query("SELECT public._raw_add($1,$2,$3,0.04,48.24,'QA-NEW-RECEIPT',NULL,NULL,'purchase_receipt','qa_new_receipt',$4,'QA-NEW-RECEIPT',NULL) r",[material,ids.branchA,ids.whA,randomUUID()])).rows[0].r;
+   expect(final).toMatchObject({success:true,approved_price_variance_posted:1.93});expect(await qty(material)).toBe(0);
+   expect((await db.query('SELECT quantity,total_cost,reconciliation_status FROM public.raw_fifo_settlements WHERE debt_id=$1',[before.id])).rows).toEqual(settlements);
+   expect(Number((await db.query('SELECT total_cost FROM public.inventory_ledger WHERE id=$1',[before.source_id])).rows[0].total_cost)).toBe(-0.48);
+   await db.query('SAVEPOINT converter_rollback');
+   try {
+    await db.query(readFileSync('scripts/rollback/raw_last_price_partial_cutover_20261104.sql','utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
+    expect((await db.query("SELECT md5(pg_get_functiondef('private.activate_raw_last_price_coordinate(uuid,uuid,uuid,numeric,integer,numeric)'::regprocedure)) hash")).rows[0].hash).toBe('756cd7af43d15b48d6e1bdfdd1e1f219');
+    expect(await qty(material)).toBe(0);
+    await db.query(readFileSync('supabase/migrations/20261104143925_raw_last_price_partial_cutover.sql','utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
+    expect(Number((await db.query('SELECT total_cost FROM public.inventory_ledger WHERE id=$1',[before.source_id])).rows[0].total_cost)).toBe(-0.48);
+   } finally {await db.query('ROLLBACK TO converter_rollback');await db.query('RELEASE converter_rollback');}
+  } finally {await db.query('ROLLBACK TO legacy_partial');await db.query('RELEASE legacy_partial');}
+ });
  it('moves old shortage quantity to one aggregate without faking receipts or changing source costs/journals',async()=>{
   const before=await db.query('SELECT id,quantity,unit_cost,total_cost FROM public.inventory_ledger WHERE raw_material_id=$1 ORDER BY id',[raw]);
   const journal=(await db.query('SELECT count(*)::int n FROM public.journal_entries')).rows[0].n;
