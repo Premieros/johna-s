@@ -65,6 +65,8 @@ jobs:
       - run: npm run build
         env:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Public 48-hex key from the johna-s project in AGENT. Empty = disabled.
+          VITE_AGENT_SUPPORT_WIDGET_KEY: ${{ vars.VITE_AGENT_SUPPORT_WIDGET_KEY }}
 
       - name: Preserve assets for active sessions
         uses: ./.github/actions/preserve-pages-assets
