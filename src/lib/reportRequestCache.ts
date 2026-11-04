@@ -54,7 +54,7 @@ export function createReportRequestCache(baseFetch: FetchLike, { ttl = 60_000, m
   const clear = () => { generation += 1; completed.clear(); inFlight.clear(); };
   const fetch: FetchLike = async (input, init) => {
     let request: Request;
-    try { request = new Request(input, init); } catch { return baseFetch(input, init); }
+    try { request = new Request(input instanceof Request ? input.clone() : input, init); } catch { return baseFetch(input, init); }
     const callerSignal = init?.signal ?? (input instanceof Request ? input.signal : request.signal);
     const path = new URL(request.url).pathname;
     const name = path.startsWith('/rest/v1/rpc/') ? path.slice('/rest/v1/rpc/'.length) : '';

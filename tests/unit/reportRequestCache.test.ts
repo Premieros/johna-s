@@ -191,3 +191,14 @@ it('keeps valid report reuse through display RPC reads but invalidates it on ope
   await cache.fetch(url, options());
   expect(base).toHaveBeenCalledTimes(6);
 });
+
+it.each(['get_dashboard_sales_snapshot', 'send_to_kitchen'])('preserves a native Request upload body through the unqueued %s path', async name => {
+  const native = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input, init);
+    return Response.json({ params: await request.json() });
+  });
+  const cache = createReportRequestCache(createPostgrestDedupingFetch(native));
+  const request = new Request(`https://example.test/rest/v1/rpc/${name}`, options());
+  expect(await (await cache.fetch(request)).json()).toEqual({ params: JSON.parse(String(options().body)) });
+  expect(native).toHaveBeenCalledOnce();
+});
