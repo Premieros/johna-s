@@ -30,6 +30,8 @@ env:
 
 jobs:
   build:
+    outputs:
+      runtime: ${{ steps.scope.outputs.runtime }}
     if: >-
       ${{
         github.event.workflow_run.conclusion == 'success' &&
@@ -51,34 +53,54 @@ jobs:
           actual="$(git ls-remote origin "refs/heads/$VERIFIED_BRANCH" | cut -f1)"
           test -n "$actual" && test "$actual" = "$VERIFIED_SHA"
 
+      - name: Download exact verified scope
+        uses: actions/download-artifact@v4
+        with:
+          name: verify-scope-plan
+          path: ci-scope
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+      - name: Validate exact verified scope
+        id: scope
+        env:
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/ci/verification-scope.mjs verify ci-scope/verification-scope.json
+
       - uses: actions/setup-node@v4
+        if: steps.scope.outputs.runtime == 'true'
         with:
           node-version: 22
           cache: npm
 
       - name: Install dependencies
+        if: steps.scope.outputs.runtime == 'true'
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
       - name: Verify locked Supabase project identity
+        if: steps.scope.outputs.runtime == 'true'
         run: node scripts/db/verify-database-identity.js
 
       - run: npm run build
+        if: steps.scope.outputs.runtime == 'true'
         env:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Preserve assets for active sessions
+        if: steps.scope.outputs.runtime == 'true'
         uses: ./.github/actions/preserve-pages-assets
         with:
           github-token: ${{ github.token }}
           deployment-branch: ${{ github.event.workflow_run.head_branch }}
 
       - uses: actions/upload-pages-artifact@v3
+        if: steps.scope.outputs.runtime == 'true'
         with:
           path: dist
           retention-days: 30
 
   production-parity:
     needs: build
+    if: needs.build.outputs.runtime == 'true'
     runs-on: ubuntu-latest
     env:
       SUPABASE_PROJECT_REF: azzdesuowpdcoflmyezn

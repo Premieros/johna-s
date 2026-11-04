@@ -6,13 +6,14 @@ const source = yaml.split('        script: |\n')[1].split('\n    - name:')[0];
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const locate = new AsyncFunction('github', 'context', 'core', source);
 const run = (id: number, conclusion = 'success', status = 'completed') => ({ id, conclusion, status, path: '.github/workflows/deploy.yml', head_branch: process.env.DEPLOYMENT_BRANCH });
-function setup(pages: ReturnType<typeof run>[][], artifacts = [{ name: 'github-pages', expired: false }]) {
+function setup(pages: ReturnType<typeof run>[][], artifacts = [{ name: 'github-pages', expired: false }], jobsByRun: Record<number, {name: string; status: string; conclusion: string}[]> = {}) {
   const listWorkflowRunsForRepo = vi.fn(async ({ page }: { page: number }) => ({ data: { workflow_runs: pages[page - 1] ?? [] } }));
+  const listJobsForWorkflowRun = vi.fn(async ({run_id}: {run_id: number}) => ({data: {jobs: jobsByRun[run_id] ?? [{name: 'deploy', status: 'completed', conclusion: 'success'}]}}));
   const listWorkflowRunArtifacts = vi.fn(async () => ({ data: { artifacts } }));
   const setOutput = vi.fn();
-  const execute = () => locate({ rest: { actions: { listWorkflowRunsForRepo, listWorkflowRunArtifacts } } },
+  const execute = () => locate({ rest: { actions: { listWorkflowRunsForRepo, listWorkflowRunArtifacts, listJobsForWorkflowRun } } },
     { repo: { owner: 'Premieros', repo: 'johna-s' }, runId: 999 }, { setOutput, info: vi.fn() });
-  return { execute, listWorkflowRunsForRepo, listWorkflowRunArtifacts, setOutput };
+  return { execute, listWorkflowRunsForRepo, listWorkflowRunArtifacts, listJobsForWorkflowRun, setOutput };
 }
 describe('actual Pages artifact locator', () => {
   it('selects the latest completed success without the stale status index', async () => {
@@ -45,4 +46,18 @@ describe('actual Pages artifact locator', () => {
     await expect(t.execute()).rejects.toThrow('search limit reached');
     expect(t.setOutput).not.toHaveBeenCalled();
   });
+});
+
+
+it('ignores a positively identified docs-only no-publication run and retains the last real deployment', async () => {
+  const t = setup([[run(996), run(995)]], [{name: 'github-pages', expired: false}], {996: [{name: 'deploy', status: 'completed', conclusion: 'skipped'}]});
+  await t.execute();
+  expect(t.listWorkflowRunArtifacts).toHaveBeenCalledTimes(1);
+  expect(t.listWorkflowRunArtifacts).toHaveBeenCalledWith({owner: 'Premieros', repo: 'johna-s', run_id: 995});
+  expect(t.setOutput).toHaveBeenCalledWith('run_id', '995');
+});
+it('fails closed for an unconfirmed publication rather than skipping its potentially required assets', async () => {
+  const t = setup([[run(996), run(995)]], [{name: 'github-pages', expired: false}], {996: []});
+  await expect(t.execute()).rejects.toThrow('publication cannot be confirmed');
+  expect(t.listWorkflowRunArtifacts).not.toHaveBeenCalled();
 });
