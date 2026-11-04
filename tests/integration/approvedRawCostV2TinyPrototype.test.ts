@@ -76,6 +76,34 @@ describe.skipIf(!disposable)('approved-cost v2 minimal-storage internal prototyp
       expect(Number(ledger[0].unit_cost)).toBe(0);expect(Number(ledger[0].total_cost)).toBe(0);
     } finally { await db.query('ROLLBACK TO zero_issue');await db.query('RELEASE zero_issue'); }
   });
+  it('keeps the movement currency total equal across fractional physical lots',async()=>{
+    await db.query('SAVEPOINT rounding_issue');
+    try {
+      await db.query("INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,reference_number,priced_at) VALUES($1,$2,50,'pricing','QA-ROUND',clock_timestamp())",[raw,branch]);
+      for (const batch of ['ROUND-A','ROUND-B']) {
+        await db.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type) VALUES($1,$2,$3,$4,0.0001,50,'qa')",[raw,branch,warehouse,batch]);
+      }
+      const ref=newRef();
+      const result=(await db.query("SELECT private.raw_issue_approved_v2($1,$2,$3,0.0002,'kitchen_send','qa_round',$4,'QA-ROUND',NULL) r",[raw,branch,warehouse,ref])).rows[0].r;
+      expect(result).toMatchObject({success:true,total_cost:0.01});
+      expect(await whQty()).toBe(0);
+      const ledger=(await db.query('SELECT sum(quantity) qty,sum(total_cost) cost,count(*)::int n FROM public.inventory_ledger WHERE reference_id=$1',[ref])).rows[0];
+      expect(ledger.n).toBe(2);
+      expect(Number(ledger.qty)).toBe(-0.0002);
+      expect(Number(ledger.cost)).toBe(-result.total_cost);
+      // A residual can exceed half a cent on one physical lot, but the
+      // complete movement must stay exact to the currency cent.
+      await db.query("UPDATE public.raw_material_price_events SET unit_cost=337 WHERE reference_number='QA-ROUND' AND raw_material_id=$1",[raw]);
+      await db.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type) VALUES($1,$2,$3,'ROUND-C',0.0001,337,'qa')",[raw,branch,warehouse]);
+      await db.query("UPDATE public.raw_material_batches SET quantity=0.0001 WHERE raw_material_id=$1",[raw]);
+      const ref2=newRef();
+      const second=(await db.query("SELECT private.raw_issue_approved_v2($1,$2,$3,0.0003,'kitchen_send','qa_round',$4,'QA-ROUND',NULL) r",[raw,branch,warehouse,ref2])).rows[0].r;
+      expect(second).toMatchObject({success:true,total_cost:0.10});
+      const total=(await db.query('SELECT sum(total_cost) cost FROM public.inventory_ledger WHERE reference_id=$1',[ref2])).rows[0];
+      expect(Number(total.cost)).toBe(-0.10);
+      expect(await whQty()).toBe(0);
+    } finally { await db.query('ROLLBACK TO rounding_issue');await db.query('RELEASE rounding_issue'); }
+  });
   it('freezes as-of approved price, aggregates shortages without FIFO debts, and journals only net receipt differences',async()=>{
     await db.query(
       "INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,reference_number,priced_at) VALUES($1,$2,1200,'pricing','P1200',clock_timestamp())",

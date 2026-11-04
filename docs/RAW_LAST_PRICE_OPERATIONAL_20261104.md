@@ -24,23 +24,48 @@ still authoritative outside raw-only counts. Last read-only audit showed774/915
 open legacy debt rows (Smouha/Cleopatra), all dated November.
 
 ## Root-cause ledger
-The unused v2 issue still rejects a missing price rather than recording0. Its
-coordinate adapter returns an insufficient-stock failure without a shortage,
-and consumers must retain explicit failure/quantity semantics. The group path
-already checks success. Old receipts also replay historical costs.
+The unused v2 issue rejected a missing price rather than recording0. Its
+coordinate adapter omitted shortage details on an insufficient-stock failure.
+Both candidate contracts are corrected. Additional reproduction found that
+statement-clock ledger dates escaped the existing purchase-edit transaction-date
+correction, and per-lot currency rounding doubled a one-cent raw movement.
+These candidate defects are fixed and covered by regressions. Old receipts
+still replay historical costs outside activated coordinates.
 
 ## Change ledger
-In progress: unify candidate price projection, preserve zero and undated current
-prices, restore exact result/error contracts, prove source-price refund/void,
-then bounded legacy conversion and count/transfer/component-group compatibility.
+Candidate writers now use the existing approved-price projection, including0
+and known undated current prices. Frozen void/refund cost is retained. A bounded
+owner-only converter preserves net quantity, original source money, journals and
+settled quantity while marking legacy obligations as archived. Future counts
+ignore archived debts and account for the aggregate shortage. Negative counts
+on active coordinates create no new FIFO debt. Branch-default fixture coverage
+includes newly created fallback raws. Routing/history guards prevent deleting
+an activation marker, settling/deleting archived debt or repricing its source.
+Ordinary ledger INSERTs do not pay for the exceptional repricing lookup.
+Candidate movement money is allocated cumulatively across physical lots;
+the existing per-lot rounding constraint retains all predicates, with its bound
+changed from half a cent to one cent. The movement sum stays exact to cents.
 
 ## Verification ledger
-52 focused checks across7 files pass in one owned-Postgres batch (6.1 seconds).
+The prior52 focused checks across7 files passed in6.1 seconds. The expanded
+nine-file suite passed67 checks in8.33 seconds before the final history guards.
 Includes old/new real POS sale/refund approval/shift lifecycle, direct reusable-group
 raw deduction without any production/batch creation, frozen snapshot void/refund
 after recipe/price change, destination-branch transfer price and retry/branch
 checks, zero default, aggregate shortages and existing count regressions.
 Application and test typecheck pass. General activation remains blocked.
+
+The purchase-correction regression failed on the new writer and passed after
+restoring transaction-clock movement timestamps (24 combined checks,3.46s).
+The two-lot rounding regression reproduced -0.02 against -0.01 expected; the
+corrected allocation also covers a three-lot residual exceeding half a cent.
+Seventeen focused checks passed after the rounding-constraint adjustment.
+Final history-guard run:68 checks across9 files passed in11.95 seconds,
+including refusal to remove activation, settle/delete archived debts or reprice
+their original ledger. Typecheck (application and tests), changed-file ESLint,
+four active-worklog contract checks and git diff whitespace checks pass.
+All fixtures use owned localhost transactions and roll back; no live business
+orders, printer jobs or production stock changes were generated.
 
 ## Production gate
 No activation until negative/zero/fractional issues, receipts, partial reversal,
@@ -49,8 +74,11 @@ old-debt reconciliation and balanced financial journals all pass. An inactive
 candidate is not completion or live deployment.
 
 ## Next action
-Finish bounded legacy-position conversion and future-count compatibility. Complete
-one coordinated writer/reversal release, preserving the ordinary sale/print path.
+Finish same-price behavior for operational callers without purchase-browsing
+permission, remove redundant kitchen snapshot price resolution, and prove raw
+quantity precision consistency. Complete branch-wide cutover finalization,
+explicit recovery packaging, source-guarded migration and exact-head CI before
+any live activation. These are unresolved release gates, not deployed fixes.
 
 ## Mandatory update protocol
 Record actual implementation, tests, PR, CI and production results. Preserve

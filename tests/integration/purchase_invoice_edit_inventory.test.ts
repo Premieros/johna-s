@@ -2,11 +2,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
+import { activateApprovedRawFixture, installApprovedRawWriterFixture } from './approvedRawWriterFixture';
 
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
 
-describe.skipIf(skip)('purchase invoice edit inventory integrity', () => {
+describe.skipIf(skip).each(['legacy','approved'] as const)('purchase invoice edit inventory integrity (%s)', (engine) => {
   let client: pg.Client;
   const branchId = randomUUID();
   const warehouseId = randomUUID();
@@ -61,6 +62,7 @@ describe.skipIf(skip)('purchase invoice edit inventory integrity', () => {
     client = openDb(dbUrl!);
     await client.connect();
     await client.query('BEGIN');
+    if (engine === 'approved') await installApprovedRawWriterFixture(client, dbUrl!);
     await client.query(`ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard`);
     await client.query(
       `INSERT INTO public.branches (id,name) VALUES
@@ -106,6 +108,10 @@ describe.skipIf(skip)('purchase invoice edit inventory integrity', () => {
     await client.query(`SELECT public.ensure_chart_of_accounts($1)`, [branchId]);
     await client.query(`SELECT public.seed_account_mappings($1)`, [branchId]);
     await client.query(`UPDATE public.settings SET tax_enabled=false`);
+    if (engine === 'approved') {
+      await activateApprovedRawFixture(client, branchId, warehouseId, rawAId);
+      await activateApprovedRawFixture(client, branchId, warehouseId, rawBId);
+    }
   });
 
   afterAll(async () => {

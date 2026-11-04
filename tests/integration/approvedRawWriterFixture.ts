@@ -22,3 +22,9 @@ export async function activateApprovedRawFixture(db: pg.Client, branch: string, 
   await db.query(`INSERT INTO private.raw_cost_v2_activated_coordinates(branch_id,warehouse_id,raw_material_id,activation_note)
     VALUES($1,$2,$3,'owned rollback-only lifecycle fixture') ON CONFLICT DO NOTHING`, [branch,warehouse,raw]);
 }
+
+/** Only empty/owned fixture branches: exercises newly created fallback raws. */
+export async function activateApprovedBranchFixture(db: pg.Client, branch: string): Promise<void> {
+  await db.query(`INSERT INTO private.raw_cost_v2_activated_coordinates(branch_id,activation_note)
+    VALUES($1,'owned empty branch fixture only') ON CONFLICT DO NOTHING`,[branch]);
+}

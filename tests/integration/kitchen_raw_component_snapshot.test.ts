@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
-import { activateApprovedRawFixture, installApprovedRawWriterFixture } from './approvedRawWriterFixture';
+import { activateApprovedBranchFixture, installApprovedRawWriterFixture } from './approvedRawWriterFixture';
 
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
@@ -72,8 +72,7 @@ describe.skipIf(skip).each(['legacy','approved'] as const)('Phase 3 direct raw k
       [directRawId, groupRawId, branchId, warehouseId, 'B-' + randomUUID(), 'B-' + randomUUID()],
     );
     if (engine==='approved') {
-      await activateApprovedRawFixture(client,branchId,warehouseId,directRawId);
-      await activateApprovedRawFixture(client,branchId,warehouseId,groupRawId);
+      await activateApprovedBranchFixture(client,branchId);
     }
   });
 
@@ -158,5 +157,6 @@ describe.skipIf(skip).each(['legacy','approved'] as const)('Phase 3 direct raw k
     expect(raw.rows[0].name).toBe('Unconfigured Kitchen Product');
     expect(Number(raw.rows[0].q)).toBeCloseTo(-2, 6);
     expect(raw.rows[0].id).toBe(fallback.raw_material_id);
+    if (engine==='approved') expect((await client.query('SELECT id FROM public.raw_fifo_debts WHERE raw_material_id=$1',[fallback.raw_material_id])).rows).toEqual([]);
   });
 });
