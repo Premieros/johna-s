@@ -89,6 +89,9 @@ describe.skipIf(skip)('raw-material stock count regression', () => {
        VALUES ($1,$2,$3,'COUNT-RAW-QA',10,4,'opening')`,
       [rawA, branchA, warehouseA],
     );
+    // Opening quantity must have matching provenance for historical counts.
+    await client.query(`INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type)
+      VALUES($1,$2,$3,10,4,40,'adjustment','opening')`,[rawA,branchA,warehouseA]);
     await client.query(
       `INSERT INTO public.products(id,name,sku,barcode,sale_price,cost_price,branch_id,is_active)
        VALUES ($1,'Count Product','COUNT-P','COUNT-P',10,5,$2,true)`,

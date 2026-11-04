@@ -7,7 +7,9 @@
 CREATE OR REPLACE FUNCTION private.raw_issue_approved_v2(
   p_raw_material_id uuid,p_branch_id uuid,p_warehouse_id uuid,p_qty numeric,
   p_entry_type text,p_reference_type text,p_reference_id uuid,
-  p_reference_number text DEFAULT NULL,p_created_by uuid DEFAULT NULL
+  p_reference_number text DEFAULT NULL,p_created_by uuid DEFAULT NULL,
+  p_valuation_as_of timestamptz DEFAULT NULL,
+  p_effective_at timestamptz DEFAULT NULL
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SET search_path TO 'public','pg_temp'
@@ -24,6 +26,7 @@ DECLARE
   v_branch_qty numeric(18,6);
   v_branch_value numeric(20,6);
   v_ledger_id bigint;
+  v_count_deficit_batch uuid;
   v_now timestamptz:=statement_timestamp();
 BEGIN
   IF p_qty IS NULL OR p_qty<=0 OR p_warehouse_id IS NULL
@@ -37,6 +40,9 @@ BEGIN
     RETURN jsonb_build_object('success',false,'error','RAW_WAREHOUSE_BRANCH_MISMATCH');
   END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended(p_raw_material_id::text||':'||p_branch_id::text,0));
+  IF p_reference_type='stock_count' THEN
+    PERFORM private.validate_count_legacy_quantity(p_raw_material_id,p_branch_id,p_warehouse_id);
+  ELSE
   IF EXISTS(SELECT 1 FROM public.raw_fifo_debts d
     WHERE d.raw_material_id=p_raw_material_id
       AND d.warehouse_id=p_warehouse_id AND d.branch_id=p_branch_id
@@ -47,12 +53,18 @@ BEGIN
       AND b.source_type<>'approved_shortage_aggregate') THEN
     RETURN jsonb_build_object('success',false,'error','LEGACY_FIFO_POSITION_NOT_CUTOVER');
   END IF;
+  END IF;
   SELECT * INTO v_price FROM private.latest_approved_raw_prices(
-    p_branch_id,ARRAY[p_raw_material_id],v_now)
+    p_branch_id,ARRAY[p_raw_material_id],COALESCE(p_valuation_as_of,v_now))
   WHERE raw_material_id=p_raw_material_id;
-  IF v_price.unit_cost IS NULL OR v_price.unit_cost<=0
+  IF p_reference_type='stock_count' AND v_price.unit_cost IS NULL THEN
+    SELECT * INTO v_price FROM private.stock_count_raw_price(
+      p_branch_id,ARRAY[p_raw_material_id],COALESCE(p_valuation_as_of,v_now))
+    WHERE raw_material_id=p_raw_material_id;
+  END IF;
+  IF v_price.unit_cost IS NULL OR v_price.unit_cost<0
     OR v_price.priced_at IS NULL
-    OR v_price.price_source NOT IN ('purchase','pricing','stock_count') THEN
+    OR v_price.price_source NOT IN ('purchase','pricing','stock_count','catalog_zero') THEN
     RETURN jsonb_build_object('success',false,'error','APPROVED_RAW_PRICE_UNAVAILABLE');
   END IF;
   SELECT COALESCE(SUM(quantity),0) INTO v_before
@@ -76,13 +88,14 @@ BEGIN
     INSERT INTO public.inventory_ledger(
       raw_material_id,branch_id,warehouse_id,batch_number,quantity,
       unit_cost,total_cost,before_qty,after_qty,entry_type,reference_type,
-      reference_id,reference_number,created_by,
+      reference_id,reference_number,created_by,created_at,
       approved_cost_basis,approved_price_source,approved_price_at,
       approved_price_ref,approved_cost_recorded_at
     ) VALUES (
       p_raw_material_id,p_branch_id,p_warehouse_id,v_batch.batch_number,-v_take,
       v_price.unit_cost,-v_take*v_price.unit_cost,v_running,v_running-v_take,
       p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,
+      COALESCE(p_effective_at,v_now),
       'approved_last_known',v_price.price_source,v_price.priced_at,
       v_price.reference_number,v_now
     );
@@ -91,6 +104,12 @@ BEGIN
   END LOOP;
 
   IF v_qty>0 THEN
+    IF p_reference_type='stock_count' THEN
+      INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type,source_id)
+      VALUES(p_raw_material_id,p_branch_id,p_warehouse_id,'SC-'||substr(replace(gen_random_uuid()::text,'-',''),1,12),
+        -v_qty,v_price.unit_cost,'stock_count_oversold',p_reference_id)
+      RETURNING id,batch_number INTO v_count_deficit_batch,v_batch_no;
+    ELSE
     INSERT INTO public.raw_material_batches(
       raw_material_id,branch_id,warehouse_id,batch_number,
       quantity,unit_cost,production_date,expiry_date,
@@ -113,19 +132,28 @@ BEGIN
         / abs(public.raw_material_batches.quantity+EXCLUDED.quantity)
     RETURNING batch_number INTO v_batch_no;
 
+    END IF;
+
     INSERT INTO public.inventory_ledger(
       raw_material_id,branch_id,warehouse_id,batch_number,quantity,
       unit_cost,total_cost,before_qty,after_qty,entry_type,reference_type,
-      reference_id,reference_number,created_by,
+      reference_id,reference_number,created_by,created_at,
       approved_cost_basis,approved_price_source,approved_price_at,
       approved_price_ref,approved_cost_recorded_at
     ) VALUES (
       p_raw_material_id,p_branch_id,p_warehouse_id,v_batch_no,-v_qty,
       v_price.unit_cost,-v_qty*v_price.unit_cost,v_running,v_running-v_qty,
       p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,
+      COALESCE(p_effective_at,v_now),
       'approved_last_known',v_price.price_source,v_price.priced_at,
       v_price.reference_number,v_now
     ) RETURNING id INTO v_ledger_id;
+    IF v_count_deficit_batch IS NOT NULL THEN
+      INSERT INTO public.raw_fifo_debts(source_ledger_id,raw_material_id,branch_id,warehouse_id,oversold_batch_id,
+        reference_type,reference_id,reference_number,debt_quantity,source_created_at)
+      VALUES(v_ledger_id,p_raw_material_id,p_branch_id,p_warehouse_id,v_count_deficit_batch,
+        p_reference_type,p_reference_id,p_reference_number,v_qty,COALESCE(p_effective_at,v_now));
+    END IF;
   END IF;
 
   SELECT COALESCE(sum(quantity),0),
@@ -151,13 +179,19 @@ $fn$;
 CREATE OR REPLACE FUNCTION private.raw_receive_approved_v2(
   p_raw_material_id uuid,p_branch_id uuid,p_warehouse_id uuid,p_qty numeric,
   p_receipt_unit_cost numeric,p_entry_type text,p_reference_type text,p_reference_id uuid,
-  p_reference_number text DEFAULT NULL,p_created_by uuid DEFAULT NULL
+  p_reference_number text DEFAULT NULL,p_created_by uuid DEFAULT NULL,
+  p_valuation_as_of timestamptz DEFAULT NULL,
+  p_effective_at timestamptz DEFAULT NULL
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SET search_path TO 'public','pg_temp'
 AS $fn$
 DECLARE
   v_shortage public.raw_material_batches%ROWTYPE;
+  v_approved_price record;
+  v_approved_price_source text;
+  v_approved_priced_at timestamptz;
+  v_approved_price_ref text;
   v_shortage_absorbed numeric(18,6):=0;
   v_shortage_basis numeric(20,6):=0;
   v_variance numeric(20,6):=0;
@@ -169,6 +203,7 @@ DECLARE
   v_now timestamptz:=statement_timestamp();
   v_batch_no text;
   v_receipt_ledger bigint;
+  v_receipt_batch uuid;
   v_journal uuid;
   v_journal_number text;
   v_variance_account uuid;
@@ -176,7 +211,7 @@ DECLARE
   v_variance_reference uuid;
 BEGIN
   IF p_qty IS NULL OR p_qty<=0 OR p_receipt_unit_cost IS NULL
-     OR p_receipt_unit_cost<=0 OR p_warehouse_id IS NULL
+     OR p_receipt_unit_cost<0 OR p_warehouse_id IS NULL
      OR p_raw_material_id IS NULL OR p_branch_id IS NULL THEN
     RETURN jsonb_build_object('success',false,'error','APPROVED_RECEIPT_INVALID_INPUT');
   END IF;
@@ -187,6 +222,9 @@ BEGIN
     RETURN jsonb_build_object('success',false,'error','RAW_WAREHOUSE_BRANCH_MISMATCH');
   END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended(p_raw_material_id::text||':'||p_branch_id::text,0));
+  IF p_reference_type='stock_count' THEN
+    PERFORM private.validate_count_legacy_quantity(p_raw_material_id,p_branch_id,p_warehouse_id);
+  ELSE
   IF EXISTS(SELECT 1 FROM public.raw_fifo_debts d WHERE d.raw_material_id=p_raw_material_id
     AND d.warehouse_id=p_warehouse_id AND d.branch_id=p_branch_id
     AND d.settled_quantity<d.debt_quantity)
@@ -195,6 +233,22 @@ BEGIN
         AND b.branch_id=p_branch_id AND b.quantity<0
         AND b.source_type<>'approved_shortage_aggregate') THEN
     RETURN jsonb_build_object('success',false,'error','LEGACY_FIFO_POSITION_NOT_CUTOVER');
+  END IF;
+  END IF;
+  -- Stock-count receipts must use the very same historically approved price
+  -- as the posting RPC and persist the source on the physical ledger.
+  IF p_reference_type='stock_count' THEN
+    SELECT * INTO v_approved_price FROM private.stock_count_raw_price(
+      p_branch_id,ARRAY[p_raw_material_id],COALESCE(p_valuation_as_of,v_now))
+    WHERE raw_material_id=p_raw_material_id;
+    IF v_approved_price.unit_cost IS NULL OR v_approved_price.unit_cost<0
+       OR v_approved_price.price_source NOT IN ('purchase','pricing','stock_count','catalog_zero')
+       OR v_approved_price.unit_cost IS DISTINCT FROM p_receipt_unit_cost THEN
+      RETURN jsonb_build_object('success',false,'error','APPROVED_RECEIPT_PRICE_MISMATCH');
+    END IF;
+    v_approved_price_source:=v_approved_price.price_source;
+    v_approved_priced_at:=v_approved_price.priced_at;
+    v_approved_price_ref:=v_approved_price.reference_number;
   END IF;
   SELECT COALESCE(sum(quantity),0) INTO v_before FROM public.raw_material_batches
     WHERE raw_material_id=p_raw_material_id AND branch_id=p_branch_id
@@ -227,17 +281,27 @@ BEGIN
   ) VALUES (
     p_raw_material_id,p_branch_id,p_warehouse_id,v_batch_no,
     v_available_after,p_receipt_unit_cost,COALESCE(p_reference_type,p_entry_type),p_reference_id
-  );
+  ) RETURNING id INTO v_receipt_batch;
   INSERT INTO public.inventory_ledger(
     raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,
     total_cost,before_qty,after_qty,entry_type,reference_type,reference_id,
-    reference_number,created_by
+    reference_number,created_by,created_at,
+    approved_cost_basis,approved_price_source,approved_price_at,
+    approved_price_ref,approved_cost_recorded_at
   ) VALUES (
     p_raw_material_id,p_branch_id,p_warehouse_id,v_batch_no,p_qty,
     p_receipt_unit_cost,p_qty*p_receipt_unit_cost,v_before,v_before+p_qty,
-    p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by
+    p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,
+      COALESCE(p_effective_at,v_now),
+    CASE WHEN p_reference_type='stock_count' THEN 'approved_last_known' ELSE NULL END,
+    v_approved_price_source,v_approved_priced_at,
+    v_approved_price_ref,
+    CASE WHEN p_reference_type='stock_count' THEN v_now ELSE NULL END
   ) RETURNING id INTO v_receipt_ledger;
 
+  IF p_reference_type='stock_count' THEN
+    PERFORM private.offset_stock_count_legacy_quantity(v_receipt_ledger,v_receipt_batch);
+  END IF;
   v_posted_variance:=round(v_variance,2);
   IF abs(v_posted_variance)>=0.01 THEN
     SELECT account_id INTO v_variance_account FROM public.account_mappings
@@ -295,8 +359,8 @@ $fn$;
 
 -- Deliberately NO SECURITY DEFINER, no public RPC, no API execute grant.
 REVOKE ALL ON FUNCTION private.raw_issue_approved_v2(
- uuid,uuid,uuid,numeric,text,text,uuid,text,uuid
+ uuid,uuid,uuid,numeric,text,text,uuid,text,uuid,timestamptz,timestamptz
 ) FROM PUBLIC,anon,authenticated,service_role;
 REVOKE ALL ON FUNCTION private.raw_receive_approved_v2(
- uuid,uuid,uuid,numeric,numeric,text,text,uuid,text,uuid
+ uuid,uuid,uuid,numeric,numeric,text,text,uuid,text,uuid,timestamptz,timestamptz
 ) FROM PUBLIC,anon,authenticated,service_role;
