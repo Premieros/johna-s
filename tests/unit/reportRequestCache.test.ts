@@ -176,3 +176,29 @@ describe('costing read sharing and nonfinancial telemetry',()=>{
   await cache.fetch(url,options());expect(base).toHaveBeenCalledTimes(4);
  });
 });
+
+it('keeps valid report reuse through display RPC reads but invalidates it on operational writes', async () => {
+  const base = vi.fn(async () => response());
+  const cache = createReportRequestCache(createPostgrestDedupingFetch(base));
+  await cache.fetch(url, options());
+  for (const name of ['get_dashboard_sales_snapshot', 'get_open_order_print_state', 'get_pos_order_operator_labels']) {
+    const display = `https://example.test/rest/v1/rpc/${name}`;
+    await Promise.all([cache.fetch(display, options()), cache.fetch(display, options())]);
+    await cache.fetch(url, options());
+  }
+  expect(base).toHaveBeenCalledTimes(4);
+  await cache.fetch('https://example.test/rest/v1/rpc/send_to_kitchen', options());
+  await cache.fetch(url, options());
+  expect(base).toHaveBeenCalledTimes(6);
+});
+
+it.each(['get_dashboard_sales_snapshot', 'send_to_kitchen'])('preserves a native Request upload body through the unqueued %s path', async name => {
+  const native = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input, init);
+    return Response.json({ params: await request.json() });
+  });
+  const cache = createReportRequestCache(createPostgrestDedupingFetch(native));
+  const request = new Request(`https://example.test/rest/v1/rpc/${name}`, options());
+  expect(await (await cache.fetch(request)).json()).toEqual({ params: JSON.parse(String(options().body)) });
+  expect(native).toHaveBeenCalledOnce();
+});

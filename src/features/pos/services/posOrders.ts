@@ -86,6 +86,10 @@ export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeDa
       .in('status', ['open', 'held'])
       .order('created_at', { ascending: false }),
   ]);
+  // Preserve the last good live snapshot on a failed refresh. A timeout is not
+  // an empty floor plan, and must not trigger additional operator-label reads.
+  if (tRes.error) throw tRes.error;
+  if (oRes.error) throw oRes.error;
   const tables = (tRes.data as DiningTable[]) || [];
   const snapshotRows = (oRes.data as ActiveOrderSnapshotRow[] | null) || [];
   // Do not broaden public.users RLS just to show occupied-table ownership.

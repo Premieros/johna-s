@@ -260,7 +260,7 @@ export function DashboardDataPage() {
         previousTo: window.previousEnd.toISOString(),
         granularity: effectiveRange === 'today' ? 'hour' : effectiveRange === 'year' ? 'month' : 'day',
         timezone: 'Africa/Cairo',
-      }).catch(() => null);
+      });
 
       if (requestId !== loadId.current) return;
       if (boundedSnapshot) {
