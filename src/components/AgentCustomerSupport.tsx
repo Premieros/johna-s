@@ -8,7 +8,8 @@ import { useAuth } from '@/context/AuthContext';
  * https://premieros.github.io origin. No Supabase credentials are shared
  * with AGENT. Each project uses its own key and server-side knowledge base.
  *
- * Deliberately disabled until a separate AGENT project and site key exist.
+ * The dedicated Johna-S project and public key are configured. The deployment
+ * remains gated by GitHub's verified-main workflow.
  */
 const SUPPORT_ORIGIN = 'https://premieros-agent-support-public.vercel.app';
 // Public embed identifier for Johna-S only, not an API secret.\n// An Actions variable may override it without requiring code changes.\nconst PUBLIC_KEY = (import.meta.env.VITE_AGENT_SUPPORT_WIDGET_KEY || '8e299da0ef520017d2c74c4e688109dd0dda3b48cee20f2d').trim();
@@ -20,7 +21,7 @@ export function AgentCustomerSupport() {
 
   useEffect(() => {
     // No second login. The support widget is shown only after the existing
-    // johna-s login has finished, and is not enabled without its own key.
+    // johna-s login has finished and only with Johna-S's own public key.
     if (loading || !user?.id || !KEY_FORMAT.test(PUBLIC_KEY)) return;
 
     const userKey = 'johna-s:agent-support-user:' + PUBLIC_KEY;
