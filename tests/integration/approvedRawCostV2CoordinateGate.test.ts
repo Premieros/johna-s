@@ -50,6 +50,16 @@ describe.skipIf(!disposable)('explicit v2 warehouse cost cutover is default OFF'
     )).rows[0].n;
     expect(rows).toBe(1);
   });
+  it('returns a real shortage without writing stock when a non-negative issue is rejected',async()=>{
+    await db.query('SAVEPOINT rejected_issue_fixture');
+    try {
+      await db.query("INSERT INTO private.raw_cost_v2_activated_coordinates(branch_id,warehouse_id,raw_material_id,activation_note) VALUES($1,$2,$3,'failure fixture only')",[branch,warehouse,raw]);
+      const result=(await db.query("SELECT public._raw_remove_fifo($1,$2,$3,1,'kitchen_send','kitchen_send',$4,'QA-REJECT',NULL,false) r",[raw,branch,warehouse,randomUUID()])).rows[0].r;
+      expect(result).toMatchObject({success:false,error:'INSUFFICIENT_STOCK',shortage:1,removed:0});
+      expect((await db.query('SELECT id FROM public.inventory_ledger WHERE raw_material_id=$1',[raw])).rows).toEqual([]);
+      expect((await db.query('SELECT id FROM public.raw_material_batches WHERE raw_material_id=$1',[raw])).rows).toEqual([]);
+    } finally { await db.query('ROLLBACK TO rejected_issue_fixture');await db.query('RELEASE rejected_issue_fixture'); }
+  });
   it('routes only the explicitly activated coordinate through frozen approved price',async()=>{
     await db.query(
       "INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,reference_number,priced_at) VALUES($1,$2,1200,'pricing',$3,clock_timestamp()-interval '1 second')",

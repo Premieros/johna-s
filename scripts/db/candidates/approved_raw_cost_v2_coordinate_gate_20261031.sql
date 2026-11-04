@@ -114,7 +114,8 @@ BEGIN
        (SELECT COALESCE(sum(quantity),0) FROM public.raw_material_batches
         WHERE raw_material_id=p_raw_material_id AND branch_id=p_branch_id
           AND warehouse_id=p_warehouse_id)<p_qty THEN
-      RETURN jsonb_build_object('success',false,'error','INSUFFICIENT_STOCK');
+      RETURN jsonb_build_object('success',false,'error','INSUFFICIENT_STOCK',
+        'shortage',p_qty,'removed',0,'total_cost',0,'avg_cost',0);
     END IF;
     RETURN private.raw_issue_approved_v2(
       p_raw_material_id,p_branch_id,p_warehouse_id,p_qty,

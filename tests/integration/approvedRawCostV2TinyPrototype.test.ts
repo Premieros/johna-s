@@ -63,11 +63,18 @@ describe.skipIf(!disposable)('approved-cost v2 minimal-storage internal prototyp
       [raw,branch,warehouse,n,cost,newRef()]);
     return r[0].result;
   }
-  it('never guesses a cost when no approved price exists',async()=>{
-    const r=await issue(2);
-    expect(r).toMatchObject({success:false,error:'APPROVED_RAW_PRICE_UNAVAILABLE'});
-    expect(await whQty()).toBe(0);
-    expect(await legacyDebts()).toBe(0);
+  it('records the approved default zero without creating FIFO debts',async()=>{
+    await db.query('SAVEPOINT zero_issue');
+    try {
+      const r=await issue(2);
+      expect(r).toMatchObject({success:true,avg_cost:0,oversold:2,approved_price_source:'catalog_zero'});
+      expect(await whQty()).toBe(-2);
+      expect(await legacyDebts()).toBe(0);
+      const ledger=await q<{unit_cost:string,total_cost:string}>(
+        'SELECT unit_cost,total_cost FROM public.inventory_ledger WHERE raw_material_id=$1',[raw]);
+      expect(ledger).toHaveLength(1);
+      expect(Number(ledger[0].unit_cost)).toBe(0);expect(Number(ledger[0].total_cost)).toBe(0);
+    } finally { await db.query('ROLLBACK TO zero_issue');await db.query('RELEASE zero_issue'); }
   });
   it('freezes as-of approved price, aggregates shortages without FIFO debts, and journals only net receipt differences',async()=>{
     await db.query(

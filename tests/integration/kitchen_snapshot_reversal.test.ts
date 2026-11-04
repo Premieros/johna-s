@@ -2,11 +2,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
+import { activateApprovedRawFixture, installApprovedRawWriterFixture } from './approvedRawWriterFixture';
 
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
 
-describe.skipIf(skip)('Phase 4 snapshot void/refund reversal', () => {
+describe.skipIf(skip).each(['legacy','approved'] as const)('Phase 4 snapshot void/refund reversal (%s)', (engine) => {
   let client: pg.Client;
   const branchId = randomUUID();
   const warehouseId = randomUUID();
@@ -38,6 +39,7 @@ describe.skipIf(skip)('Phase 4 snapshot void/refund reversal', () => {
         [rawId, branchId, warehouseId, `P4-B-${randomUUID()}`, qty],
       );
     }
+    if (engine==='approved') await activateApprovedRawFixture(client,branchId,warehouseId,rawId);
     return rawId;
   }
 
@@ -66,6 +68,7 @@ describe.skipIf(skip)('Phase 4 snapshot void/refund reversal', () => {
     client = openDb(dbUrl!);
     await client.connect();
     await client.query('BEGIN');
+    if (engine==='approved') await installApprovedRawWriterFixture(client,dbUrl!);
     await client.query(
       `INSERT INTO public.branches(id,name) VALUES($1,'Phase 4 Branch')`,
       [branchId],
@@ -75,6 +78,8 @@ describe.skipIf(skip)('Phase 4 snapshot void/refund reversal', () => {
        VALUES($1,'Phase 4 WH',$2,true,true)`,
       [warehouseId, branchId],
     );
+    await client.query('SELECT public.ensure_chart_of_accounts($1)',[branchId]);
+    await client.query('SELECT public.seed_account_mappings($1)',[branchId]);
   });
 
   afterAll(async () => {
@@ -126,6 +131,7 @@ describe.skipIf(skip)('Phase 4 snapshot void/refund reversal', () => {
     );
 
     const beforeChanged = await rawQty(currentRecipeRaw);
+    await client.query("INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,reference_number,priced_at) VALUES($1,$2,50,'SNAPSHOT-NEW-PRICE',clock_timestamp())",[originalRaw,branchId]);
     const restored = await client.query<{ r: { success: boolean; restored_sent_quantity?: number } }>(
       `SELECT public._restore_kitchen_inventory_for_void($1,$2,1) AS r`,
       [orderId, orderItemId],
@@ -135,6 +141,12 @@ describe.skipIf(skip)('Phase 4 snapshot void/refund reversal', () => {
     expect(Number(restored.rows[0].r.restored_sent_quantity)).toBeCloseTo(1, 6);
     expect(await rawQty(originalRaw)).toBeCloseTo(10, 6);
     expect(await rawQty(currentRecipeRaw)).toBeCloseTo(beforeChanged, 6);
+    const receipt=(await client.query("SELECT unit_cost,total_cost FROM public.inventory_ledger WHERE reference_id=$1 AND raw_material_id=$2 AND entry_type='kitchen_void'",[eventId,originalRaw])).rows;
+    expect(receipt).toHaveLength(1);
+    expect(Number(receipt[0].unit_cost)).toBe(5);expect(Number(receipt[0].total_cost)).toBe(10);
+    const retry=(await client.query('SELECT public._restore_kitchen_inventory_for_void($1,$2,1) r',[orderId,orderItemId])).rows[0].r;
+    expect(Number(retry.restored_sent_quantity)).toBe(0);
+    expect(await rawQty(originalRaw)).toBe(10);
 
     const event = await client.query<{ voided_quantity: string }>(
       `SELECT voided_quantity::text
@@ -204,6 +216,7 @@ describe.skipIf(skip)('Phase 4 snapshot void/refund reversal', () => {
     );
 
     const beforeChanged = await rawQty(currentRecipeRaw);
+    await client.query("INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,reference_number,priced_at) VALUES($1,$2,50,'REFUND-NEW-PRICE',clock_timestamp())",[originalRaw,branchId]);
     const restored = await client.query<{
       r: { success: boolean; snapshot_restored?: boolean; auto_production_reversed?: number };
     }>(

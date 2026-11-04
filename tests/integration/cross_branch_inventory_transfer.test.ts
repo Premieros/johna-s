@@ -3,13 +3,14 @@ import { randomUUID } from 'node:crypto';
 import {readFileSync,readdirSync} from 'node:fs';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
+import { activateApprovedRawFixture, installApprovedRawWriterFixture } from './approvedRawWriterFixture';
 
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
 
 type RpcResult = { success?: boolean; error?: string; transfer_id?: string; status?: string };
 
-describe.skipIf(skip)('cross-branch inventory transfer', () => {
+describe.skipIf(skip).each(['legacy','approved'] as const)('cross-branch inventory transfer (%s)', (engine) => {
   let client: pg.Client;
   const branchA = randomUUID();
   const branchB = randomUUID();
@@ -71,6 +72,7 @@ describe.skipIf(skip)('cross-branch inventory transfer', () => {
     client = openDb(dbUrl!);
     await client.connect();
     await client.query('BEGIN');
+    if (engine==='approved') await installApprovedRawWriterFixture(client,dbUrl!);
     await client.query(
       `INSERT INTO public.branches(id,name) VALUES ($1,'Transfer A'),($2,'Transfer B'),($3,'Transfer C')`,
       [branchA, branchB, branchC],
@@ -132,6 +134,11 @@ describe.skipIf(skip)('cross-branch inventory transfer', () => {
        VALUES ($1,$2,$3,'RAW-TRANSFER-QA',20,4,'opening')`,
       [rawA, branchA, whA1],
     );
+    if (engine==='approved') {
+      await activateApprovedRawFixture(client,branchA,whA1,rawA);
+      await activateApprovedRawFixture(client,branchA,whA2,rawA);
+      await activateApprovedRawFixture(client,branchB,whB,rawB);
+    }
   });
 
   beforeEach(async () => {

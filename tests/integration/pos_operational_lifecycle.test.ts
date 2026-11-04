@@ -4,6 +4,7 @@ import { attachRawComponentToUnit, rawQtyForUnit } from './componentTestFixtures
 import { randomUUID } from 'node:crypto';
 import { getDbUrl, openDb } from './db';
 import { canImpersonate, runAsPersist, seedRlsFixture, type RlsIds } from './rls';
+import { activateApprovedRawFixture, installApprovedRawWriterFixture } from './approvedRawWriterFixture';
 
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
@@ -19,7 +20,7 @@ type RpcResult = {
   items_sent_count?: number;
 };
 
-describe.skipIf(skip)('POS operational lifecycle release gate', () => {
+describe.skipIf(skip).each(['legacy','approved'] as const)('POS operational lifecycle release gate (%s)', (engine) => {
   let client: pg.Client;
   let ids: RlsIds;
   let impersonationAvailable = false;
@@ -43,6 +44,7 @@ describe.skipIf(skip)('POS operational lifecycle release gate', () => {
     client = openDb(dbUrl!);
     await client.connect();
     await client.query('BEGIN');
+    if (engine==='approved') await installApprovedRawWriterFixture(client,dbUrl!);
     ids = await seedRlsFixture(client);
     impersonationAvailable = await canImpersonate(client);
 
@@ -106,7 +108,8 @@ describe.skipIf(skip)('POS operational lifecycle release gate', () => {
        VALUES ($1, $2, $3, 10, 10)`,
       [unitId, ids.branchA, ids.whA],
     );
-    await attachRawComponentToUnit(client, unitId, ids.branchA, ids.whA, 10, 10);
+    const raw=await attachRawComponentToUnit(client, unitId, ids.branchA, ids.whA, 10, 10);
+    if (engine==='approved') await activateApprovedRawFixture(client,ids.branchA,ids.whA,raw);
     await client.query(`UPDATE public.settings SET tax_enabled = false, tax_rate = 0`);
   });
 

@@ -2,11 +2,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
+import { activateApprovedRawFixture, installApprovedRawWriterFixture } from './approvedRawWriterFixture';
 
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
 
-describe.skipIf(skip)('Phase 3 direct raw kitchen deduction helper', () => {
+describe.skipIf(skip).each(['legacy','approved'] as const)('Phase 3 direct raw kitchen deduction helper (%s)', (engine) => {
   let client: pg.Client;
   const branchId = randomUUID();
   const warehouseId = randomUUID();
@@ -31,6 +32,7 @@ describe.skipIf(skip)('Phase 3 direct raw kitchen deduction helper', () => {
     client = openDb(dbUrl!);
     await client.connect();
     await client.query('BEGIN');
+    if (engine==='approved') await installApprovedRawWriterFixture(client,dbUrl!);
 
     await client.query('INSERT INTO public.branches(id,name) VALUES($1,$2)', [branchId, 'Phase 3 Branch']);
     await client.query(
@@ -69,6 +71,10 @@ describe.skipIf(skip)('Phase 3 direct raw kitchen deduction helper', () => {
       'INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost) VALUES($1,$3,$4,$5,1,5),($2,$3,$4,$6,10,7)',
       [directRawId, groupRawId, branchId, warehouseId, 'B-' + randomUUID(), 'B-' + randomUUID()],
     );
+    if (engine==='approved') {
+      await activateApprovedRawFixture(client,branchId,warehouseId,directRawId);
+      await activateApprovedRawFixture(client,branchId,warehouseId,groupRawId);
+    }
   });
 
   afterAll(async () => {
@@ -103,6 +109,12 @@ describe.skipIf(skip)('Phase 3 direct raw kitchen deduction helper', () => {
       [unitId],
     );
     expect(afterProduction.rows[0].c).toBe(beforeProduction.rows[0].c);
+    expect((await client.query('SELECT id FROM public.inventory_unit_batches WHERE unit_id=$1',[unitId])).rows).toEqual([]);
+    if (engine==='approved') {
+      expect((await client.query('SELECT id FROM public.raw_fifo_debts WHERE raw_material_id=ANY($1::uuid[])',[[directRawId,groupRawId]])).rows).toEqual([]);
+      const cost=(await client.query('SELECT sum(-total_cost) cost FROM public.inventory_ledger WHERE reference_id=$1',[eventId])).rows[0].cost;
+      expect(Number(cost)).toBe(4*5+6*7);
+    }
 
     const ledger = await client.query<{ c: number }>(
       "SELECT count(*)::int c FROM public.inventory_ledger WHERE reference_id=$1 AND entry_type='kitchen_send' AND reference_type='kitchen_send'",

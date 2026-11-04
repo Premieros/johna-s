@@ -71,14 +71,14 @@ BEGIN
       (p_frozen_price->>'priced_at')::timestamptz priced_at,
       p_frozen_price->>'reference_number' reference_number INTO v_price;
   ELSE
-  SELECT * INTO v_price FROM private.latest_approved_raw_prices(
-    p_branch_id,ARRAY[p_raw_material_id],COALESCE(p_valuation_as_of,v_now))
+  -- Same canonical projection as counts, including a real numeric zero.
+  -- NULL cutoff is a current lookup, retaining known undated source prices.
+  -- A known undated current source is observed now, never backdated into history.
+  SELECT p.unit_cost,p.price_source,COALESCE(p.priced_at,v_now) priced_at,
+    p.reference_number INTO v_price
+  FROM private.stock_count_raw_price(
+    p_branch_id,ARRAY[p_raw_material_id],p_valuation_as_of) p
   WHERE raw_material_id=p_raw_material_id;
-  IF p_reference_type='stock_count' AND v_price.unit_cost IS NULL THEN
-    SELECT * INTO v_price FROM private.stock_count_raw_price(
-      p_branch_id,ARRAY[p_raw_material_id],COALESCE(p_valuation_as_of,v_now))
-    WHERE raw_material_id=p_raw_material_id;
-  END IF;
   END IF;
   IF v_price.unit_cost IS NULL OR v_price.unit_cost<0
     OR v_price.priced_at IS NULL
@@ -203,7 +203,9 @@ BEGIN
   ON CONFLICT(raw_material_id,branch_id) DO UPDATE SET
     quantity=EXCLUDED.quantity,avg_cost=EXCLUDED.avg_cost,updated_at=now();
   RETURN jsonb_build_object(
-    'success',true,'removed',p_qty,'oversold',v_qty,
+    'success',true,'shortage',0,
+    'removed',CASE WHEN p_reference_type='stock_count' THEN p_qty ELSE p_qty-v_qty END,
+    'oversold',v_qty,
     'total_cost',p_qty*v_price.unit_cost,'avg_cost',v_price.unit_cost,
     'approved_price_source',v_price.price_source,'approved_price_at',v_price.priced_at,
     'approved_price_ref',v_price.reference_number,
