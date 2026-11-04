@@ -112,7 +112,8 @@ BEGIN
     SELECT 1 FROM public.raw_material_batches b
     LEFT JOIN LATERAL (SELECT sum(d.debt_quantity-d.settled_quantity) qty
       FROM public.raw_fifo_debts d WHERE d.oversold_batch_id=b.id
-      AND d.raw_material_id=p_raw AND d.branch_id=p_branch AND d.warehouse_id=p_warehouse) debts ON true
+      AND d.raw_material_id=p_raw AND d.branch_id=p_branch AND d.warehouse_id=p_warehouse
+      AND d.settled_quantity<d.debt_quantity) debts ON true
     WHERE b.raw_material_id=p_raw AND b.branch_id=p_branch AND b.warehouse_id=p_warehouse
       AND b.quantity<0 AND -b.quantity IS DISTINCT FROM COALESCE(debts.qty,0)
   ) OR EXISTS (
