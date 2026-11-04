@@ -99,6 +99,14 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
     const applyEnd = historicalRollback.indexOf('$function$;', applyStart);
     if (applyStart < 0 || applyEnd < 0) throw new Error('HISTORICAL_COUNT_APPLY_FIXTURE_MISSING');
     await observer.query(historicalRollback.slice(applyStart, applyEnd + '$function$;'.length));
+    // This October-13 rehearsal also pins the receipt writer. The approved-price
+    // count release intentionally freezes new count values on later receipts.
+    // Restore the historical writer only inside this owned qa_kitchen_* database;
+    // retain every canonical drift assertion in forward() and rollback().
+    const receiptStart = historicalRollback.lastIndexOf('CREATE OR REPLACE FUNCTION public._raw_fifo_settle_receipt(');
+    const receiptEnd = historicalRollback.indexOf('$function$;', receiptStart);
+    if (receiptStart < 0 || receiptEnd < 0) throw new Error('HISTORICAL_RECEIPT_FIXTURE_MISSING');
+    await observer.query(historicalRollback.slice(receiptStart, receiptEnd + '$function$;'.length));
     await observer.query(`UPDATE public.roles SET permissions=permissions || '["pos.send_kitchen"]'::jsonb WHERE role='cashier'`);
     originalDefinitions=(await observer.query(catalogSQL)).rows;
     await observer.query("SET app.kitchen_rollout_ack='johnas-kitchen-20261013-review-required'");
