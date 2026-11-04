@@ -31,6 +31,8 @@ DECLARE
   v_branch_value numeric(20,6);
   v_ledger_id bigint;
   v_count_deficit_batch uuid;
+  -- Keep legacy document-date correction matching on the transaction clock.
+  -- Price observation has its own wall-clock provenance below.
   v_now timestamptz:=statement_timestamp();
 BEGIN
   IF p_qty IS NULL OR p_qty<=0 OR p_warehouse_id IS NULL
@@ -43,6 +45,14 @@ BEGIN
     WHERE m.id=p_raw_material_id AND m.branch_id=p_branch_id AND m.is_active) THEN
     RETURN jsonb_build_object('success',false,'error','RAW_WAREHOUSE_BRANCH_MISMATCH');
   END IF;
+  -- Existing batch, stock-count and ledger quantity columns use four decimals.
+  -- Normalize once, before both physical and monetary writes, and return the
+  -- actual quantity so kitchen snapshots do not promise a different amount.
+  p_qty:=round(p_qty,4);
+  IF p_qty=0 THEN
+    RETURN jsonb_build_object('success',true,'quantity',0,'shortage',0,'removed',0,
+      'oversold',0,'total_cost',0,'avg_cost',0);
+  END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended(p_raw_material_id::text||':'||p_branch_id::text,0));
   IF p_reference_type='stock_count' THEN
     IF coalesce((p_frozen_price->>'quantity_verified')::boolean,false) IS NOT TRUE THEN
@@ -52,7 +62,8 @@ BEGIN
   IF EXISTS(SELECT 1 FROM public.raw_fifo_debts d
     WHERE d.raw_material_id=p_raw_material_id
       AND d.warehouse_id=p_warehouse_id AND d.branch_id=p_branch_id
-      AND d.settled_quantity<d.debt_quantity)
+      AND d.settled_quantity<d.debt_quantity
+      AND d.approved_converted_at IS NULL)
     OR EXISTS(SELECT 1 FROM public.raw_material_batches b
     WHERE b.raw_material_id=p_raw_material_id AND b.warehouse_id=p_warehouse_id
       AND b.branch_id=p_branch_id AND b.quantity<0
@@ -71,14 +82,14 @@ BEGIN
       (p_frozen_price->>'priced_at')::timestamptz priced_at,
       p_frozen_price->>'reference_number' reference_number INTO v_price;
   ELSE
-  SELECT * INTO v_price FROM private.latest_approved_raw_prices(
-    p_branch_id,ARRAY[p_raw_material_id],COALESCE(p_valuation_as_of,v_now))
+  -- Same canonical projection as counts, including a real numeric zero.
+  -- NULL cutoff is a current lookup, retaining known undated source prices.
+  -- A known undated current source is observed now, never backdated into history.
+  SELECT p.unit_cost,p.price_source,COALESCE(p.priced_at,v_now) priced_at,
+    p.reference_number INTO v_price
+  FROM private.stock_count_raw_price(
+    p_branch_id,ARRAY[p_raw_material_id],p_valuation_as_of) p
   WHERE raw_material_id=p_raw_material_id;
-  IF p_reference_type='stock_count' AND v_price.unit_cost IS NULL THEN
-    SELECT * INTO v_price FROM private.stock_count_raw_price(
-      p_branch_id,ARRAY[p_raw_material_id],COALESCE(p_valuation_as_of,v_now))
-    WHERE raw_material_id=p_raw_material_id;
-  END IF;
   END IF;
   IF v_price.unit_cost IS NULL OR v_price.unit_cost<0
     OR v_price.priced_at IS NULL
@@ -112,9 +123,14 @@ BEGIN
       approved_price_ref,approved_cost_recorded_at
     ) VALUES (
       p_raw_material_id,p_branch_id,p_warehouse_id,v_batch.batch_number,-v_take,
-      v_price.unit_cost,-v_take*v_price.unit_cost,v_running,v_running-v_take,
+      -- Allocate currency rounding cumulatively across the physical lots.
+      -- Summed ledger money must equal one rounded raw movement amount.
+      v_price.unit_cost,
+      round((v_before-v_running)*v_price.unit_cost,2)
+        -round((v_before-v_running+v_take)*v_price.unit_cost,2),
+      v_running,v_running-v_take,
       p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,
-      COALESCE(p_effective_at,v_now),
+      COALESCE(p_effective_at,transaction_timestamp()),
       'approved_last_known',v_price.price_source,v_price.priced_at,
       v_price.reference_number,v_now
     );
@@ -124,7 +140,7 @@ BEGIN
   END LOOP;
 
   IF v_qty>0 THEN
-    IF p_reference_type='stock_count' THEN
+    IF p_reference_type='stock_count' AND NOT private.raw_last_price_enabled(p_branch_id,p_warehouse_id,p_raw_material_id) THEN
       INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type,source_id)
       VALUES(p_raw_material_id,p_branch_id,p_warehouse_id,'SC-'||substr(replace(gen_random_uuid()::text,'-',''),1,12),
         -v_qty,v_price.unit_cost,'stock_count_oversold',p_reference_id)
@@ -163,9 +179,12 @@ BEGIN
       approved_price_ref,approved_cost_recorded_at
     ) VALUES (
       p_raw_material_id,p_branch_id,p_warehouse_id,v_batch_no,-v_qty,
-      v_price.unit_cost,-v_qty*v_price.unit_cost,v_running,v_running-v_qty,
+      v_price.unit_cost,
+      round((v_before-v_running)*v_price.unit_cost,2)
+        -round(p_qty*v_price.unit_cost,2),
+      v_running,v_running-v_qty,
       p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,
-      COALESCE(p_effective_at,v_now),
+      COALESCE(p_effective_at,transaction_timestamp()),
       'approved_last_known',v_price.price_source,v_price.priced_at,
       v_price.reference_number,v_now
     ) RETURNING id INTO v_ledger_id;
@@ -181,14 +200,14 @@ BEGIN
       approved_cost_basis,approved_price_source,approved_price_at,approved_price_ref,approved_cost_recorded_at
     ) VALUES (
       p_raw_material_id,p_branch_id,p_warehouse_id,NULL,-p_qty,v_price.unit_cost,-round(p_qty*v_price.unit_cost,2),
-      v_before,v_before-p_qty,p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,COALESCE(p_effective_at,v_now),
+      v_before,v_before-p_qty,p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,COALESCE(p_effective_at,transaction_timestamp()),
       'approved_last_known',v_price.price_source,v_price.priced_at,v_price.reference_number,v_now
     ) RETURNING id INTO v_ledger_id;
     IF v_count_deficit_batch IS NOT NULL THEN
       INSERT INTO public.raw_fifo_debts(source_ledger_id,raw_material_id,branch_id,warehouse_id,oversold_batch_id,
         reference_type,reference_id,reference_number,debt_quantity,source_created_at)
       VALUES(v_ledger_id,p_raw_material_id,p_branch_id,p_warehouse_id,v_count_deficit_batch,
-        p_reference_type,p_reference_id,p_reference_number,v_qty,COALESCE(p_effective_at,v_now));
+        p_reference_type,p_reference_id,p_reference_number,v_qty,COALESCE(p_effective_at,transaction_timestamp()));
     END IF;
   END IF;
 
@@ -203,8 +222,10 @@ BEGIN
   ON CONFLICT(raw_material_id,branch_id) DO UPDATE SET
     quantity=EXCLUDED.quantity,avg_cost=EXCLUDED.avg_cost,updated_at=now();
   RETURN jsonb_build_object(
-    'success',true,'removed',p_qty,'oversold',v_qty,
-    'total_cost',p_qty*v_price.unit_cost,'avg_cost',v_price.unit_cost,
+    'success',true,'quantity',p_qty,'shortage',0,
+    'removed',CASE WHEN p_reference_type='stock_count' THEN p_qty ELSE p_qty-v_qty END,
+    'oversold',v_qty,
+    'total_cost',round(p_qty*v_price.unit_cost,2),'avg_cost',v_price.unit_cost,
     'approved_price_source',v_price.price_source,'approved_price_at',v_price.priced_at,
     'approved_price_ref',v_price.reference_number,
     'warehouse_id',p_warehouse_id,'shortage_ledger_id',v_ledger_id
@@ -237,6 +258,8 @@ DECLARE
   v_before numeric(18,6);
   v_branch_qty numeric(18,6);
   v_branch_value numeric(20,6);
+  -- Keep legacy document-date correction matching on the transaction clock.
+  -- Price observation has its own wall-clock provenance below.
   v_now timestamptz:=statement_timestamp();
   v_batch_no text;
   v_receipt_ledger bigint;
@@ -258,6 +281,11 @@ BEGIN
       WHERE m.id=p_raw_material_id AND m.branch_id=p_branch_id AND m.is_active) THEN
     RETURN jsonb_build_object('success',false,'error','RAW_WAREHOUSE_BRANCH_MISMATCH');
   END IF;
+  p_qty:=round(p_qty,4);
+  IF p_qty=0 THEN
+    RETURN jsonb_build_object('success',true,'quantity',0,'warehouse_id',p_warehouse_id,
+      'approved_shortage_absorbed',0,'approved_price_variance_posted',0);
+  END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended(p_raw_material_id::text||':'||p_branch_id::text,0));
   IF p_reference_type='stock_count' THEN
     IF coalesce((p_frozen_price->>'quantity_verified')::boolean,false) IS NOT TRUE THEN
@@ -266,7 +294,7 @@ BEGIN
   ELSE
   IF EXISTS(SELECT 1 FROM public.raw_fifo_debts d WHERE d.raw_material_id=p_raw_material_id
     AND d.warehouse_id=p_warehouse_id AND d.branch_id=p_branch_id
-    AND d.settled_quantity<d.debt_quantity)
+    AND d.settled_quantity<d.debt_quantity AND d.approved_converted_at IS NULL)
     OR EXISTS(SELECT 1 FROM public.raw_material_batches b
       WHERE b.raw_material_id=p_raw_material_id AND b.warehouse_id=p_warehouse_id
         AND b.branch_id=p_branch_id AND b.quantity<0
@@ -343,7 +371,7 @@ BEGIN
     p_raw_material_id,p_branch_id,p_warehouse_id,v_batch_no,p_qty,
     p_receipt_unit_cost,p_qty*p_receipt_unit_cost,v_before,v_before+p_qty,
     p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,
-      COALESCE(p_effective_at,v_now),
+      COALESCE(p_effective_at,transaction_timestamp()),
     CASE WHEN p_reference_type='stock_count' THEN 'approved_last_known' ELSE NULL END,
     v_approved_price_source,v_approved_priced_at,
     v_approved_price_ref,
@@ -398,7 +426,7 @@ BEGIN
     quantity=EXCLUDED.quantity,avg_cost=EXCLUDED.avg_cost,updated_at=now();
 
   RETURN jsonb_build_object(
-    'success',true,'warehouse_id',p_warehouse_id,
+    'success',true,'quantity',p_qty,'warehouse_id',p_warehouse_id,
     'before_qty',v_before,'after_qty',v_before+p_qty,
     'approved_shortage_absorbed',v_shortage_absorbed,
     'approved_price_variance_exact',v_variance,

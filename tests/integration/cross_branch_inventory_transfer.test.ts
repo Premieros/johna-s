@@ -1,15 +1,16 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { randomUUID } from 'node:crypto';
+import { createHash,randomUUID } from 'node:crypto';
 import {readFileSync,readdirSync} from 'node:fs';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
+import { activateApprovedRawFixture, installApprovedRawWriterFixture } from './approvedRawWriterFixture';
 
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
 
 type RpcResult = { success?: boolean; error?: string; transfer_id?: string; status?: string };
 
-describe.skipIf(skip)('cross-branch inventory transfer', () => {
+describe.skipIf(skip).each(['legacy','approved'] as const)('cross-branch inventory transfer (%s)', (engine) => {
   let client: pg.Client;
   const branchA = randomUUID();
   const branchB = randomUUID();
@@ -71,6 +72,7 @@ describe.skipIf(skip)('cross-branch inventory transfer', () => {
     client = openDb(dbUrl!);
     await client.connect();
     await client.query('BEGIN');
+    if (engine==='approved') await installApprovedRawWriterFixture(client,dbUrl!);
     await client.query(
       `INSERT INTO public.branches(id,name) VALUES ($1,'Transfer A'),($2,'Transfer B'),($3,'Transfer C')`,
       [branchA, branchB, branchC],
@@ -132,6 +134,11 @@ describe.skipIf(skip)('cross-branch inventory transfer', () => {
        VALUES ($1,$2,$3,'RAW-TRANSFER-QA',20,4,'opening')`,
       [rawA, branchA, whA1],
     );
+    if (engine==='approved') {
+      await activateApprovedRawFixture(client,branchA,whA1,rawA);
+      await activateApprovedRawFixture(client,branchA,whA2,rawA);
+      await activateApprovedRawFixture(client,branchB,whB,rawB);
+    }
   });
 
   beforeEach(async () => {
@@ -285,6 +292,20 @@ describe.skipIf(skip)('cross-branch inventory transfer', () => {
     const result=await client.query(`SELECT unit_cost FROM public.inventory_ledger WHERE reference_id=$1 AND raw_material_id=$2 AND quantity>0`,[created.transfer_id,rawB]);
     expect(Number(result.rows[0].unit_cost)).toBe(0);
   });
+  it('uses the receiver last purchase price without requiring the transfer operator to browse invoice history',async()=>{
+    if (engine!=='approved') return;
+    let purchase:string;
+    do {purchase=randomUUID();} while(parseInt(createHash('md5').update(branchB+':'+purchase).digest('hex').slice(0,8),16)%100<99);
+    await client.query('DELETE FROM public.raw_material_price_events WHERE raw_material_id=$1',[rawB]);
+    await client.query("INSERT INTO public.purchases(id,invoice_number,branch_id,warehouse_id,subtotal,total,paid_amount,status,created_at) VALUES($1,$2,$3,$4,123,123,123,'completed','2020-01-01')",[purchase,'QA-TRANSFER-OLD-'+purchase,branchB,whB]);
+    await client.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,before_qty,after_qty,entry_type,reference_type,reference_id,created_at) VALUES($1,$2,$3,1,123,123,0,1,'purchase','purchase',$4,'2020-01-01')",[rawB,branchB,whB,purchase]);
+    const visible=await asUser(userMulti,()=>client.query("SELECT private.financial_row_visible($1,$2,'2020-01-01') allowed",[purchase,branchB]));
+    expect(visible.rows[0].allowed).toBe(false);
+    const created=await rawTransfer();expect(created.success).toBe(true);
+    expect(Number((await client.query('SELECT unit_cost FROM public.warehouse_transfer_items WHERE transfer_id=$1',[created.transfer_id])).rows[0].unit_cost)).toBe(123);
+    expect((await approve(userMulti,created.transfer_id!)).success).toBe(true);
+    expect(Number((await client.query('SELECT unit_cost FROM private.raw_transfer_receipt_prices WHERE transfer_id=$1',[created.transfer_id])).rows[0].unit_cost)).toBe(123);
+  });
   it('does not reprice a frozen receiver receipt during a source valuation repair',async()=>{
     await publishReceiverPrice(8);const created=await rawTransfer();expect((await approve(userMulti,created.transfer_id!)).success).toBe(true);
     const repaired=await client.query(`SELECT public._fifo_adjust_warehouse_transfer_delta($1,$2,$3,'raw_material',$4,10) result`,[created.transfer_id,branchA,whA1,rawA]);
@@ -305,10 +326,17 @@ describe.skipIf(skip)('cross-branch inventory transfer', () => {
     const before=(await read()).rows;expect(before).toHaveLength(3);
     await client.query('SAVEPOINT destination_price_rollback');
     try {
+      // Reconstruct only the older price-reader call before its immutable
+      // rollback rehearsal, retaining current transfer authority and stock code.
+      const operational=before.some(r=>r.definition.includes('private.stock_count_raw_price('));
+      if (operational) for (const row of before.filter(r=>r.proname!=='_fifo_adjust_warehouse_transfer_delta')) {
+        await client.query(row.definition.replace('private.stock_count_raw_price(','private.latest_approved_raw_prices('));
+      }
       await client.query(readFileSync('scripts/rollback/destination_raw_transfer_price_20261029.sql','utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
       expect(Number((await client.query('SELECT unit_cost FROM private.raw_transfer_receipt_prices WHERE transfer_id=$1',[created.transfer_id])).rows[0].unit_cost)).toBe(7.123456);
       const migration=readdirSync('supabase/migrations').find(p=>p.endsWith('_destination_raw_transfer_price.sql'))!;
       await client.query(readFileSync(`supabase/migrations/${migration}`,'utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
+      if (operational) await client.query(readFileSync('scripts/db/candidates/raw_last_price_transfer_context_20261104.sql','utf8'));
       expect((await read()).rows).toEqual(before);
       expect(Number((await client.query('SELECT unit_cost FROM public.warehouse_transfer_items WHERE transfer_id=$1',[created.transfer_id])).rows[0].unit_cost)).toBe(7.123456);
     } finally {await client.query('ROLLBACK TO SAVEPOINT destination_price_rollback');}

@@ -502,7 +502,10 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     }
   });
 
-  it('measures full dispatch work on identical replayed fixtures without a timing-only acceptance gate',async()=>{
+  // The 768-run benchmark targets an unpublished October experiment. Keep
+  // every behavioral/authorization case mandatory; run this load experiment
+  // only through the explicit owned-CI workflow input.
+  it.runIf(process.env.JOHNAS_RUN_LEGACY_DISPATCH_BENCHMARK==='1')('measures full dispatch work on identical replayed fixtures without a timing-only acceptance gate',async()=>{
     await client.query("SET LOCAL track_functions='all'");
     type Sample={ms:number;hits:number;reads:number;wal:number;resolverCalls:number;priceCalls:number;summaryWrites:number};
     const measurements: Record<string,{baseline:Sample[];candidate:Sample[];price:Sample[];stock:Sample[]}>={};
@@ -610,6 +613,6 @@ describe.skipIf(skip)('isolated component reuse dispatch candidate', () => {
     console.info('KITCHEN_COMPONENT_REUSE_FULL_CORE_BENCHMARK '+JSON.stringify(summary));
     // Seven samples are exploratory; production tail latency, CPU and
     // contention need separate evidence. Never assert noisy wall-time ratios.
-  },180000);
+  },600000);
 
 });

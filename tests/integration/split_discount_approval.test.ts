@@ -13,6 +13,8 @@ describe.skipIf(!dbUrl)('discount checkout failures and split invoice proof', ()
     await client.connect();
     await client.query('BEGIN');
     ids = await seedRlsFixture(client);
+  // These cases assert untaxed15-unit settlement, independent of seed defaults.
+  await client.query('UPDATE public.settings SET tax_enabled=false,tax_rate=0');
     await client.query(`UPDATE public.roles SET permissions=permissions || '["pos.order.edit","pos.payment.take"]'::jsonb WHERE role='cashier'`);
     await client.query('UPDATE public.orders SET subtotal=20,total=20,inventory_warehouse_id=$2 WHERE id=$1', [ids.rows.orders.own,ids.whA]);
     await client.query(`INSERT INTO public.order_kitchen_sends(branch_id,order_id,order_item_id,sent_quantity,sent_by)

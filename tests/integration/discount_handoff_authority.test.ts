@@ -8,6 +8,8 @@ describe.skipIf(!dbUrl)('permission-based saved discount handoff',()=>{
  let client:pg.Client; let ids:RlsIds;
  beforeEach(async()=>{
   client=openDb(dbUrl!);await client.connect();await client.query('BEGIN');ids=await seedRlsFixture(client);
+  // These cases assert untaxed15-unit settlement, independent of seed defaults.
+  await client.query('UPDATE public.settings SET tax_enabled=false,tax_rate=0');
   await client.query(`UPDATE public.roles SET permissions=(permissions || '["pos.order.edit","pos.payment.take"]'::jsonb)-'pos.discount' WHERE role='cashier'`);
   await client.query(`UPDATE public.roles SET permissions=permissions || '["pos.order.edit","pos.payment.take","pos.discount"]'::jsonb WHERE role IN ('branch_manager','warehouse_manager')`);
   await client.query('UPDATE public.orders SET subtotal=20,total=20,inventory_warehouse_id=$2 WHERE id=$1',[ids.rows.orders.own,ids.whA]);

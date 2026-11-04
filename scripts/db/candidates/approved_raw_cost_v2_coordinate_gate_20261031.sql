@@ -1,6 +1,6 @@
 -- CANDIDATE ONLY. A default-OFF warehouse/material cutover gate.
 -- Prerequisites: approved_raw_cost_engine_minimal_storage_20261031.sql and
--- approved_raw_cost_engine_v2_helpers_20261031.sql; both still uninstalled.
+-- approved_raw_cost_engine_v2_helpers_20261031.sql; general routing remains disabled.
 -- IMPORTANT: never apply to a live customer project until kitchen/sales,
 -- reversals, reports, accounting period and legacy FIFO conversion are released.
 BEGIN;
@@ -9,14 +9,7 @@ SET LOCAL statement_timeout='10s';
 
 -- At most ONE durable cutover marker per warehouse/material, not a row
 -- per sale, debt or inventory movement. No users can mutate the private table.
-CREATE TABLE IF NOT EXISTS private.raw_cost_v2_activated_coordinates (
-  branch_id uuid NOT NULL REFERENCES public.branches(id) ON DELETE RESTRICT,
-  warehouse_id uuid NOT NULL REFERENCES public.warehouses(id) ON DELETE RESTRICT,
-  raw_material_id uuid NOT NULL REFERENCES public.raw_materials(id) ON DELETE RESTRICT,
-  activated_at timestamptz NOT NULL DEFAULT statement_timestamp(),
-  activation_note text NOT NULL DEFAULT '',
-  PRIMARY KEY (branch_id,warehouse_id,raw_material_id)
-);
+-- The storage candidate defines this empty marker table and its internal reader.
 REVOKE ALL ON private.raw_cost_v2_activated_coordinates FROM PUBLIC,anon,authenticated,service_role;
 
 -- Retain source physical lot identity; original v2 helper already
@@ -52,6 +45,7 @@ BEGIN
   IF COALESCE((v_result->>'success')::boolean,false) IS NOT TRUE THEN
     RETURN v_result;
   END IF;
+  IF (v_result->>'quantity')::numeric=0 THEN RETURN v_result; END IF;
   v_ledger_id:=(v_result->>'receipt_ledger_id')::bigint;
   SELECT l.batch_number INTO STRICT v_batch_no
   FROM public.inventory_ledger l WHERE l.id=v_ledger_id
@@ -105,16 +99,13 @@ BEGIN
 
   -- APPROVED_RAW_V2_COORDINATE_ROUTE_V1:
   -- the activation row is the durable, non-reversible v2 accounting cutover.
-  IF EXISTS (
-    SELECT 1 FROM private.raw_cost_v2_activated_coordinates a
-    WHERE a.branch_id=p_branch_id AND a.warehouse_id=p_warehouse_id
-      AND a.raw_material_id=p_raw_material_id
-  ) THEN
+  IF private.raw_last_price_enabled(p_branch_id,p_warehouse_id,p_raw_material_id) THEN
     IF p_allow_negative IS NOT TRUE AND
        (SELECT COALESCE(sum(quantity),0) FROM public.raw_material_batches
         WHERE raw_material_id=p_raw_material_id AND branch_id=p_branch_id
           AND warehouse_id=p_warehouse_id)<p_qty THEN
-      RETURN jsonb_build_object('success',false,'error','INSUFFICIENT_STOCK');
+      RETURN jsonb_build_object('success',false,'error','INSUFFICIENT_STOCK',
+        'shortage',p_qty,'removed',0,'total_cost',0,'avg_cost',0);
     END IF;
     RETURN private.raw_issue_approved_v2(
       p_raw_material_id,p_branch_id,p_warehouse_id,p_qty,
@@ -145,13 +136,8 @@ BEGIN
   );
 
   -- APPROVED_RAW_V2_RECEIPT_ROUTE_V1:
-  -- reject callers supplying physical lot metadata until v2 preserves
-  -- source batch / expiry dates. This ensures no silent traceability loss.
-  IF EXISTS(
-    SELECT 1 FROM private.raw_cost_v2_activated_coordinates a
-    WHERE a.branch_id=p_branch_id AND a.warehouse_id=p_warehouse_id
-      AND a.raw_material_id=p_raw_material_id
-  ) THEN
+  -- The lot adapter retains source batch identity and physical expiry dates.
+  IF private.raw_last_price_enabled(p_branch_id,p_warehouse_id,p_raw_material_id) THEN
     RETURN private.raw_receive_approved_v2_lot(
       p_raw_material_id,p_branch_id,p_warehouse_id,p_qty,p_unit_cost,
       p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,

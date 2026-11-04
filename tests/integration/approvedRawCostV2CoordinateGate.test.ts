@@ -31,9 +31,11 @@ describe.skipIf(!disposable)('explicit v2 warehouse cost cutover is default OFF'
     }
     await db.query('SELECT public.ensure_chart_of_accounts($1)',[branch]);
     await db.query('SELECT public.seed_account_mappings($1)',[branch]);
+    if (!(await db.query("SELECT to_regprocedure('private.finalize_raw_last_price_branch(uuid)') IS NOT NULL installed")).rows[0].installed) {
     await db.query(innerCandidate('scripts/db/candidates/approved_raw_cost_engine_minimal_storage_20261031.sql'));
     await db.query(readFileSync('scripts/db/candidates/approved_raw_cost_engine_v2_helpers_20261031.sql','utf8'));
     await db.query(innerCandidate('scripts/db/candidates/approved_raw_cost_v2_coordinate_gate_20261031.sql'));
+    }
     const count=(await db.query<{n:number}>(
       'SELECT count(*)::int n FROM private.raw_cost_v2_activated_coordinates'
     )).rows[0].n;
@@ -49,6 +51,16 @@ describe.skipIf(!disposable)('explicit v2 warehouse cost cutover is default OFF'
       'SELECT count(*)::int n FROM public.raw_fifo_debts WHERE raw_material_id=$1',[legacyRaw]
     )).rows[0].n;
     expect(rows).toBe(1);
+  });
+  it('returns a real shortage without writing stock when a non-negative issue is rejected',async()=>{
+    await db.query('SAVEPOINT rejected_issue_fixture');
+    try {
+      await db.query("INSERT INTO private.raw_cost_v2_activated_coordinates(branch_id,warehouse_id,raw_material_id,activation_note) VALUES($1,$2,$3,'failure fixture only')",[branch,warehouse,raw]);
+      const result=(await db.query("SELECT public._raw_remove_fifo($1,$2,$3,1,'kitchen_send','kitchen_send',$4,'QA-REJECT',NULL,false) r",[raw,branch,warehouse,randomUUID()])).rows[0].r;
+      expect(result).toMatchObject({success:false,error:'INSUFFICIENT_STOCK',shortage:1,removed:0});
+      expect((await db.query('SELECT id FROM public.inventory_ledger WHERE raw_material_id=$1',[raw])).rows).toEqual([]);
+      expect((await db.query('SELECT id FROM public.raw_material_batches WHERE raw_material_id=$1',[raw])).rows).toEqual([]);
+    } finally { await db.query('ROLLBACK TO rejected_issue_fixture');await db.query('RELEASE rejected_issue_fixture'); }
   });
   it('routes only the explicitly activated coordinate through frozen approved price',async()=>{
     await db.query(
