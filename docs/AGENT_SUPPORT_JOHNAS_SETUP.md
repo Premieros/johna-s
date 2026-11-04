@@ -5,7 +5,7 @@
 - Site: https://premieros.github.io/johna-s/
 - Existing Johna-S Supabase: `azzdesuowpdcoflmyezn` (unchanged).
 - AGENT service: independent AGENT Supabase project. Never reuse Premier's public widget key.
-- The external chat is disabled until a valid public key is configured via the GitHub Actions **repository variable** `VITE_AGENT_SUPPORT_WIDGET_KEY`.
+- Johna-S's approved **public** widget identifier is pinned in `src/components/AgentCustomerSupport.tsx`. There are no secret keys or GitHub variables to configure.
 - The login remains Johna-S's own login. There is no AGENT login prompt for staff or customers to use the chat.
 
 ## One-time AGENT setup
@@ -19,11 +19,11 @@
 5. Copy the generated public widget key from AGENT.
 
 ## GitHub Pages integration
-1. On GitHub, open `Premieros/johna-s → Settings → Secrets and variables → Actions → Variables`.
-2. Create repository variable `VITE_AGENT_SUPPORT_WIDGET_KEY` and paste the **Johna-S-specific public key** (48 hexadecimal characters). This is a public browser key, not a secret.
-3. Confirm PR verification passes before merging. The GitHub Pages workflow only publishes a commit after the existing `Verify main` checks complete successfully.
-4. A new successful verified main deployment will then bundle the key, and a small customer chat button appears for signed-in Johna-S users.
-5. If the key is blank or invalid, the widget does not load. Remove the GitHub variable and redeploy a verified commit to disable future widget injection.
+1. The Johna-S widget public key `8e299da0ef520017d2c74c4e688109dd0dda3b48cee20f2d` is configured in the support component. There are no secrets to paste.
+2. Confirm the AGENT site entry `https://premieros.github.io` is enabled under the **Johna-S** project, not Premier.
+3. Confirm all GitHub PR checks pass. The GitHub Pages workflow publishes only after `Verify main` succeeds.
+4. After merge and verified deployment, signed-in Johna-S users will see the support chat.
+5. To disable support, remove the `<AgentCustomerSupport />` component from `src/app/App.tsx` and redeploy a verified commit.
 
 ## Security and limitations
 - AGENT isolates conversations/knowledge by its own project and widget `public_key` and validates incoming browser `Origin`.
@@ -33,7 +33,7 @@
 - The widget is an unprivileged help chat, not an administrative backdoor or access to database records. It does **not** automatically read the screen or report employee identity/branch.
 - The JavaScript endpoint is `https://premieros-agent-support-public.vercel.app/support/widget.js`; the AGENT Preview control panel remains separately protected.
 - Allowed origin is `https://premieros.github.io` because the site is deployed under a GitHub Pages subpath. In this hosting model other GitHub Pages projects on the same host share the browser origin; use separate keys and do not treat origin alone as user authentication.
-- Do not merge until the project's own AGENT key has been created and the full check suite is green. Do not modify production databases or financial/inventory records as part of onboarding.
+- The dedicated public key is set; do not merge unless AGENT origin registration is confirmed and the full check suite is green. Do not modify production databases or financial/inventory records as part of onboarding.
 
 ## Verification
 1. Log in to `https://premieros.github.io/johna-s/` with a non-admin staff account.
