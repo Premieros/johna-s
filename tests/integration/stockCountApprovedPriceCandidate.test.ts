@@ -286,6 +286,11 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
       expect(applied.success,JSON.stringify(applied)).toBe(true);
       await db.query('RESET ROLE');
       expect(Number((await db.query('SELECT sum(quantity) qty FROM public.raw_material_batches WHERE raw_material_id=$1',[material])).rows[0].qty)).toBe(-6);
+      // Reverting the application binding after posting must not remove the
+      // receipt freeze protecting the count's approved value.
+      const rollback=readFileSync('scripts/candidates/historical_raw_counts_binding_rollback_20261104.sql','utf8')
+        .replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,'');
+      await db.query(rollback);
       const received=(await db.query("SELECT public._raw_add($1,$2,$3,6,30,NULL,NULL,NULL,'purchase','qa_receipt',$4,NULL,NULL) r",[material,branch,warehouse,randomUUID()])).rows[0].r;
       expect(received.success,JSON.stringify(received)).toBe(true);
       const ledger=(await db.query('SELECT quantity,unit_cost,total_cost FROM public.inventory_ledger WHERE reference_id=$1',[doc])).rows;

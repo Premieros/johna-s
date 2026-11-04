@@ -220,7 +220,10 @@ BEGIN
   END;
 END;
 $function$;
-CREATE OR REPLACE FUNCTION public._raw_fifo_settle_receipt(p_receipt_ledger_id bigint, p_receipt_batch_id uuid, p_run_id uuid DEFAULT NULL::uuid)
+-- Approved values already posted must stay frozen after a binding rollback.
+DO $rollback$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM public.inventory_ledger WHERE approved_cost_basis='approved_last_known') THEN
+  EXECUTE $restore$CREATE OR REPLACE FUNCTION public._raw_fifo_settle_receipt(p_receipt_ledger_id bigint, p_receipt_batch_id uuid, p_run_id uuid DEFAULT NULL::uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -420,26 +423,7 @@ BEGIN
     'remaining_receipt_quantity',v_available
   );
 END;
-$function$;
-CREATE OR REPLACE FUNCTION private.latest_approved_raw_prices(p_branch_id uuid, p_raw_material_ids uuid[], p_as_of timestamp with time zone)
- RETURNS TABLE(raw_material_id uuid, branch_id uuid, unit_cost numeric, price_source text, priced_at timestamp with time zone, reference_number text)
- LANGUAGE sql
- STABLE
- SET search_path TO 'public', 'pg_temp'
-AS $function$
- SELECT rm.id,rm.branch_id,w.unit_cost,COALESCE(w.price_source,'unpriced'),w.priced_at,w.reference_number
- FROM public.raw_materials rm
- LEFT JOIN LATERAL (
-  SELECT CASE WHEN c.source_kind='purchase_items' THEN (norm.value->>'stock_unit_cost')::numeric(18,6) ELSE c.unit_cost::numeric(18,6) END AS unit_cost,
-   CASE WHEN c.source_kind IN('inventory_ledger','purchase_items') THEN 'purchase' WHEN c.source_kind='stock_count_items' THEN 'stock_count' ELSE 'pricing' END AS price_source,
-   c.priced_at,c.reference_number
-  FROM private.raw_approved_price_read_model c
-  LEFT JOIN LATERAL(SELECT public._normalize_raw_purchase_uom(c.raw_material_id,c.purchase_quantity,c.unit_cost,c.purchase_unit) AS value WHERE c.source_kind='purchase_items') norm ON true
-  WHERE c.branch_id=rm.branch_id AND c.raw_material_id=rm.id AND (p_as_of IS NULL OR c.priced_at<=p_as_of)
-   AND private.raw_approved_price_visible(c.source_kind,c.source_id,c.parent_id,c.raw_material_id,c.branch_id)
-   AND (c.source_kind<>'purchase_items' OR (COALESCE((norm.value->>'success')::boolean,false) AND COALESCE((norm.value->>'stock_unit_cost')::numeric,0)>0))
-  ORDER BY c.priced_at DESC NULLS LAST,c.source_rank,c.reference_number DESC NULLS LAST,c.event_id DESC LIMIT 1
- ) w ON true
- WHERE (p_branch_id IS NULL OR rm.branch_id=p_branch_id) AND(p_raw_material_ids IS NULL OR rm.id=ANY(p_raw_material_ids));
-$function$;
+$function$;$restore$;
+ END IF;
+END $rollback$;
 COMMIT;
