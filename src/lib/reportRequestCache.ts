@@ -1,4 +1,4 @@
-import { postgrestDedupingFetch } from './postgrestDedupingFetch';
+import { isSharedReadRpc, postgrestDedupingFetch } from './postgrestDedupingFetch';
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 // Only authoritative, read-only reporting RPCs belong here. Operational writes
@@ -59,7 +59,7 @@ export function createReportRequestCache(baseFetch: FetchLike, { ttl = 60_000, m
     const path = new URL(request.url).pathname;
     const name = path.startsWith('/rest/v1/rpc/') ? path.slice('/rest/v1/rpc/'.length) : '';
     if (!reportRpcs.has(name) || !['GET', 'POST'].includes(request.method)) {
-      if (path.startsWith('/rest/v1/') && !['GET', 'HEAD'].includes(request.method) && name !== 'record_user_issue') {
+      if (path.startsWith('/rest/v1/') && !['GET', 'HEAD'].includes(request.method) && name !== 'record_user_issue' && !isSharedReadRpc(name)) {
         clear();
         try { return await baseFetch(input, init); } finally { clear(); }
       }

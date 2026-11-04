@@ -176,3 +176,18 @@ describe('costing read sharing and nonfinancial telemetry',()=>{
   await cache.fetch(url,options());expect(base).toHaveBeenCalledTimes(4);
  });
 });
+
+it('keeps valid report reuse through display RPC reads but invalidates it on operational writes', async () => {
+  const base = vi.fn(async () => response());
+  const cache = createReportRequestCache(createPostgrestDedupingFetch(base));
+  await cache.fetch(url, options());
+  for (const name of ['get_dashboard_sales_snapshot', 'get_open_order_print_state', 'get_pos_order_operator_labels']) {
+    const display = `https://example.test/rest/v1/rpc/${name}`;
+    await Promise.all([cache.fetch(display, options()), cache.fetch(display, options())]);
+    await cache.fetch(url, options());
+  }
+  expect(base).toHaveBeenCalledTimes(4);
+  await cache.fetch('https://example.test/rest/v1/rpc/send_to_kitchen', options());
+  await cache.fetch(url, options());
+  expect(base).toHaveBeenCalledTimes(6);
+});

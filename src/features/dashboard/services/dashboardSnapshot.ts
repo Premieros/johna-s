@@ -92,7 +92,16 @@ export async function loadDashboardSalesSnapshot(args: {
     p_timezone: args.timezone || 'Africa/Cairo',
   });
 
-  if (result.error || !result.data || typeof result.data !== 'object') return null;
+  if (result.error) {
+    // A rolling deployment may lack this RPC. Only that compatibility case may
+    // use raw-sale reads. Timeouts/network/auth failures must not fan out into
+    // more expensive reads while the database is already struggling.
+    if (['PGRST202', '42883'].includes(result.error.code || '')) return null;
+    throw result.error;
+  }
+  if (!result.data || typeof result.data !== 'object' || Array.isArray(result.data)) {
+    throw new Error('DASHBOARD_SNAPSHOT_INVALID');
+  }
   const raw = result.data as RawSnapshot;
 
   return {

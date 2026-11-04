@@ -153,3 +153,16 @@ describe('complete dashboard refresh and failure isolation', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 });
+
+it('does not fan out into raw sales reads after a timeout and permits an explicit retry', async () => {
+  mocks.snapshot.mockRejectedValueOnce({ code: '57014', message: 'statement timeout' });
+  render(<MemoryRouter><DashboardDataPage /></MemoryRouter>);
+  await waitReady();
+  expect(mocks.fallback).not.toHaveBeenCalled();
+  expect(mocks.snapshot).toHaveBeenCalledTimes(1);
+  expect(screen.getByText('Sales data could not be loaded. Please retry.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+  await waitReady();
+  expect(mocks.snapshot).toHaveBeenCalledTimes(2);
+  expect(screen.getByTestId('analysis-net-sales')).toHaveTextContent('100.00');
+});
