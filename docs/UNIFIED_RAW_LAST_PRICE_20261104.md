@@ -5,132 +5,126 @@ Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `refactor/unified-last-price-20261104`
 Current PR: #601
 Last updated: 2026-11-04
-State: **READY**
-
-## Current scope
-Owner requests continuing source consolidation, removing expensive reads and
-replacing financial FIFO with published last price. Merge and application are
-authorized after verification. November counts00008/00009 are already applied
-and reconciled; never post them again.
-
-## Source contract
-- Current raw quantity: SUM of signed `raw_material_batches.quantity`, through
-  existing `private.raw_stock_quantities`. The legacy summary table is a writer
-  compatibility projection, not an independent current balance source.
-- Current unit price: existing `private.latest_approved_raw_prices`, respecting
-  branch/source visibility. `get_raw_material_current_prices` projects missing
-  accessible source prices as numeric zero, with explicit `catalog_zero` metadata.
-  Failed requests and inaccessible materials are never converted to zero rows.
-- Current valuation: signed current quantity multiplied by this same unit price.
-- Historical reversals must use original movement snapshots, not today's price.
-- Physical expiry/batch tracking is distinct from financial FIFO repricing.
-
-## Findings and order
-1. Material stock and reorder screens still read `raw_material_inventory` while
-   reports use summed batches. Count preview downloads unpaged batch history.
-   Replace these reads with bounded aggregated stock, not another stock table.
-2. Material stock screen still displays FIFO unit cost beside published price.
-   Replace the obsolete column with current signed stock value at last price.
-3. Public current-price RPC still emits NULL for a never-priced material; client
-   helpers also reject explicit zero. Preserve zero and the error boundary.
-4. Core `_raw_remove_fifo` and `_raw_add` still call legacy issue/settlement.
-   Receipt settlement can rewrite historical sale/kitchen costs. Do not flip
-   those bindings until reversal, journal and legacy-position gates below pass.
-
-## Release boundaries
-First release is read-only: no stock, journal, FIFO debt, sale, kitchen, print or
-price-source business mutations. Preserve all applied count fixes. Use existing
-RLS and INVOKER functions; no new privileged public reader. No polling, cache
-table, background queue or infrastructure upgrade.
-
-## Remaining operational cutover
-Inventory of direct core callers includes kitchen send/void, sale/refund,
-production/reversal, purchase/return, same-branch and cross-branch transfer,
-manual adjustment and product/mixed counts. Each needs source-price freeze,
-signed quantity parity, exact-once reversal, unchanged authorization and balanced
-journals. Legacy obligations must be audited and converted in bounded transactions
-without deleting original source records or replaying old sales during checkout.
-The old prototype's positive-price-only rule is superseded by the owner's zero
-default policy. Global FIFO retirement is not completed by a read-only release.
-
-## Verification and rollout
-Pending implementation, focused behavioral/DB tests, exact-head CI, guarded
-migration, Pages deployment and live read-only parity verification. Record actual
-results here as they happen. Keep a rollback restoring only reader bindings;
-never reverse or reapply the two customer counts as rollback of this work.
+State: **DEPLOYED**
 
 ## Work status
-Read-only implementation complete;32 focused integration checks and23 additional
-client checks pass. An earlier18-unit check passed. Typecheck and changed-file
-lint pass. No production migration or Pages deployment yet.
+Read-only source consolidation and the measured raw-stock authorization bottleneck
+are fixed in production. PR601 merged as4e04e114fd2784d605a5e0d0c70bcea0eb5d42f9.
+Exact-head PR Verify41809525503 and post-merge Verify41810270484 passed all four
+jobs. Production migration20261104095037 (`unified_raw_stock_last_price_reads`)
+is applied; canonical source is
+`supabase/migrations/20261104091453_unified_raw_stock_last_price_reads.sql`.
+Pages release41810949930 is verified separately below.
+
+This release does NOT retire operational FIFO writers. November counts00008/00009
+remain applied and must never be posted again.
 
 ## Guardrails
-Preserve stock, source events, old debts, journals, sale/kitchen/print writers and
-all applied count data. No new source table or polling. Page identities before
-aggregate/price resolution. Missing access/errors must not fabricate zero rows.
+No business rows, quantity batches, price events, FIFO debts, sales, kitchen sends,
+printers, journals or count documents are mutated by this release. No new table,
+index, polling, background queue, privileged public reader or paid upgrade.
+Stock/price failures remain errors; inaccessible materials are not fabricated.
+The SELECT policy uses the existing branch authorization function; grants and
+other policies are unchanged. Guarded rollback restores the original predicate
+and current-price function, without reversing customer stock or journals.
 
 ## Baseline
-Main9e0d096; both production branches have zero discrepancies between current
-legacy summary quantities and canonical batch sums (809 materials). Consolidation
-removes a future divergence source; this is not a claim that current stock is
-incorrect. Stats reset2026-09-01; top cumulative statement timings are historical,
-not measurements of today's bottleneck. Legacy exact POS availability no longer
-has a frontend caller and must not be optimized based on accumulated rank alone.
+Main9e0d096 before this work. Both branches' legacy summary quantities already
+matched canonical batch sums across809 materials. Consolidation prevents a second
+future balance source; it does not claim those current balances were incorrect.
+
+Authenticated Smouha aggregation took2909.694ms for292 grouped materials over17268
+physical batch rows, using an index, zero disk reads and26323 shared-buffer hits.
+The plan executed nested branch authorization per batch. An initial all-branch
+read exceeded its3-second safety deadline and was cancelled; the deadline was not
+raised. Cumulative statement counters reset2026-09-01 and are not today's latency.
 
 ## Root-cause ledger
-Material/reorder reads still use a second quantity projection. Count snapshot
-silently caps an unpaged lot-history read. Stock screen shows a FIFO cost beside
-last price. Client numeric helper discards zero.
+- Per-batch `user_may_access_branch(branch_id)` caused avoidable CPU work.
+- Material/reorder screens read a separate `raw_material_inventory` projection.
+- Count preview fetched unpaged lot history and could silently lose rows.
+- Stock screen displayed a FIFO unit cost beside published last price.
+- Current-price RPC returned NULL and its client rejected a valid numeric zero.
 
 ## Change ledger
-Bounded INVOKER stock-summary RPC uses existing quantity view plus indexed price
-resolver, one500-material page at a time. Material/reorder services use it;
-stock tab reuses its returned price instead of a second RPC. Count preview pages
-warehouse aggregates, retaining all lots' signed sum without downloading history.
-Public current-price RPC returns default0; historical resolver/snapshots unchanged.
-Stock screen replaces FIFO column with signed balance times last price. Guarded
-reader-only rollback is rehearsed before the immutable October rollback proof.
+- Raw-batch SELECT policy resolves allowed branch IDs once/query, then checks
+  membership using the same authorization function. Mandatory non-NULL branch
+  and the exact old policy hash are checked before replacement.
+- Bounded INVOKER `get_raw_material_stock_summary` pages500 material identities
+  before canonical quantity aggregation and indexed published-price lookup.
+- Material stock and reorder reuse this projection. Stock tab reuses returned
+  prices instead of making another price read.
+- Count preview pages aggregate warehouse balances, retaining all signed lots.
+- Current public price projects absent visible source price as0/catalog_zero.
+  The underlying historical resolver, source precedence and visibility remain.
+- Current stock value is signed quantity multiplied by this same last price.
+  Original purchase documents and historical financial snapshots are unchanged.
 
 ## Verification ledger
-32 DB checks across5 files pass in owned local PostgreSQL, including applied
-count regressions, fractional quantities, negative lots, deliberately stale
-summary, zero default, RLS branch denial, bounded pages and both reader rollbacks.
-23 client checks pass across4 files plus18 checks across5 earlier focused files.
-No production test rows. Exact-head full CI remains required.
+54 focused DB checks across7 files,25 costing/source checks,109 additional
+branch/security checks and focused client checks passed in owned local PostgreSQL.
+No production test rows. Tests include fractional/negative lots, stale legacy
+summary, zero default, complete pages, branch denial, additionally granted branch,
+report amounts/refunds, invalid recipes, old/new guarded rollback and unchanged
+writer definitions. A32-lot differential test measured fewer authorization calls
+with exactly identical RLS-visible rows. All mandatory CI jobs then passed.
+
+Production same-query Smouha EXPLAIN:2909.694→421.001ms (~85.5% reduction; ~6.9x),
+292 output materials retained, shared-buffer hits26323→1069. This is a measured
+query improvement, not a peak-load/global latency guarantee.
+
+Same-transaction authenticated reconciliation:
+| Branch | Materials | Quantity mismatches | Price mismatches |
+|---|---:|---:|---:|
+| Smouha |407|0|0|
+| Cleopatra |402|0|0|
+
+All known positive price/source/date/reference fingerprints remained unchanged.
+A cross-time Smouha quantity fingerprint changed during live operation; it is not
+used as a before/after equality claim. The in-transaction comparisons above both
+match exactly. Core sale/kitchen/print/count/receipt writer fingerprint remained
+cc44b8dc075e0b5487149783680796c0. Security advisor finding names/counts unchanged:
+26 rls_enabled_no_policy,254 authenticated_security_definer_function_executable,
+1 auth_leaked_password_protection. These are preexisting, not resolved here.
 
 ## Production gate
-Pending exact-head four-job CI and guarded read-only migration, then Pages after
-verified main. Live parity must compare quantities and every known positive
-price under the same authorized user in both branches. No global FIFO activation.
+Read-only release passed source, security, exact-head CI, guarded migration and
+live reconciliation gates. Rollback:
+`scripts/rollback/unified_raw_stock_last_price_reads_20261104.sql`.
+Do not reapply this migration or either November count. Global writer activation
+still requires the operational gates below.
 
 ## Next action
-Publish reviewed read-only PR, verify CI, apply exact migration once, merge and
-verify Pages. Continue operational cutover separately with the listed gates.
+Complete ONE coordinated operational last-price release, rather than enabling
+unverified individual writers:
+1. Default-zero approved source snapshots in all raw issue paths. Existing
+   non-count v2 prototype still rejects an absent positive source; that rule is
+   superseded by the owner's zero-default policy.
+2. Full caller-result parity. In particular,
+   `_produce_inventory_unit_internal` checks shortage but not success; a routed
+   failure must not create manufactured stock at zero consumption.
+3. Snapshot-based kitchen void, sale refund, production reverse, purchase return
+   and transfer reversal; receipt/variance journals must reverse exactly once.
+4. Reconcile and convert legacy positions in bounded, audited transactions,
+   preserving original sources/journals. At the read-only2026-11-04 audit there
+   were774 open rows/88 positions in Smouha and915/94 in Cleopatra, with zero open
+   rows predating November. This does not mean all FIFO obligations are retired.
+5. Raw-only future counts must handle aggregate shortage positions correctly;
+   mixed/product counts and full writer permissions need explicit compatibility.
+6. Verify same/cross-branch transfer, manufacture/component use, sale/void/refund,
+   second count, zero/fractional prices, concurrency, retries and balanced journals
+   in small deterministic owned fixtures. Do not activate or invent accounting
+   corrections until these gates pass.
+
+One current quantity source remains the signed batch sum, via existing
+`private.raw_stock_quantities`. Current price remains the existing indexed
+approved-price source; no new independent valuation engine or price table.
+Physical expiry/lot traceability is distinct from financial FIFO replay.
 
 ## Mandatory update protocol
-Record actual CI, migration, merge and live parity results here. Never equate
-source merge with production activation or claim global FIFO retirement.
+Record actual CI, merge, migration, Pages and reconciliation results. Never equate
+a candidate or read-only release with global operational FIFO retirement.
 
-## Additional measured root cause — before production application
-Authenticated Smouha stock aggregation under the existing RLS policy took2909.694ms
-for292 grouped materials /17268 physical batch rows, all buffer hits and zero disk
-reads. The indexed scan still called `user_may_access_branch(branch_id)` per row.
-An all-branch parity probe exceeded its3-second safety deadline and was cancelled.
-Do not raise that deadline or mistake cumulative query counters for this proof.
-
-The guarded release also changes only the raw-batch SELECT policy expression:
-resolve accessible branch IDs once using the exact same authorization function,
-then use membership for every batch. Table/role grants, other policies and every
-writer remain unchanged. Mandatory non-NULL branch FK and exact old policy hash
-are checked before replacement. Rollback restores the exact original predicate.
-A32-lot local differential test proves fewer actual authorization function calls,
-identical home-branch rows and identical additionally granted-branch rows.
-
-54 focused DB checks across7 files now pass, including report default-zero
-semantics, existing price-source RLS and both old/new rollback rehearsals. A further
-25 costing/source checks pass after replacing old NULL expectations with the
-owner's numeric-zero contract. First full CI found only obsolete source-contract
-and NULL/missing-price expectations; these are corrected without removing source,
-branch, amount, refund, invalid-recipe or rollback assertions. A fresh exact-head
-full run is required for the policy expression change. No production application
-has occurred yet.
+## Final Pages verification
+GitHub Pages41810949930 completed successfully: build, production API parity and
+deployment all green for merge4e04e114. The new stock/price UI is published.
