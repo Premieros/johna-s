@@ -5,7 +5,7 @@ Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `experiment/historical-count-quantity-offset`
 Current PR: #597
 Last updated: 2026-11-04
-State: **BLOCKED**
+State: **DEPLOYED**
 
 ## Work status
 Implementation and rollback package complete. Exact-head CI and final production preflight pending. User has authorized merge, application and both November counts. This entry supersedes earlier candidate-only restrictions for this specific release once verification passes.
@@ -80,3 +80,21 @@ finishes with unchanged zero stock, no pre-count open debt and unchanged balance
 115420 debit/credit. Largest individual cleanup call:488 ms. These are local
 measurements, not production success. Existing deployed migrations remain intact;
 the new guarded migration is 20261104072139_linear_count_debt_validation.sql.
+
+## Production application — 2026-11-04
+#599 merged and guarded migration applied. Both customer counts are now applied:
+Smouha00008:407 lines,293013.54; Cleopatra00009:402 lines,45552.54.
+Effective movement dates remain their November1 creation timestamps. Both have
+one balanced journal. All809 quantity deltas match their document lines.
+Compatibility cleanup completed in108 bounded transactions with unchanged net
+stock in every call. No available count-receipt cleanup remains.
+
+Post-application currency review found21 raw-material groups with independently
+rounded negative lot rows (largest deviation0.12); document/journal totals are
+already correct. Follow-up branch `fix/count-currency-consolidation` emits one
+monetary ledger row per raw count issue. Its private audited repair keeps IDs and
+debt links, consolidates affected count movement rows without changing total
+quantity or the journal, and retains before/after records in audit_log. This
+correction is still pending final verification/application; do not reapply counts.
+
+Currency follow-up local verification:60 integration checks across12 files pass, including fractional two-lot rounding, audited repair, retained IDs, retry, unchanged physical quantity and unchanged journal. Final CI and currency-only repair are pending; both counts remain applied and must not be posted again.
