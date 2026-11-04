@@ -41,3 +41,15 @@
 3. AGENT → `/support/conversations` should show only the **Johna-S** conversation under its separate project. Premier conversations remain under Premier.
 4. Sign out and log in as a **different** employee in the same tab. Confirm the previous conversation is not shown.
 5. Remove the variable and run a verified deploy to test a simple rollback.
+
+## One conversation — AGENT and human support (2026-11-04)
+- The customer opens **one** `خدمة العملاء` widget. All customer messages, AI responses, and support staff replies use the same AGENT `support_conversations.id` and `support_messages` rows.
+- Johna-S superadmin: open `#/super-admin` → **دعم العملاء**. The inbox is embedded inside the same dashboard and uses the existing Johna-S Supabase session; no AGENT login is requested.
+- New conversations use `mode=ai`. To reply personally, press **استلام المحادثة**, write the message, then **إرسال**. When finished, press **إعادة الرد إلى AGENT**.
+- Customers can explicitly request a support person. When AGENT cannot generate a response, the same thread is transferred to human mode rather than creating another chat.
+- The customer widget refreshes message history while opened; staff replies appear in the **same** conversation, with no separate human chat window.
+- Superadmin access is verified **server-side** using Johna-S Auth and the persisted `users.role=super_admin`/active profile. The server scopes every read/write to the Johna-S widget and project; never accept an AGENT API key or visitor token as admin authorization.
+- The Johna-S Supabase publishable key is set **server-side** on AGENT Preview as `JOHNAS_SUPABASE_PUBLISHABLE_KEY`, never committed to Git. AGENT service-role remains server-side.
+- The history API authenticates widget visitors by the original conversation ID + securely generated visitor token. It never returns another user's thread merely because they share the GitHub Pages hostname.
+- If no conversation is present, ask a signed-in employee to send a first test question; then open the superadmin inbox. Confirm customer → AI response → admin takeover → admin response → AGENT release → AI response all appear in the original thread.
+- The Johna-S website remains unmodified on `main` until all mandatory `Verify main` jobs pass and the PR is deliberately merged. The customer widget makes no changes to sales, inventory, finance or production tables.
