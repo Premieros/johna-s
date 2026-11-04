@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `feat/raw-last-price-operational-20261104`
-Current PR: #0
+Current PR: #602
 Last updated: 2026-11-04
 State: **BLOCKED**
 
@@ -74,11 +74,54 @@ old-debt reconciliation and balanced financial journals all pass. An inactive
 candidate is not completion or live deployment.
 
 ## Next action
-Finish same-price behavior for operational callers without purchase-browsing
-permission, remove redundant kitchen snapshot price resolution, and prove raw
-quantity precision consistency. Complete branch-wide cutover finalization,
-explicit recovery packaging, source-guarded migration and exact-head CI before
-any live activation. These are unresolved release gates, not deployed fixes.
+Finish exact-head CI for #602, recheck live legacy snapshots, merge and apply the
+single reviewed operational migration, then convert each negative coordinate in
+bounded owner-authorized transactions. Finalize both branches only after no
+unconverted negative positions remain; enable the new-branch default last.
+No live writer routing has been changed yet.
+
+## Coordinated release package
+`20261104111802_raw_last_price_operational_cutover.sql` guards the exact22
+modified pre-release functions, owners and ACLs. It preserves public adapters,
+order-type/payment authority, the original send core and all print bindings.
+One shared canonical resolver body now has an internal trusted-server mode;
+report mode retains source RLS and invoice visibility. Browser roles cannot use
+operational mode. No second price cache or price source is added.
+The existing raw adapters remain INVOKER and retain their trusted service_role
+contract through narrowly scoped private dependency grants; activation mutation
+rights remain owner-only. Browser roles gain no helper/table access.
+Kitchen capture reuses this event's indexed ledger records, including zero;
+the normal group path never creates production or manufactured batches.
+Quantity is normalized once to the existing four-decimal physical/ledger/count
+precision and the actual quantity is passed into component snapshots.
+Activated compatibility valuation uses quantity times the same last price.
+Old administrative FIFO replay tools fail before writes after cutover starts.
+Future raw coordinates inherit the branch default. Future branch defaults are
+installed disabled until the final all-branch switch.
+
+## Recovery
+`scripts/rollback/raw_last_price_operational_pre_activation_20261104.sql`
+restores the exact modified writer definitions and their ACLs only while the
+activation table is empty. It never changes unrelated adapter overloads.
+`scripts/recovery/raw_last_price_operational_20261104.sql` restores verified
+last-price writers after activation, preserving quantities, original source
+costs, journals and conversion history. Reverting converted positions to legacy
+FIFO is deliberately blocked. Both paths are rehearsed in owned rollback tests.
+
+## Verification update — fresh database
+The earlier portable test database lacked three current API migrations and used
+Cairo session time and taxed seed defaults. Its26 failures included one actual
+new-writer defect: service_role could not read the private routing dependency.
+That dependency contract is fixed and covered by active backend issue/receipt
+checks. A new owned database was bootstrapped from the complete current canonical
+migration chain with UTC, matching CI. Untaxed discount fixtures now explicitly
+set their intended tax setting within their rollback transactions; no production
+discount/tax behavior is changed.
+The unpublished October load experiment executes768 dispatches and exceeded
+three minutes. Its behavioral/security cases remain mandatory; only that load
+benchmark now requires the explicit `legacy_dispatch_benchmark` workflow input.
+The current full fresh-database result and exact-head CI are recorded below when
+finished. No production business test rows or printer jobs are generated.
 
 ## Mandatory update protocol
 Record actual implementation, tests, PR, CI and production results. Preserve
@@ -94,3 +137,10 @@ The normal send/sale path must create no `inventory_unit_productions` or
 manufactured batches. Remove the newly proposed old-production caller change
 from this bundle; it was never applied to production. Test the real group path,
 including nested groups, last-price raw snapshots and exact-once void/refund.
+
+Fresh canonical suite:1220 checks passed; the remaining9 failures were the two
+untaxed fixture groups now corrected. Rerun of those groups plus operational
+price/cutover/recovery, service backend, normal groups and POS:44/44 pass across
+8 files in16.4s. Typecheck, changed-file ESLint, API contract generation check,
+4 active-worklog checks and whitespace verification pass. Exact-head CI must
+still pass before merge/application.

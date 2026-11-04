@@ -122,6 +122,22 @@ describe.skipIf(skip).each(['legacy','approved'] as const)('Phase 3 direct raw k
     expect(ledger.rows[0].c).toBeGreaterThanOrEqual(2);
   });
 
+  it('uses one actual four-decimal quantity for the ledger, physical stock and component response', async () => {
+    if (engine !== 'approved') return;
+    await client.query('SAVEPOINT fractional_raw');
+    try {
+      await client.query('UPDATE public.recipe_items SET quantity=0.166667 WHERE recipe_id=$1',[recipeId]);
+      const before=await rawQty(directRawId),ref=randomUUID();
+      const result=(await client.query('SELECT public._deduct_kitchen_raw_components($1,$2,$3,1,$4::jsonb,$5,$6,NULL) r',[productId,branchId,warehouseId,'[]',ref,'QA-FRACTION'])).rows[0].r;
+      expect(result.success,JSON.stringify(result)).toBe(true);
+      const component=result.raw_materials_deducted.find((r:{raw_material_id:string})=>r.raw_material_id===directRawId);
+      expect(component.quantity).toBe(0.1667);
+      expect(await rawQty(directRawId)).toBeCloseTo(before-0.1667,4);
+      const ledger=(await client.query('SELECT sum(quantity) qty,sum(total_cost) cost FROM public.inventory_ledger WHERE reference_id=$1 AND raw_material_id=$2',[ref,directRawId])).rows[0];
+      expect(Number(ledger.qty)).toBe(-component.quantity);
+      expect(Number(ledger.cost)).toBe(-component.total_cost);
+    } finally {await client.query('ROLLBACK TO fractional_raw');await client.query('RELEASE fractional_raw');}
+  });
   it('creates a same-name fallback raw for an unconfigured product and records negative stock', async () => {
     const result = await client.query<{
       r: {
@@ -137,6 +153,7 @@ describe.skipIf(skip).each(['legacy','approved'] as const)('Phase 3 direct raw k
     expect(result.rows[0].r.raw_materials_deducted).toHaveLength(1);
 
     const fallback = result.rows[0].r.raw_materials_deducted![0];
+    if (engine==='approved') expect(fallback).toMatchObject({unit_cost:0,total_cost:0,price_source:'catalog_zero'});
     expect(fallback.raw_name).toBe('Unconfigured Kitchen Product');
     expect(Number(fallback.quantity)).toBeCloseTo(2, 6);
 

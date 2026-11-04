@@ -40,6 +40,7 @@ describe.skipIf(!disposable)('approved-cost v2 minimal-storage internal prototyp
     await db.query('SELECT public.seed_account_mappings($1)',[branch]);
     await db.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active) VALUES($1,$2,'Approved-cost QA raw',$3,0,true)",[raw,'AC-'+raw,branch]);
 
+    if (!(await db.query("SELECT to_regprocedure('private.finalize_raw_last_price_branch(uuid)') IS NOT NULL installed")).rows[0].installed) {
     const schema=readFileSync(
       'scripts/db/candidates/approved_raw_cost_engine_minimal_storage_20261031.sql','utf8'
     ).replace(/^([\s\S]*?)BEGIN;\s*/,'').replace(/\s*COMMIT;\s*$/,'');
@@ -47,6 +48,7 @@ describe.skipIf(!disposable)('approved-cost v2 minimal-storage internal prototyp
     await db.query(readFileSync(
       'scripts/db/candidates/approved_raw_cost_engine_v2_helpers_20261031.sql','utf8'
     ));
+    }
   },60000);
   afterAll(async()=>{
     if(db){try{await db.query('ROLLBACK');}finally{await db.end();}}

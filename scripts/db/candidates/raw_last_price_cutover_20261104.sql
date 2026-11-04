@@ -144,3 +144,38 @@ CREATE TRIGGER raw_converted_source_cost_immutable
  BEFORE UPDATE OF unit_cost,total_cost ON public.inventory_ledger
  FOR EACH ROW WHEN (OLD.unit_cost IS DISTINCT FROM NEW.unit_cost OR OLD.total_cost IS DISTINCT FROM NEW.total_cost)
  EXECUTE FUNCTION private.guard_raw_converted_source_cost();
+
+-- Final branch default covers later materials/warehouses without creating a
+-- per-sale marker. Only enable after every old negative coordinate is converted.
+CREATE OR REPLACE FUNCTION private.finalize_raw_last_price_branch(p_branch uuid)
+RETURNS jsonb LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE actor uuid:=auth.uid(); material uuid;
+BEGIN
+ IF actor IS NULL OR NOT public.can_permission('inventory.count.apply')
+  OR NOT public.user_may_access_branch(p_branch) THEN RAISE EXCEPTION 'CUTOVER_NOT_ALLOWED'; END IF;
+ IF EXISTS(SELECT 1 FROM private.raw_cost_v2_activated_coordinates
+  WHERE branch_id=p_branch AND warehouse_id IS NULL AND raw_material_id IS NULL) THEN
+  RETURN jsonb_build_object('success',true,'already_active',true);
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.branches WHERE id=p_branch) THEN RAISE EXCEPTION 'CUTOVER_BRANCH_MISMATCH'; END IF;
+ -- NOWAIT: fail promptly rather than queue behind a sale or catalog change.
+ LOCK TABLE public.raw_materials IN SHARE MODE NOWAIT;
+ FOR material IN SELECT id FROM public.raw_materials WHERE branch_id=p_branch ORDER BY id LOOP
+  IF NOT pg_try_advisory_xact_lock(hashtextextended(material::text||':'||p_branch::text,0)) THEN
+   RAISE EXCEPTION 'CUTOVER_STOCK_BUSY';
+  END IF;
+ END LOOP;
+ IF EXISTS(SELECT 1 FROM public.raw_fifo_debts WHERE branch_id=p_branch
+  AND settled_quantity<debt_quantity AND approved_converted_at IS NULL)
+  OR EXISTS(SELECT 1 FROM public.raw_material_batches WHERE branch_id=p_branch
+   AND quantity<0 AND source_type<>'approved_shortage_aggregate') THEN
+  RAISE EXCEPTION 'CUTOVER_BRANCH_LEGACY_POSITION_REMAINS';
+ END IF;
+ INSERT INTO private.raw_cost_v2_activated_coordinates(branch_id,activation_note)
+ VALUES(p_branch,'all legacy negatives reconciled; new raw coordinates use last price');
+ INSERT INTO public.audit_log(user_id,action,entity,entity_id,branch_id,details)
+ VALUES(actor,'update','branches',p_branch,p_branch,jsonb_build_object('kind','raw_last_price_branch_cutover'));
+ RETURN jsonb_build_object('success',true,'already_active',false);
+END;
+$$;
+REVOKE ALL ON FUNCTION private.finalize_raw_last_price_branch(uuid) FROM PUBLIC,anon,authenticated,service_role;

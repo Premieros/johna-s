@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main, master]
   workflow_dispatch:
+    inputs:
+      legacy_dispatch_benchmark:
+        description: Run the unpublished October dispatch load experiment in owned CI
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -85,6 +90,7 @@ jobs:
       SUPABASE_PROJECT_REF: azzdesuowpdcoflmyezn
       VITE_SUPABASE_URL: https://azzdesuowpdcoflmyezn.supabase.co
       SUPABASE_DB_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      JOHNAS_RUN_LEGACY_DISPATCH_BENCHMARK: ${{ inputs.legacy_dispatch_benchmark && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -45,6 +45,7 @@ BEGIN
   IF COALESCE((v_result->>'success')::boolean,false) IS NOT TRUE THEN
     RETURN v_result;
   END IF;
+  IF (v_result->>'quantity')::numeric=0 THEN RETURN v_result; END IF;
   v_ledger_id:=(v_result->>'receipt_ledger_id')::bigint;
   SELECT l.batch_number INTO STRICT v_batch_no
   FROM public.inventory_ledger l WHERE l.id=v_ledger_id

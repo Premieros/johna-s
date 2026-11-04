@@ -45,6 +45,14 @@ BEGIN
     WHERE m.id=p_raw_material_id AND m.branch_id=p_branch_id AND m.is_active) THEN
     RETURN jsonb_build_object('success',false,'error','RAW_WAREHOUSE_BRANCH_MISMATCH');
   END IF;
+  -- Existing batch, stock-count and ledger quantity columns use four decimals.
+  -- Normalize once, before both physical and monetary writes, and return the
+  -- actual quantity so kitchen snapshots do not promise a different amount.
+  p_qty:=round(p_qty,4);
+  IF p_qty=0 THEN
+    RETURN jsonb_build_object('success',true,'quantity',0,'shortage',0,'removed',0,
+      'oversold',0,'total_cost',0,'avg_cost',0);
+  END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended(p_raw_material_id::text||':'||p_branch_id::text,0));
   IF p_reference_type='stock_count' THEN
     IF coalesce((p_frozen_price->>'quantity_verified')::boolean,false) IS NOT TRUE THEN
@@ -214,7 +222,7 @@ BEGIN
   ON CONFLICT(raw_material_id,branch_id) DO UPDATE SET
     quantity=EXCLUDED.quantity,avg_cost=EXCLUDED.avg_cost,updated_at=now();
   RETURN jsonb_build_object(
-    'success',true,'shortage',0,
+    'success',true,'quantity',p_qty,'shortage',0,
     'removed',CASE WHEN p_reference_type='stock_count' THEN p_qty ELSE p_qty-v_qty END,
     'oversold',v_qty,
     'total_cost',round(p_qty*v_price.unit_cost,2),'avg_cost',v_price.unit_cost,
@@ -272,6 +280,11 @@ BEGIN
     OR NOT EXISTS(SELECT 1 FROM public.raw_materials m
       WHERE m.id=p_raw_material_id AND m.branch_id=p_branch_id AND m.is_active) THEN
     RETURN jsonb_build_object('success',false,'error','RAW_WAREHOUSE_BRANCH_MISMATCH');
+  END IF;
+  p_qty:=round(p_qty,4);
+  IF p_qty=0 THEN
+    RETURN jsonb_build_object('success',true,'quantity',0,'warehouse_id',p_warehouse_id,
+      'approved_shortage_absorbed',0,'approved_price_variance_posted',0);
   END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended(p_raw_material_id::text||':'||p_branch_id::text,0));
   IF p_reference_type='stock_count' THEN
@@ -413,7 +426,7 @@ BEGIN
     quantity=EXCLUDED.quantity,avg_cost=EXCLUDED.avg_cost,updated_at=now();
 
   RETURN jsonb_build_object(
-    'success',true,'warehouse_id',p_warehouse_id,
+    'success',true,'quantity',p_qty,'warehouse_id',p_warehouse_id,
     'before_qty',v_before,'after_qty',v_before+p_qty,
     'approved_shortage_absorbed',v_shortage_absorbed,
     'approved_price_variance_exact',v_variance,

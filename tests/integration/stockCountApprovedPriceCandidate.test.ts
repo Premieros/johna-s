@@ -19,6 +19,9 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
   const failingLine='00000000-0000-4000-8000-000000000012';
   beforeAll(async () => {
     db=openDb(url); await db.connect(); await db.query('BEGIN');
+    if ((await db.query("SELECT to_regprocedure('private.finalize_raw_last_price_branch(uuid)') IS NOT NULL installed")).rows[0].installed) {
+      await db.query(readFileSync('scripts/rollback/raw_last_price_operational_pre_activation_20261104.sql','utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
+    }
     // Reconstruct the inspected production function bindings in this local-only
     // transaction. CI separately applies the migration in canonical sequence.
     const baseline=readFileSync('scripts/candidates/historical_raw_counts_binding_rollback_20261104.sql','utf8')

@@ -176,6 +176,14 @@ describe.skipIf(skip).each(['legacy','approved'] as const)('POS operational life
     expect(sent.success).toBe(true);
     expect(sent.items_sent_count).toBe(1);
     expect(await batchQty()).toBe(stockBeforeKds - 1); // Kitchen send is the stock boundary.
+    if (engine==='approved') {
+      const event=(await client.query('SELECT total_cost,component_snapshot FROM public.order_kitchen_inventory_events WHERE order_id=$1',[orderId])).rows;
+      expect(event).toHaveLength(1);
+      const components=event[0].component_snapshot;
+      expect(components).toHaveLength(1);
+      expect(components[0]).toMatchObject({quantity:1,unit_cost:10,extended_cost:10,cost_basis:'approved_last_known'});
+      expect(Number(event[0].total_cost)).toBe(components[0].extended_cost);
+    }
 
     const invoice = `LIFE-${Date.now()}-${randomUUID().slice(0, 8)}`;
     const sale = await rpc(
