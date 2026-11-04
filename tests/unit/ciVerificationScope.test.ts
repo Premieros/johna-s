@@ -58,10 +58,13 @@ it('classifies the whole pushed range, including code followed by a documentatio
     git('init','-q'); writeFileSync(join(dir,'README.md'),'base'); const base = commit();
     mkdirSync(join(dir,'src')); writeFileSync(join(dir,'src/a.ts'),'export const a=1'); const code = commit();
     mkdirSync(join(dir,'docs')); writeFileSync(join(dir,'docs/a.md'),'note'); commit();
-    const run = (from: string, event='push') => JSON.parse(execFileSync(process.execPath, [script,'plan',join(dir,'scope.json')], {cwd:dir, encoding:'utf8', env:{...process.env, GITHUB_OUTPUT:'', CI_SCOPE_BASE:from, GITHUB_EVENT_NAME:event}}));
+    const run = (from: string, event='push') => JSON.parse(execFileSync(process.execPath, [script,'plan',join(dir,'.git','scope.json')], {cwd:dir, encoding:'utf8', env:{...process.env, GITHUB_OUTPUT:'', CI_SCOPE_BASE:from, GITHUB_EVENT_NAME:event}}));
     expect(run(base)).toMatchObject({runtime:true,paths:['docs/a.md','src/a.ts']});
     expect(run(code)).toMatchObject({runtime:false,paths:['docs/a.md']});
     expect(run(code,'workflow_dispatch').runtime).toBe(true);
     expect(run('0'.repeat(40)).runtime).toBe(true);
+    const beforeRename = git('rev-parse','HEAD');
+    git('mv','src/a.ts','docs/moved.md'); commit();
+    expect(run(beforeRename)).toMatchObject({runtime:true,paths:['docs/moved.md','src/a.ts']});
   } finally {rmSync(dir,{recursive:true,force:true});}
 });
