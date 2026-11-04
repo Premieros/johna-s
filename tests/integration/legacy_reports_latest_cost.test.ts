@@ -70,7 +70,7 @@ describe.skipIf(!local)('installed agent report pages and latest raw cost — ow
   const result=await runAs(db,ids.users.branch_manager,"select * from public.get_raw_consumption_latest_cost($1,now()-interval '1 day',now()+interval '1 day') where raw_material_id=ANY($2::uuid[])",[ids.branchA,[raw,missing]]);
   expect(result.error).toBeUndefined();expect(result.rows).toHaveLength(2);
   expect(result.rows.find(r=>r.raw_material_id===raw)).toMatchObject({consumed_quantity:'2.000000',displayed_cost:'34.00',price_missing:false,pricing_basis:'latest_approved'});
-  expect(result.rows.find(r=>r.raw_material_id===missing)).toMatchObject({price_missing:true});
+  expect(result.rows.find(r=>r.raw_material_id===missing)).toMatchObject({price_missing:false,displayed_cost:'0.00'});
   const values=await runAs(db,ids.users.branch_manager,'select * from public.get_raw_material_latest_valuation($1) where raw_material_id=$2',[ids.branchA,raw]);expect(values.error).toBeUndefined();
   expect(Number(values.rows[0]?.stock_quantity)).toBe(-3);
   expect(values.rows[0]).toMatchObject({latest_cost:'17.000000',estimated_net_stock_value:'-51.00',price_missing:false});

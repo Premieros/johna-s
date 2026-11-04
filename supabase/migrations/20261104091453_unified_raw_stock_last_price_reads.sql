@@ -8,6 +8,20 @@ DO $guard$ BEGIN
  THEN RAISE EXCEPTION 'UNIFIED_RAW_READ_BASELINE_CHANGED'; END IF;
 END $guard$;
 
+-- Same branch authorization, evaluated for the small branch set once/query
+-- rather than invoking nested user/role checks for every physical batch row.
+-- The branch FK is mandatory; the explicit predicate retains the same boundary
+-- even when the branch table has broader organization-level visibility.
+DO $policy_guard$ BEGIN
+ IF (SELECT md5(pg_get_expr(polqual,polrelid)) FROM pg_policy
+  WHERE polrelid='public.raw_material_batches'::regclass AND polname='auth_select_raw_material_batches')
+  IS DISTINCT FROM 'b2574706352e4e182910cb29a93c364a'
+ OR NOT (SELECT attnotnull FROM pg_attribute WHERE attrelid='public.raw_material_batches'::regclass AND attname='branch_id')
+ THEN RAISE EXCEPTION 'UNIFIED_RAW_BATCH_POLICY_BASELINE_CHANGED'; END IF;
+END $policy_guard$;
+ALTER POLICY auth_select_raw_material_batches ON public.raw_material_batches
+ USING (branch_id IN (SELECT b.id FROM public.branches b WHERE public.user_may_access_branch(b.id)));
+
 -- The indexed canonical resolver and its authorization remain unchanged.
 -- Zero is a valid default; missing access and query failures remain errors/absent
 -- rows. Do not fall back to FIFO, catalog default_cost, or a second price source.

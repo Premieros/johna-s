@@ -35,8 +35,8 @@ describe.skipIf(!local)('monthly consumption and independent quick creation — 
   const r=await report();expect(r.error).toBeUndefined();const data=r.rows[0].r as ConsumptionLatestResult;
   const priced=data.rows.find(row=>row.raw_material_id===raw)!;
   expect(priced).toMatchObject({consumed_quantity:6,returned_quantity:1.5,net_quantity:4.5,unit_price:999,price_source:'pricing',consumption_value:4495.5,price_missing:false});
-  expect(data.summary).toMatchObject({count:2,total:4495.5,unpriced_count:1,complete:false});
-  expect(data.rows.find(row=>row.raw_material_id===missing)).toMatchObject({unit_price:0,price_source:'unpriced',consumption_value:0,price_missing:true});
+  expect(data.summary).toMatchObject({count:2,total:4495.5,unpriced_count:0,complete:true});
+  expect(data.rows.find(row=>row.raw_material_id===missing)).toMatchObject({unit_price:0,price_source:'catalog_zero',consumption_value:0,price_missing:false});
   expect((await report('material',true)).rows[0].r).toMatchObject({summary:{total:5494.5}});
  });
  it('takes the newest price from pricing, applied count or purchase through the canonical reader',async()=>{

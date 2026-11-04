@@ -83,4 +83,41 @@ describe.skipIf(!local)('unified current raw stock / published price, owned loca
     expect(await fingerprints()).toBe(before);
     await db.query('SET LOCAL ROLE authenticated');
   });
+  it('preserves exact batch RLS for home and additionally granted branches while avoiding per-batch authorization calls', async () => {
+    await db.query('RESET ROLE'); await db.query('SAVEPOINT policy_parity');
+    try {
+      await db.query("SET LOCAL track_functions='all'");
+      // Owner-only fixture setup precedes the authenticated read comparison.
+      await db.query("SELECT set_config('app.user_id','',true),set_config('request.jwt.claim.sub','',true),set_config('request.jwt.claims','{}',true)");
+      const foreignWarehouse=randomUUID();
+      await db.query("INSERT INTO public.warehouses(id,name,branch_id) VALUES($1,'Summary foreign WH',$2)", [foreignWarehouse,b]);
+      await db.query(`INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type)
+        SELECT $1,$2,$3,'POLICY-'||g,0.01,1,'opening' FROM generate_series(1,32) g`, [raw,a,wh]);
+      await db.query(`INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type)
+        VALUES($1,$2,$3,'POLICY-FOREIGN',9,1,'opening')`, [foreign,b,foreignWarehouse]);
+      await db.query("SELECT set_config('app.user_id',$1,true),set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claims',$2,true)", [viewer,JSON.stringify({sub:viewer,role:'authenticated'})]);
+      const calls = async () => Number((await db.query("SELECT coalesce(sum(calls),0) calls FROM pg_stat_xact_user_functions WHERE funcid='public.user_may_access_branch(uuid)'::regprocedure")).rows[0].calls);
+      const read = async () => {
+        await db.query('SET LOCAL ROLE authenticated');
+        const rows=(await db.query('SELECT raw_material_id,branch_id,sum(quantity) quantity FROM public.raw_material_batches GROUP BY raw_material_id,branch_id ORDER BY raw_material_id,branch_id')).rows;
+        await db.query('RESET ROLE'); return rows;
+      };
+      const count0=await calls(), optimized=await read(), newCalls=(await calls())-count0;
+      expect(optimized.some(row => row.branch_id===b)).toBe(false);
+      await db.query('ALTER POLICY auth_select_raw_material_batches ON public.raw_material_batches USING(public.user_may_access_branch(branch_id))');
+      const count1=await calls(), previous=await read(), oldCalls=(await calls())-count1;
+      expect(optimized).toEqual(previous);
+      expect(newCalls).toBeGreaterThan(0);
+      expect(newCalls).toBeLessThan(oldCalls);
+      await db.query('INSERT INTO public.user_branch_access(user_id,branch_id) VALUES($1,$2)', [viewer,b]);
+      const allowedPrevious=await read();
+      await db.query('ALTER POLICY auth_select_raw_material_batches ON public.raw_material_batches USING(branch_id IN(SELECT br.id FROM public.branches br WHERE public.user_may_access_branch(br.id)))');
+      expect(await read()).toEqual(allowedPrevious);
+      expect(allowedPrevious.some(row => row.branch_id===b)).toBe(true);
+      console.info('RAW_BATCH_RLS_CALLS '+JSON.stringify({oldCalls,newCalls,fixture:'32 extra physical lots; no production writes'}));
+    } finally {
+      await db.query('ROLLBACK TO policy_parity'); await db.query('RELEASE policy_parity');
+      await db.query('SET LOCAL ROLE authenticated');
+    }
+  });
 });

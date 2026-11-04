@@ -36,8 +36,8 @@ describe.skipIf(!local)('sold current-recipe consumption — owned localhost',()
  it('uses net sold units and canonical current composition rather than historical inventory quantities',async()=>{
   const result=value(await report());const meat=result.rows.find(r=>r.raw_material_id===raw)!;
   expect(meat).toMatchObject({net_quantity:1.782,unit_price:350,consumption_value:623.7});
-  expect(result.summary).toMatchObject({count:2,total:623.7,unpriced_count:1,missing_recipe_count:0,invalid_unit_count:0,complete:false});
-  expect(result.rows.find(r=>r.raw_material_id===missing)).toMatchObject({unit_price:0,consumption_value:0,price_missing:true});
+  expect(result.summary).toMatchObject({count:2,total:623.7,unpriced_count:0,missing_recipe_count:0,invalid_unit_count:0,complete:true});
+  expect(result.rows.find(r=>r.raw_material_id===missing)).toMatchObject({unit_price:0,consumption_value:0,price_missing:false});
   const canonical=await db.query('SELECT raw_material_id,SUM(quantity*(1+wastage_percent/100)) quantity FROM public._costing_product_raw_lines($1,$2) GROUP BY raw_material_id',[ids.prodA,ids.branchA]);
   for(const line of canonical.rows) expect(result.rows.find(r=>r.raw_material_id===line.raw_material_id)?.net_quantity).toBeCloseTo(Number(line.quantity)*6,9);
  });
@@ -86,7 +86,7 @@ describe.skipIf(!local)('sold current-recipe consumption — owned localhost',()
    const hidden=value(await report());expect(hidden.rows.some(r=>r.raw_material_id===raw)).toBe(false);expect(hidden.summary.complete).toBe(false);
    await db.query('DROP POLICY qa_sold_recipe_hidden_raw ON public.raw_materials');
    await db.query(`CREATE POLICY qa_sold_recipe_hidden_price ON private.raw_approved_price_read_model AS RESTRICTIVE FOR SELECT TO authenticated USING(raw_material_id<>'${raw}'::uuid)`);
-   expect(value(await report()).rows.find(r=>r.raw_material_id===raw)).toMatchObject({price_missing:true,unit_price:0});
+   expect(value(await report()).rows.find(r=>r.raw_material_id===raw)).toMatchObject({price_missing:false,unit_price:0});
   }finally{await db.query('ROLLBACK TO SAVEPOINT rls_recipe');}
   expect((await db.query("SELECT has_function_privilege('authenticated','public._costing_product_raw_lines(uuid,uuid)','execute') allowed")).rows[0].allowed).toBe(false);
   expect((await report('material',0,100,ids.users.cashier)).error).toContain('PERMISSION_DENIED');

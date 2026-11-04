@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 
 const consumers = [
   'src/features/catalog/services/pricingData.ts',
-  'src/features/inventory/services/lowStockData.ts',
   'src/features/trade/services/purchasePageData.ts',
   'src/features/catalog/services/productSetupData.ts',
   'src/features/costing/services/recipeEstimateData.ts',
@@ -15,6 +14,12 @@ const consumers = [
   'src/features/trade/services/shiftClosingReport.ts',
 ];
 describe('latest-approved material price reader contract', () => {
+  it('reorder reuses the canonical stock-summary price without an extra price or FIFO read', () => {
+    const content = readFileSync('src/features/inventory/services/lowStockData.ts', 'utf8');
+    expect(content).toContain('loadRawStockSummary(branchId)');
+    expect(content).not.toContain('loadRawMaterialDisplayPrices');
+    expect(content).not.toContain("from('raw_material_inventory')");
+  });
   it.each(consumers)('%s uses the unified price display reader', (path) => {
     const content = readFileSync(path, 'utf8');
     expect(content).toContain('loadRawMaterialDisplayPrices');

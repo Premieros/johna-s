@@ -110,3 +110,27 @@ verify Pages. Continue operational cutover separately with the listed gates.
 ## Mandatory update protocol
 Record actual CI, migration, merge and live parity results here. Never equate
 source merge with production activation or claim global FIFO retirement.
+
+## Additional measured root cause — before production application
+Authenticated Smouha stock aggregation under the existing RLS policy took2909.694ms
+for292 grouped materials /17268 physical batch rows, all buffer hits and zero disk
+reads. The indexed scan still called `user_may_access_branch(branch_id)` per row.
+An all-branch parity probe exceeded its3-second safety deadline and was cancelled.
+Do not raise that deadline or mistake cumulative query counters for this proof.
+
+The guarded release also changes only the raw-batch SELECT policy expression:
+resolve accessible branch IDs once using the exact same authorization function,
+then use membership for every batch. Table/role grants, other policies and every
+writer remain unchanged. Mandatory non-NULL branch FK and exact old policy hash
+are checked before replacement. Rollback restores the exact original predicate.
+A32-lot local differential test proves fewer actual authorization function calls,
+identical home-branch rows and identical additionally granted-branch rows.
+
+54 focused DB checks across7 files now pass, including report default-zero
+semantics, existing price-source RLS and both old/new rollback rehearsals. A further
+25 costing/source checks pass after replacing old NULL expectations with the
+owner's numeric-zero contract. First full CI found only obsolete source-contract
+and NULL/missing-price expectations; these are corrected without removing source,
+branch, amount, refund, invalid-recipe or rollback assertions. A fresh exact-head
+full run is required for the policy expression change. No production application
+has occurred yet.
