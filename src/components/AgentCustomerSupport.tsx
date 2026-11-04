@@ -47,9 +47,28 @@ export function AgentCustomerSupport() {
     script.src = SUPPORT_ORIGIN + '/support/widget.js';
     script.dataset.widgetKey = PUBLIC_KEY;
     script.dataset.johnaSupport = '1';
+    // Keep the floating support button away from the phone's persistent
+    // bottom navigation and from modal confirmation buttons. The inactive
+    // container must never absorb pointer events outside the actual button.
+    const moveOverlay = () => {
+      const overlay = document.querySelector<HTMLElement>('[data-support-ai-root]');
+      if (!overlay) return;
+      overlay.style.bottom = window.innerWidth < 768 ? '88px' : '14px';
+      overlay.style.pointerEvents = 'none';
+      const interactive = overlay.shadowRoot?.querySelectorAll<HTMLElement>('button, input, form, .panel');
+      interactive?.forEach(element => { element.style.pointerEvents = 'auto'; });
+    };
+    script.addEventListener('load', moveOverlay);
     document.body.appendChild(script);
+    const observer = new MutationObserver(moveOverlay);
+    observer.observe(document.body, { childList: true });
+    window.addEventListener('resize', moveOverlay);
+    moveOverlay();
 
     return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', moveOverlay);
+      script.removeEventListener('load', moveOverlay);
       script.remove();
       document.querySelectorAll('[data-support-ai-root]').forEach(root => root.remove());
     };
