@@ -23,7 +23,7 @@ The previous apply path compared physical quantities with today's stock, then us
 - Raw-only dispatch to the historical count implementation behind existing authorization.
 - Verified ledger cutoff at document creation; persist that baseline on the line.
 - Separate effective movement time from latest price valuation time.
-- Reconcile negative batch quantities against existing debt metadata before posting.
+- Reconcile negative batch quantities against existing debt metadata before posting, using the existing partial open-debt index (do not scan settled debt history).
 - Quantity-only offset of pre-count debts; preserve later negative activity and sale cost.
 - Negative count corrections can remain negative after later sales, valued at published price.
 - Later legacy receipts cannot reprice movements explicitly marked approved_last_known.
@@ -32,13 +32,13 @@ The previous apply path compared physical quantities with today's stock, then us
 - Binding rollback preserves already posted stock/journals and audit columns.
 
 ## Verification ledger
-50 integration checks passed across 8 files in disposable PostgreSQL. Includes real separate-connection stock locking, journal failure rollback, receipt after count deficit, retry, zero price and later sale preservation. Existing raw test openings now include ledger provenance. Draft Excel quoted prices do not override published prices when posting. Typecheck and changed test lint passed before final packaging; CI must validate the final commit. No production success is claimed yet.
+55 integration checks passed across 10 files in disposable PostgreSQL. Includes real separate-connection stock locking, journal failure rollback, receipt after count deficit, retry, zero price and later sale preservation. Existing raw test openings now include ledger provenance. Draft Excel quoted prices do not override published prices when posting. Typecheck and changed test lint passed before final packaging; CI must validate the final commit. No production success is claimed yet.
 
 ## Production gate
 Require exact-head Verify main success, final ledger/batch/debt reconciliation and no superseding count. Apply the guarded migration once. Post approved documents through the normal public RPC under an authorized account, in a transaction that fails if either response is unsuccessful. Verify stock totals, historical deltas, document status, journal balance and no duplicate references afterwards. Do not silently waive baseline or reconciliation errors.
 
 ## Next action
-Push the complete release package, inspect exact-head CI, then merge and apply after successful checks. If preflight reveals unexplained stock provenance, repair only that coordinate with explicit evidence; never remove the reconciliation gate.
+Push the complete release package, inspect exact-head CI, then merge and apply after successful checks. A broad preflight query was canceled when slow; use bounded coordinate checks and the atomic in-function validation rather than repeating large scans. If preflight reveals unexplained stock provenance, repair only that coordinate with explicit evidence; never remove the reconciliation gate.
 
 ## Mandatory update protocol
 Update this log after CI, merge, migration and count application. Record real results and remaining blockers. Never label local regression success as production application.

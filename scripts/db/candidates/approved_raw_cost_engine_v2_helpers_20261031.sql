@@ -54,9 +54,14 @@ BEGIN
     RETURN jsonb_build_object('success',false,'error','LEGACY_FIFO_POSITION_NOT_CUTOVER');
   END IF;
   END IF;
-  SELECT * INTO v_price FROM private.stock_count_raw_price(
+  SELECT * INTO v_price FROM private.latest_approved_raw_prices(
     p_branch_id,ARRAY[p_raw_material_id],COALESCE(p_valuation_as_of,v_now))
   WHERE raw_material_id=p_raw_material_id;
+  IF p_reference_type='stock_count' AND v_price.unit_cost IS NULL THEN
+    SELECT * INTO v_price FROM private.stock_count_raw_price(
+      p_branch_id,ARRAY[p_raw_material_id],COALESCE(p_valuation_as_of,v_now))
+    WHERE raw_material_id=p_raw_material_id;
+  END IF;
   IF v_price.unit_cost IS NULL OR v_price.unit_cost<0
     OR v_price.priced_at IS NULL
     OR v_price.price_source NOT IN ('purchase','pricing','stock_count','catalog_zero') THEN
