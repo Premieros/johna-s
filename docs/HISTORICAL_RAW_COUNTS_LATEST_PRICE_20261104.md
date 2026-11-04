@@ -2,13 +2,13 @@
 
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `experiment/historical-count-quantity-offset`
-Current PR: #597
+Branch: `fix/count-currency-consolidation`
+Current PR: #600
 Last updated: 2026-11-04
 State: **DEPLOYED**
 
 ## Work status
-Implementation and rollback package complete. Exact-head CI and final production preflight pending. User has authorized merge, application and both November counts. This entry supersedes earlier candidate-only restrictions for this specific release once verification passes.
+Production application and verification complete for both November counts. PRs #597–600 merged after exact-head CI. Count posting, bounded compatibility housekeeping and audited currency consolidation have all completed. Do not reapply these documents.
 
 ## Guardrails
 Raw-only counts use the existing permission and branch checks. Product/mixed counts retain their previous implementation. Sales, kitchen and printing RPC bindings remain unchanged. No test data is written to production. No full-history scan is added to sale/kitchen requests. A busy stock lock returns promptly; the count cannot wait indefinitely behind a sale. Zero is the default valuation in the count projection of the existing canonical price reader.
@@ -38,7 +38,7 @@ The previous apply path compared physical quantities with today's stock, then us
 Require exact-head Verify main success, final ledger/batch/debt reconciliation and no superseding count. Apply the guarded migration once. Post approved documents through the normal public RPC under an authorized account, in a transaction that fails if either response is unsuccessful. Verify stock totals, historical deltas, document status, journal balance and no duplicate references afterwards. Do not silently waive baseline or reconciliation errors.
 
 ## Next action
-Push the complete release package, inspect exact-head CI, then merge and apply after successful checks. A broad preflight query was canceled when slow; use bounded coordinate checks and the atomic in-function validation rather than repeating large scans. If preflight reveals unexplained stock provenance, repair only that coordinate with explicit evidence; never remove the reconciliation gate.
+No action remains for documents00008/00009. Future changes require an audited correction rather than repeating the posting. Global retirement of other legacy sale/purchase valuation paths is outside this raw-count release.
 
 ## Mandatory update protocol
 Update this log after CI, merge, migration and count application. Record real results and remaining blockers. Never label local regression success as production application.
@@ -98,3 +98,13 @@ quantity or the journal, and retains before/after records in audit_log. This
 correction is still pending final verification/application; do not reapply counts.
 
 Currency follow-up local verification:60 integration checks across12 files pass, including fractional two-lot rounding, audited repair, retained IDs, retry, unchanged physical quantity and unchanged journal. Final CI and currency-only repair are pending; both counts remain applied and must not be posted again.
+
+## Final production verification — 2026-11-04
+All four PR #600 checks passed (run41801547943); merge4cd5f99f and guarded migration applied. The currency repair consolidated14 Smouha and7 Cleopatra material groups with one before/after audit record per document. No physical quantity or journal was changed.
+
+| Document | Status | Lines | Net count adjustment | Quantity mismatches | Value mismatches | Journals |
+|---|---|---:|---:|---:|---:|---:|
+| Smouha00008 | applied |407|293013.54|0|0|1 balanced |
+| Cleopatra00009 | applied |402|45552.54|0|0|1 balanced |
+
+Stock movements remain effective at the original November1 creation timestamps. All809 lines reconcile. Bounded cleanup finished in108 transactions, each checking unchanged net stock. Zero-valued lines were checked against the canonical price source: no earlier known positive price was ignored. The correction is complete; earlier pending statements above are chronological history, not current blockers.
