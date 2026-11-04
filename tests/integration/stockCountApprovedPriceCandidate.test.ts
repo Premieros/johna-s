@@ -168,6 +168,8 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
       await db.query("INSERT INTO public.raw_material_batches(id,raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type) VALUES($1,$4,$5,$6,'NEG-QA',-19,10,'kitchen_send_oversold'),($2,$4,$5,$6,'REC-QA',$7,10,'stock_count'),($3,$4,$5,$6,'LATER-QA',-8,10,'kitchen_send_oversold')",[negative,receiptBatch,laterBatch,material,branch,warehouse,receiptQty]);
       const sale=(await db.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,created_at) VALUES($1,$2,$3,-19,10,-190,'sale','sale',$4,'2026-10-31') RETURNING id",[material,branch,warehouse,randomUUID()])).rows[0].id;
       await db.query("INSERT INTO public.raw_fifo_debts(source_ledger_id,raw_material_id,branch_id,warehouse_id,oversold_batch_id,debt_quantity,source_created_at) VALUES($1,$2,$3,$4,$5,19,'2026-10-31')",[sale,material,branch,warehouse,negative]);
+      const futureSale=(await db.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,created_at) VALUES($1,$2,$3,-8,10,-80,'sale','sale',$4,'2026-11-02') RETURNING id",[material,branch,warehouse,randomUUID()])).rows[0].id;
+      await db.query("INSERT INTO public.raw_fifo_debts(source_ledger_id,raw_material_id,branch_id,warehouse_id,oversold_batch_id,debt_quantity,source_created_at) VALUES($1,$2,$3,$4,$5,8,'2026-11-02')",[futureSale,material,branch,warehouse,laterBatch]);
       const receipt=(await db.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,created_at) VALUES($1,$2,$3,'REC-QA',$6,10,$6::numeric*10,'adjustment','stock_count',$4,$5) RETURNING id",[material,branch,warehouse,doc,time,receiptQty])).rows[0].id;
       await db.query('SAVEPOINT invalid_negative');
       await db.query('UPDATE public.raw_material_batches SET quantity=-1 WHERE id=$1',[negative]);
@@ -183,6 +185,7 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
       expect(Number(balance.qty)).toBe(-27+receiptQty);
       expect(Number((await db.query("SELECT total_cost FROM public.inventory_ledger WHERE id=$1",[sale])).rows[0].total_cost)).toBe(-190);
       expect(Number((await db.query("SELECT quantity FROM public.raw_material_batches WHERE id=$1",[laterBatch])).rows[0].quantity)).toBe(-8);
+      expect(Number((await db.query('SELECT settled_quantity FROM public.raw_fifo_debts WHERE source_ledger_id=$1',[futureSale])).rows[0].settled_quantity)).toBe(0);
     } finally {
       await db.query('ROLLBACK TO SAVEPOINT quantity_offset');
       await db.query('RELEASE SAVEPOINT quantity_offset');
