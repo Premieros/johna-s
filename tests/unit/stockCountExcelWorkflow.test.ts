@@ -14,10 +14,11 @@ describe('stock count Excel workflow contract', () => {
     expect(page).toContain('Stock has not been changed yet');
   });
 
-  it('uses warehouse FIFO batches for the reference system quantity', () => {
+  it('uses paged warehouse aggregates for the reference system quantity', () => {
     const service = read('src/features/inventory/services/stockCountData.ts');
     expect(service).toContain('loadRawMaterialWarehouseSnapshot');
-    expect(service).toContain(".from('raw_material_batches')");
+    expect(service).toContain(".from('raw_material_warehouse_inventory')");
+    expect(service).toContain('fetchAllReportRows');
     expect(service).toContain(".eq('branch_id', branchId)");
     expect(service).toContain(".eq('warehouse_id', warehouseId)");
   });

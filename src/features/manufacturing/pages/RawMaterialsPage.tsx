@@ -1,5 +1,4 @@
 import { rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
-import { rawFifoCost } from '@/features/costing/services/rawFifoCostData';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, Edit2, Boxes, Layers, Trash2 } from 'lucide-react';
 import * as api from '@/api';
@@ -233,7 +232,7 @@ export function RawMaterialsPage() {
     { key: 'branch', header: t('branch'), render: (i) => branchLabel(i.branch_id) },
     { key: 'quantity', header: t('quantity'), render: (i) => <span className={`font-semibold ${Number(i.quantity) < Number(i.min_stock) ? 'text-ui-danger' : 'text-ui-text'}`}>{formatRawMaterialQuantity(Number(i.quantity), unitForMaterial(i.raw_material), { lang })}</span> },
     { key: 'latest_price', header: isAr ? 'آخر سعر معتمد / وحدة' : 'Latest approved price / unit', render: (i) => currentPrices[i.raw_material_id] == null ? '-' : formatNumber(currentPrices[i.raw_material_id]!, 6) },
-    { key: 'avg_cost', header: isAr ? 'تكلفة المخزون الحالية (FIFO)' : 'Current inventory cost (FIFO)', render: (i) => rawFifoCost(i) === null ? '-' : formatNumber(Number(i.avg_cost), 2) },
+    { key: 'stock_value', header: isAr ? 'قيمة الرصيد بآخر سعر' : 'Stock value at latest price', render: (i) => currentPrices[i.raw_material_id] == null ? '-' : formatNumber(Number(i.quantity) * currentPrices[i.raw_material_id]!, 2) },
     { key: 'actions', header: t('actions'), render: (i) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>{can('raw_materials.manage') && <button onClick={() => openAdjust(i)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('adjustRawStock')}><Edit2 className="w-4 h-4" /></button>}</div> },
   ];
 
