@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `perf/ci-runtime-dedup-20261104`
-Current PR: `0`
+Current PR: `606`
 Last updated: 2026-11-04
 State: **BLOCKED**
 
