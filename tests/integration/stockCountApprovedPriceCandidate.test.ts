@@ -19,19 +19,15 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
   const failingLine='00000000-0000-4000-8000-000000000012';
   beforeAll(async () => {
     db=openDb(url); await db.connect(); await db.query('BEGIN');
-    // Install the existing unshipped v2 movement prototype ONLY inside this local
-    // disposable transaction. Strip outer transaction commands to retain ROLLBACK.
-    const schema=readFileSync('scripts/db/candidates/approved_raw_cost_engine_minimal_storage_20261031.sql','utf8')
+    // Reconstruct the inspected production function bindings in this local-only
+    // transaction. CI separately applies the migration in canonical sequence.
+    const baseline=readFileSync('scripts/candidates/historical_raw_counts_binding_rollback_20261104.sql','utf8')
       .replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,'');
-    await db.query(schema);
-    const helpers=readFileSync('scripts/db/candidates/approved_raw_cost_engine_v2_helpers_20261031.sql','utf8');
-    await db.query(helpers);
-    // Install the candidate price reader first, so every count movement shares it.
-    const pricing=readFileSync('scripts/candidates/latest_approved_price_zero_catalog_NOT_FOR_PRODUCTION_20261101.sql','utf8')
+    await db.query(baseline);
+    // Install the exact release migration inside the rollback-only fixture.
+    const release=readFileSync('supabase/migrations/20261104062413_historical_raw_counts_latest_price.sql','utf8')
       .replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,'');
-    await db.query(pricing);
-    const candidate=readFileSync('scripts/candidates/stock_count_apply_last_price_ATOMIC_NOT_FOR_PRODUCTION_20261101.sql','utf8');
-    await db.query(candidate);
+    await db.query(release);
     await db.query("INSERT INTO public.branches(id,name) VALUES($1,'Latest price QA')",[branch]);
     await db.query("INSERT INTO public.warehouses(id,branch_id,name,is_active) VALUES($1,$2,'Latest price QA WH',true)",[warehouse,branch]);
     await db.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active) VALUES($1,$2,'Zero cost raw',$3,0,true)",[raw,'QA-'+raw.slice(0,8),branch]);
@@ -74,13 +70,13 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
     // The canonical reader candidate is never installed in production here.
     // This transaction is deliberately rolled back by afterAll.
     const now = await db.query(
-      "SELECT unit_cost,price_source FROM private.latest_approved_raw_prices($1,ARRAY[$2]::uuid[],now()) WHERE raw_material_id=$2",
+      "SELECT unit_cost,price_source FROM private.stock_count_raw_price($1,ARRAY[$2]::uuid[],now()) WHERE raw_material_id=$2",
       [branch,raw],
     );
     expect(Number(now.rows[0].unit_cost)).toBe(0);
     expect(now.rows[0].price_source).toBe('catalog_zero');
     const before = await db.query(
-      "SELECT unit_cost,price_source FROM private.latest_approved_raw_prices($1,ARRAY[$2]::uuid[],now()-interval '30 years') WHERE raw_material_id=$2",
+      "SELECT unit_cost,price_source FROM private.stock_count_raw_price($1,ARRAY[$2]::uuid[],now()-interval '30 years') WHERE raw_material_id=$2",
       [branch,raw],
     );
     expect(Number(before.rows[0].unit_cost)).toBe(0);
@@ -133,7 +129,8 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
       await db.query('SET LOCAL ROLE authenticated');
       const blocked=(await db.query('SELECT public.apply_stock_count($1) r',[latestPriceCount])).rows[0].r;
       await db.query('RESET ROLE');
-      expect(blocked).toMatchObject({success:false,error:'LEGACY_FIFO_POSITION_NOT_CUTOVER'});
+      expect(blocked.success).toBe(false);
+      expect(blocked.detail).toContain('COUNT_LEGACY_QUANTITY_UNRECONCILED');
       expect((await db.query("SELECT count(*)::int n FROM public.inventory_ledger WHERE reference_id=$1",[latestPriceCount])).rows[0].n).toBe(0);
       expect((await db.query("SELECT status FROM public.stock_counts WHERE id=$1",[latestPriceCount])).rows[0].status).toBe('approved');
     } finally {
@@ -189,6 +186,112 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
     } finally {
       await db.query('ROLLBACK TO SAVEPOINT quantity_offset');
       await db.query('RELEASE SAVEPOINT quantity_offset');
+    }
+  });
+
+  it('applies a historical negative-stock count atomically at the latest price with a balanced journal', async () => {
+    await db.query('RESET ROLE');
+    await db.query('SAVEPOINT integrated_count');
+    try {
+      const material=randomUUID(), negative=randomUUID(), laterBatch=randomUUID(), doc=randomUUID();
+      await db.query("INSERT INTO public.raw_materials(id,branch_id,code,name,default_cost) VALUES($1::uuid,$2,$1::uuid::text,'Integrated count fixture',0)",[material,branch]);
+      await db.query("INSERT INTO public.raw_material_batches(id,raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type) VALUES($1,$3,$4,$5,'NEG-INTEGRATED',-19,10,'kitchen_send_oversold'),($2,$3,$4,$5,'LATER-INTEGRATED',-8,10,'kitchen_send_oversold')",[negative,laterBatch,material,branch,warehouse]);
+      for (const [qty,batch,time] of [[19,negative,'2026-10-31'],[8,laterBatch,'2026-11-02']] as const) {
+        const sale=(await db.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,created_at) VALUES($1,$2,$3,-$4::numeric,10,-$4::numeric*10,'sale','sale',$5,$6) RETURNING id",[material,branch,warehouse,qty,randomUUID(),time])).rows[0].id;
+        await db.query("INSERT INTO public.raw_fifo_debts(source_ledger_id,raw_material_id,branch_id,warehouse_id,oversold_batch_id,debt_quantity,source_created_at) VALUES($1,$2,$3,$4,$5,$6,$7)",[sale,material,branch,warehouse,batch,qty,time]);
+      }
+      await db.query("INSERT INTO public.stock_counts(id,count_number,branch_id,warehouse_id,status,count_type,created_by,approved_by,approved_at,created_at) VALUES($1,$5,$2,$3,'approved','partial',$4,$4,now(),'2026-11-01 07:00Z')",[doc,branch,warehouse,actor,'QA-INTEGRATED-'+doc.slice(0,8)]);
+      await db.query("INSERT INTO public.stock_count_items(stock_count_id,raw_material_id,system_quantity,counted_quantity,unit_cost) VALUES($1,$2,-24,4,0)",[doc,material]);
+      // A price published AFTER the count must be used, independently of quantity date.
+      await db.query("INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,reference_number,priced_at) VALUES($1,$2,10,'pricing',$3,'2026-11-03')",[material,branch,'QA-LATEST-'+doc]);
+      await db.query('SELECT public.ensure_chart_of_accounts($1)',[branch]);
+      await db.query('SELECT public.seed_account_mappings($1)',[branch]);
+      // A live stock writer owns the same lock on a separate connection.
+      // Count must return promptly without changing stock or blocking the sale.
+      const writer=openDb(url);
+      await writer.connect();
+      try {
+        await writer.query('BEGIN');
+        await writer.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[material+':'+branch]);
+        await db.query('SET LOCAL ROLE authenticated');
+        const busy=(await db.query('SELECT public.apply_stock_count($1) r',[doc])).rows[0].r;
+        await db.query('RESET ROLE');
+        expect(busy.success).toBe(false);
+        expect(busy.detail).toContain('STOCK_COUNT_STOCK_BUSY_RETRY');
+      } finally {
+        await writer.query('ROLLBACK');
+        await writer.end();
+      }
+      // A missing accounting mapping must undo the receipt, offsets and count status.
+      await db.query('SAVEPOINT bad_mapping');
+      await db.query("UPDATE public.account_mappings SET semantic_key='qa_missing_variance' WHERE branch_id=$1 AND semantic_key='stock_variance'",[branch]);
+      await db.query('SET LOCAL ROLE authenticated');
+      const rejected=(await db.query('SELECT public.apply_stock_count($1) r',[doc])).rows[0].r;
+      await db.query('RESET ROLE');
+      expect(rejected.success).toBe(false);
+      expect(Number((await db.query("SELECT count(*) n FROM public.inventory_ledger WHERE reference_id=$1",[doc])).rows[0].n)).toBe(0);
+      expect(Number((await db.query('SELECT sum(settled_quantity) qty FROM public.raw_fifo_debts WHERE raw_material_id=$1',[material])).rows[0].qty)).toBe(0);
+      await db.query('ROLLBACK TO SAVEPOINT bad_mapping');
+      await db.query('RELEASE SAVEPOINT bad_mapping');
+      await db.query('SET LOCAL ROLE authenticated');
+      const applied=(await db.query('SELECT public.apply_stock_count($1) r',[doc])).rows[0].r;
+      expect(applied.success,JSON.stringify(applied)).toBe(true);
+      const retry=(await db.query('SELECT public.apply_stock_count($1) r',[doc])).rows[0].r;
+      expect(retry.success).toBe(false);
+      await db.query('RESET ROLE');
+      expect(Number((await db.query('SELECT sum(quantity) qty FROM public.raw_material_batches WHERE raw_material_id=$1',[material])).rows[0].qty)).toBe(-4);
+      const countLedger=(await db.query("SELECT sum(quantity) qty,sum(total_cost) value,min(created_at)::text at FROM public.inventory_ledger WHERE reference_id=$1",[doc])).rows[0];
+      expect(Number(countLedger.qty)).toBe(23);
+      expect(Number(countLedger.value)).toBe(230);
+      const line=(await db.query('SELECT system_quantity,variance_quantity,variance_value FROM public.stock_count_items WHERE stock_count_id=$1',[doc])).rows[0];
+      expect(Number(line.system_quantity)).toBe(-19);
+      expect(Number(line.variance_quantity)).toBe(23);
+      expect(Number(line.variance_value)).toBe(230);
+      expect(new Date(countLedger.at).toISOString()).toBe('2026-11-01T07:00:00.000Z');
+      expect(Number((await db.query("SELECT sum(total_cost) value FROM public.inventory_ledger WHERE raw_material_id=$1 AND reference_type='sale'",[material])).rows[0].value)).toBe(-270);
+      expect(Number((await db.query('SELECT quantity FROM public.raw_material_batches WHERE id=$1',[laterBatch])).rows[0].quantity)).toBe(-8);
+      const journal=(await db.query('SELECT sum(debit) debit,sum(credit) credit FROM public.journal_entry_lines WHERE journal_entry_id=$1',[applied.journal_entry_id])).rows[0];
+      expect(Number(journal.debit)).toBe(230);
+      expect(Number(journal.credit)).toBe(230);
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT integrated_count');
+      await db.query('RELEASE SAVEPOINT integrated_count');
+      await db.query('RESET ROLE');
+    }
+  });
+
+  it('keeps a count shortage valued at its published price when a later receipt settles quantity', async () => {
+    await db.query('RESET ROLE');
+    await db.query('SAVEPOINT shortage_count');
+    try {
+      const material=randomUUID(), negative=randomUUID(), doc=randomUUID();
+      await db.query("INSERT INTO public.raw_materials(id,branch_id,code,name,default_cost) VALUES($1::uuid,$2,$1::uuid::text,'Count shortage fixture',0)",[material,branch]);
+      await db.query("INSERT INTO public.raw_material_batches(id,raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type) VALUES($1,$2,$3,$4,'LATER-SHORT',-3,10,'kitchen_send_oversold')",[negative,material,branch,warehouse]);
+      await db.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,created_at) VALUES($1,$2,$3,5,10,50,'purchase','qa_seed','2026-10-31')",[material,branch,warehouse]);
+      const sale=(await db.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,created_at) VALUES($1,$2,$3,-8,10,-80,'sale','sale',$4,'2026-11-02') RETURNING id",[material,branch,warehouse,randomUUID()])).rows[0].id;
+      await db.query("INSERT INTO public.raw_fifo_debts(source_ledger_id,raw_material_id,branch_id,warehouse_id,oversold_batch_id,debt_quantity,source_created_at) VALUES($1,$2,$3,$4,$5,3,'2026-11-02')",[sale,material,branch,warehouse,negative]);
+      await db.query("INSERT INTO public.stock_counts(id,count_number,branch_id,warehouse_id,status,count_type,created_by,approved_by,approved_at,created_at) VALUES($1,$5,$2,$3,'approved','partial',$4,$4,now(),'2026-11-01 07:00Z')",[doc,branch,warehouse,actor,'QA-SHORT-'+doc.slice(0,8)]);
+      await db.query("INSERT INTO public.stock_count_items(stock_count_id,raw_material_id,system_quantity,counted_quantity,unit_cost) VALUES($1,$2,5,2,0)",[doc,material]);
+      await db.query("INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,reference_number,priced_at) VALUES($1,$2,10,'pricing',$3,'2026-11-03')",[material,branch,'QA-SHORT-PRICE-'+doc]);
+      await db.query('SELECT public.ensure_chart_of_accounts($1)',[branch]);
+      await db.query('SELECT public.seed_account_mappings($1)',[branch]);
+      await db.query('SET LOCAL ROLE authenticated');
+      const applied=(await db.query('SELECT public.apply_stock_count($1) r',[doc])).rows[0].r;
+      expect(applied.success,JSON.stringify(applied)).toBe(true);
+      await db.query('RESET ROLE');
+      expect(Number((await db.query('SELECT sum(quantity) qty FROM public.raw_material_batches WHERE raw_material_id=$1',[material])).rows[0].qty)).toBe(-6);
+      const received=(await db.query("SELECT public._raw_add($1,$2,$3,6,30,NULL,NULL,NULL,'purchase','qa_receipt',$4,NULL,NULL) r",[material,branch,warehouse,randomUUID()])).rows[0].r;
+      expect(received.success,JSON.stringify(received)).toBe(true);
+      const ledger=(await db.query('SELECT quantity,unit_cost,total_cost FROM public.inventory_ledger WHERE reference_id=$1',[doc])).rows;
+      expect(ledger).toHaveLength(1);
+      expect(Number(ledger[0].quantity)).toBe(-3);
+      expect(Number(ledger[0].unit_cost)).toBe(10);
+      expect(Number(ledger[0].total_cost)).toBe(-30);
+      expect(Number((await db.query('SELECT sum(quantity) qty FROM public.raw_material_batches WHERE raw_material_id=$1',[material])).rows[0].qty)).toBe(0);
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT shortage_count');
+      await db.query('RELEASE SAVEPOINT shortage_count');
+      await db.query('RESET ROLE');
     }
   });
 

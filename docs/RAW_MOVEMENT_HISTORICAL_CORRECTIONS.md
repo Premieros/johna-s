@@ -28,9 +28,15 @@ historical count followed by sale and transfer, two consecutive counts,
 negative stock and open legacy debt, zero price, retry and concurrent sale,
 cross-branch denial, and unchanged kitchen/printing behavior.
 
-The historical count candidate is local only. Seven targeted disposable-database checks pass locally: zero valuation, historical
-quantity delta, later sale preservation, full and partial negative-quantity offset,
-retry, and atomic failure on a mismatched negative batch. The offset helper is not
-yet connected to the count posting transaction. Legacy writer concurrency, product
-movements, separate effective/valuation dates, and journal parity still need coverage
-before either November count is posted. This document does not bypass those checks.
+The historical raw-only count path is now wired through the existing public
+permission/branch gate. Nine disposable-database tests cover zero valuation,
+historical quantity delta, later sale preservation, full/partial debt offset,
+retry, atomic rollback on quantity or account mismatch, a separate concurrent
+writer lock, balanced journals, and a count shortage settled by a later receipt
+without repricing the count. Effective movement time and valuation time are
+separate parameters. Mixed/product counts retain the previous implementation.
+
+Deployment still requires exact-head CI and production preflight. Neither count
+has been posted by these tests. Existing sale/purchase writers retain their old
+valuation behavior; this change is limited to raw stock counts. The compatibility
+receipt change freezes only movements marked approved_last_known.

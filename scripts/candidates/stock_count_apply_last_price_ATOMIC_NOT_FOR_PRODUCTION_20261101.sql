@@ -2,7 +2,7 @@
 -- Uses the existing central approved-price source, never FIFO for raw counts.
 -- Missing price and legacy debt coordinates fail closed; no rollout is authorized.
 -- Requires independent disposable-DB and accounting reconciliation tests.
-CREATE OR REPLACE FUNCTION public.apply_stock_count(p_stock_count_id uuid)
+CREATE OR REPLACE FUNCTION private.apply_raw_stock_count_last_price(p_stock_count_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -12,6 +12,8 @@ DECLARE
   v_count public.stock_counts%ROWTYPE;
   v_item public.stock_count_items%ROWTYPE;
   v_current numeric(14,4);
+  v_lock_raw uuid;
+  v_valuation_at timestamptz:=statement_timestamp();
   v_later_delta numeric;
   v_ledger_at_creation numeric;
   v_expected_current numeric;
@@ -50,6 +52,25 @@ BEGIN
       RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
     END IF;
 
+    IF NOT EXISTS(SELECT 1 FROM public.warehouses WHERE id=v_count.warehouse_id AND branch_id=v_count.branch_id AND is_active) THEN
+      RAISE EXCEPTION 'WAREHOUSE_BRANCH_MISMATCH';
+    END IF;
+    IF EXISTS(SELECT 1 FROM public.stock_count_items WHERE stock_count_id=v_count.id
+      AND (counted_quantity IS NULL OR counted_quantity<0 OR (raw_material_id IS NULL AND product_id IS NULL)
+        OR (raw_material_id IS NOT NULL AND product_id IS NOT NULL)))
+      OR EXISTS(SELECT 1 FROM public.stock_count_items WHERE stock_count_id=v_count.id AND raw_material_id IS NOT NULL
+        GROUP BY raw_material_id HAVING count(*)>1) THEN
+      RAISE EXCEPTION 'STOCK_COUNT_INVALID_LINES';
+    END IF;
+
+    IF EXISTS(SELECT 1 FROM public.stock_count_items WHERE stock_count_id=v_count.id AND product_id IS NOT NULL) THEN
+      RAISE EXCEPTION 'RAW_ONLY_STOCK_COUNT_REQUIRED';
+    END IF;
+    IF EXISTS(SELECT 1 FROM public.inventory_ledger WHERE reference_type='stock_count' AND reference_id=v_count.id)
+      OR EXISTS(SELECT 1 FROM public.journal_entries WHERE reference_type='stock_count' AND reference_id=v_count.id) THEN
+      RAISE EXCEPTION 'COUNT_EXISTING_POSTING_REQUIRES_REVIEW';
+    END IF;
+
     -- A later applied count supersedes this count on overlapping coordinates.
     IF EXISTS (
       SELECT 1 FROM public.stock_count_items original
@@ -63,21 +84,15 @@ BEGIN
       RETURN jsonb_build_object('success',false,'error','LATER_STOCK_COUNT_ALREADY_APPLIED');
     END IF;
 
-    -- Fail closed before any stock/accounting write when a counted raw
-    -- coordinate still has unsettled legacy FIFO debt. The approved-v2
-    -- movement helper also blocks this; preflight makes the blocker explicit.
-    IF EXISTS (
-      SELECT 1 FROM public.stock_count_items sci
-      JOIN public.raw_fifo_debts d
-        ON d.raw_material_id=sci.raw_material_id
-       AND d.branch_id=v_count.branch_id
-       AND d.warehouse_id=v_count.warehouse_id
-      WHERE sci.stock_count_id=p_stock_count_id
-        AND d.debt_quantity>d.settled_quantity
-    ) THEN
-      RETURN jsonb_build_object('success',false,
-        'error','LEGACY_FIFO_POSITION_NOT_CUTOVER');
-    END IF;
+    -- Use the same locks as live raw sales/receipts, in stable order. A busy
+    -- coordinate returns promptly rather than making the till wait for a count.
+    FOR v_lock_raw IN SELECT DISTINCT raw_material_id FROM public.stock_count_items
+      WHERE stock_count_id=p_stock_count_id AND raw_material_id IS NOT NULL ORDER BY raw_material_id
+    LOOP
+      IF NOT pg_try_advisory_xact_lock(hashtextextended(v_lock_raw::text||':'||v_count.branch_id::text,0)) THEN
+        RAISE EXCEPTION 'STOCK_COUNT_STOCK_BUSY_RETRY';
+      END IF;
+    END LOOP;
 
     FOR v_item IN
       SELECT *
@@ -95,12 +110,12 @@ BEGIN
         PERFORM pg_advisory_xact_lock(hashtextextended(
           v_item.raw_material_id::text||':'||v_count.branch_id::text,0
         ));
-        -- Resolve as of the physical count document creation time (pending explicit
-        -- physical counted_at support). Never invent a price from count snapshots.
+        -- Price uses the latest published source at posting; the quantity cutoff
+        -- remains the count creation time. These timestamps are independent.
         SELECT p.unit_cost,p.price_source
           INTO v_final_price,v_price_source
-          FROM private.latest_approved_raw_prices(
-            v_count.branch_id,ARRAY[v_item.raw_material_id],v_count.created_at
+          FROM private.stock_count_raw_price(
+            v_count.branch_id,ARRAY[v_item.raw_material_id],v_valuation_at
           ) p WHERE p.raw_material_id=v_item.raw_material_id;
         -- Explicitly recorded zero is a valid cost. Missing (NULL / unpriced)
         -- and negative prices are invalid. The source projection must be updated
@@ -139,6 +154,10 @@ BEGIN
         IF v_current-v_later_delta IS DISTINCT FROM v_ledger_at_creation THEN
           RAISE EXCEPTION 'STOCK_COUNT_HISTORICAL_BASELINE_UNVERIFIED item %',v_item.id;
         END IF;
+        -- Persist the verified historical baseline so the document shows the
+        -- same variance as its stock ledger and accounting entry.
+        UPDATE public.stock_count_items SET system_quantity=v_ledger_at_creation
+          WHERE id=v_item.id AND system_quantity IS DISTINCT FROM v_ledger_at_creation;
         v_variance := v_item.counted_quantity - (v_current - v_later_delta);
         v_expected_current := v_current + v_variance;
 
@@ -147,7 +166,7 @@ BEGIN
           v_res := private.raw_receive_approved_v2(
             v_item.raw_material_id, v_count.branch_id, v_count.warehouse_id,
             v_variance, v_final_price,
-            'adjustment', 'stock_count', v_count.id, v_count.count_number, auth.uid(), v_count.created_at
+            'adjustment', 'stock_count', v_count.id, v_count.count_number, auth.uid(), v_valuation_at, v_count.created_at
           );
           IF NOT COALESCE((v_res->>'success')::boolean, false) THEN
             RAISE EXCEPTION 'STOCK_COUNT_ITEM_FAILED: %', 'RAW_ADJUST_FAILED';
@@ -173,7 +192,7 @@ BEGIN
           v_res := private.raw_issue_approved_v2(
             v_item.raw_material_id, v_count.branch_id, v_count.warehouse_id,
             -v_variance, 'adjustment', 'stock_count', v_count.id,
-            v_count.count_number, auth.uid(), v_count.created_at
+            v_count.count_number, auth.uid(), v_valuation_at, v_count.created_at
           );
           IF COALESCE((v_res->>'success')::boolean,false) IS NOT TRUE THEN
             RAISE EXCEPTION 'STOCK_COUNT_REMOVE_FAILED: %',COALESCE(v_res->>'error','unknown');
@@ -203,55 +222,6 @@ BEGIN
         IF COALESCE(v_current,0) IS DISTINCT FROM v_expected_current THEN
           RAISE EXCEPTION 'STOCK_COUNT_WAREHOUSE_QUANTITY_MISMATCH material % expected % actual %',
             v_item.raw_material_id,v_expected_current,COALESCE(v_current,0);
-        END IF;
-      ELSE
-        SELECT COALESCE(quantity, 0)
-          INTO v_current
-          FROM public.inventory
-          WHERE product_id = v_item.product_id
-            AND warehouse_id = v_count.warehouse_id;
-
-        v_current := COALESCE(v_current, 0);
-        -- Preserve activity after the count was opened. Refuse to infer a
-        -- historical baseline where the movement history cannot reconcile.
-        SELECT COALESCE(sum(quantity) FILTER (WHERE created_at > v_count.created_at),0),
-               COALESCE(sum(quantity) FILTER (WHERE created_at <= v_count.created_at),0)
-          INTO v_later_delta,v_ledger_at_creation
-          FROM public.inventory_ledger
-         WHERE product_id=v_item.product_id AND branch_id=v_count.branch_id
-           AND warehouse_id=v_count.warehouse_id;
-        IF v_current-v_later_delta IS DISTINCT FROM v_ledger_at_creation THEN
-          RAISE EXCEPTION 'STOCK_COUNT_HISTORICAL_BASELINE_UNVERIFIED item %',v_item.id;
-        END IF;
-        v_variance := v_item.counted_quantity - (v_current - v_later_delta);
-        v_expected_current := v_current + v_variance;
-
-        IF v_variance > 0 THEN
-          v_res := public._product_inv_add(
-            v_item.product_id, v_count.warehouse_id, v_count.branch_id,
-            v_variance, v_item.unit_cost, NULL, NULL, NULL,
-            'adjustment', 'stock_count', v_count.id, v_count.count_number, auth.uid()
-          );
-          IF NOT COALESCE((v_res->>'success')::boolean, false) THEN
-            RAISE EXCEPTION 'STOCK_COUNT_ITEM_FAILED: %', 'ADJUST_FAILED';
-          END IF;
-          v_value := round(v_variance * COALESCE(v_item.unit_cost, 0), 2);
-          v_fg_delta := v_fg_delta + v_value;
-        ELSIF v_variance < 0 THEN
-          v_res := public._product_inv_remove_fifo(
-            v_item.product_id, v_count.warehouse_id, v_count.branch_id,
-            -v_variance, 'adjustment', 'stock_count', v_count.id,
-            v_count.count_number, auth.uid()
-          );
-          IF COALESCE((v_res->>'success')::boolean,false) IS NOT TRUE THEN
-            RAISE EXCEPTION 'PRODUCT_STOCK_COUNT_REMOVE_FAILED: %',COALESCE(v_res->>'error','unknown');
-          END IF;
-          v_shortage := COALESCE((v_res->>'shortage')::numeric, 0);
-          IF v_shortage > 0 THEN
-            RAISE EXCEPTION 'STOCK_COUNT_ITEM_FAILED: %', 'STOCK_COUNT_SHORTAGE';
-          END IF;
-          v_value := round(COALESCE((v_res->>'total_cost')::numeric, 0), 2);
-          v_fg_delta := v_fg_delta - v_value;
         END IF;
       END IF;
 
@@ -327,5 +297,5 @@ BEGIN
       );
   END;
 END;
-$function$
-
+$function$;
+REVOKE ALL ON FUNCTION private.apply_raw_stock_count_last_price(uuid) FROM PUBLIC,anon,authenticated,service_role;

@@ -1,3 +1,26 @@
+-- Require an exact quantity bridge before using legacy debt metadata.
+-- No FIFO valuation or historical sale cost writes occur here.
+CREATE OR REPLACE FUNCTION private.validate_count_legacy_quantity(p_raw uuid,p_branch uuid,p_warehouse uuid)
+RETURNS void LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM public.raw_material_batches b
+    LEFT JOIN LATERAL (SELECT sum(d.debt_quantity-d.settled_quantity) qty
+      FROM public.raw_fifo_debts d WHERE d.oversold_batch_id=b.id
+      AND d.raw_material_id=p_raw AND d.branch_id=p_branch AND d.warehouse_id=p_warehouse) debts ON true
+    WHERE b.raw_material_id=p_raw AND b.branch_id=p_branch AND b.warehouse_id=p_warehouse
+      AND b.quantity<0 AND -b.quantity IS DISTINCT FROM COALESCE(debts.qty,0)
+  ) OR EXISTS (
+    SELECT 1 FROM public.raw_fifo_debts d LEFT JOIN public.raw_material_batches b ON b.id=d.oversold_batch_id
+    WHERE d.raw_material_id=p_raw AND d.branch_id=p_branch AND d.warehouse_id=p_warehouse
+      AND d.settled_quantity<d.debt_quantity
+      AND (b.id IS NULL OR b.quantity>=0 OR b.raw_material_id IS DISTINCT FROM p_raw
+        OR b.branch_id IS DISTINCT FROM p_branch OR b.warehouse_id IS DISTINCT FROM p_warehouse)
+  ) THEN RAISE EXCEPTION 'COUNT_LEGACY_QUANTITY_UNRECONCILED'; END IF;
+END;
+$$;
+REVOKE ALL ON FUNCTION private.validate_count_legacy_quantity(uuid,uuid,uuid) FROM PUBLIC,anon,authenticated;
+
 -- Local prototype. Call only in the same transaction as the count receipt.
 -- Compatibility rows track outstanding quantity; never call the FIFO cost writer.
 CREATE OR REPLACE FUNCTION private.offset_stock_count_legacy_quantity(p_receipt_id bigint,p_batch_id uuid)
