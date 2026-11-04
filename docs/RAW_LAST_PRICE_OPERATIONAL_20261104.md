@@ -81,7 +81,7 @@ unconverted negative positions remain; enable the new-branch default last.
 No live writer routing has been changed yet.
 
 ## Coordinated release package
-`20261104111802_raw_last_price_operational_cutover.sql` guards the exact22
+`20261104111802_raw_last_price_operational_cutover.sql` guards the exact24
 modified pre-release functions, owners and ACLs. It preserves public adapters,
 order-type/payment authority, the original send core and all print bindings.
 One shared canonical resolver body now has an internal trusted-server mode;
@@ -144,3 +144,9 @@ price/cutover/recovery, service backend, normal groups and POS:44/44 pass across
 8 files in16.4s. Typecheck, changed-file ESLint, API contract generation check,
 4 active-worklog checks and whitespace verification pass. Exact-head CI must
 still pass before merge/application.
+
+Transfer quotes/approval now use the same closed operational price projection,
+so restricted purchase-history access cannot change the receiver price. Existing
+financial-context readers retain their prior visibility. An actual restricted
+operator purchase-source test covers both quote and approval; historical transfer
+rollback is rehearsed on its exact older reader call without weakening guards.

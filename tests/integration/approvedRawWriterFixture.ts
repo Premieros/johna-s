@@ -27,6 +27,7 @@ export async function installApprovedRawWriterFixture(db: pg.Client, url: string
     'scripts/db/candidates/raw_last_price_retire_legacy_tools_20261104.sql',
     'scripts/db/candidates/raw_last_price_new_branch_defaults_20261104.sql',
     'scripts/db/candidates/raw_last_price_backend_compatibility_20261104.sql',
+    'scripts/db/candidates/raw_last_price_transfer_context_20261104.sql',
   ]) {
     await db.query(readFileSync(path,'utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
   }

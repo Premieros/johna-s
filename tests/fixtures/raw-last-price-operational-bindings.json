@@ -29,5 +29,7 @@
   "raw_fifo_price_fallback_reverse(uuid)": "a76a1e898c9f3d632d43509b8445b73b",
   "raw_fifo_reverse_backfill(uuid)": "4710ce78bafe20bc5cbb598400cc64da",
   "raw_opening_cost_apply_repair(uuid)": "4832afa4bb132596e8b02548dfcadd3c",
-  "raw_opening_cost_reverse_repair(uuid)": "a61cedf5cba602298bd3fbeca1a34fa5"
+  "raw_opening_cost_reverse_repair(uuid)": "a61cedf5cba602298bd3fbeca1a34fa5",
+  "approve_warehouse_transfer(uuid)": "9aea5341bf1822f99ecdba194e831e14",
+  "create_warehouse_transfer(uuid,uuid,uuid,jsonb,text,text)": "e44848d513d225922279123ff8e57dd3"
 }
