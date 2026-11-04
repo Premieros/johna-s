@@ -3,7 +3,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `refactor/unified-last-price-20261104`
-Current PR: #0
+Current PR: #601
 Last updated: 2026-11-04
 State: **READY**
 
