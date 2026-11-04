@@ -4,31 +4,40 @@ Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `perf/ci-runtime-dedup-20261104`
 Current PR: `606`
 Last updated: 2026-11-04
-State: **BLOCKED**
+State: **DEPLOYED**
 
 ## Work status
-Owner approved shorter verification and removal of redundant test work. Baseline mainf45b693/#604 is deployed. This change touches test/CI configuration only; no application behavior or database changes.
+#606 is merged as65c4f247dd26db533682267a10a9e4ab75a64739. The CI configuration is active on main and all postmerge checks and verified Pages publication succeeded. No restaurant application or production database behavior was changed.
 
 ## Guardrails
-Retain all frontend, database/RLS, accounting, sale/kitchen/printing and browser assertions. No production test transactions, dependency upgrade, new runtime price source or paid runner upgrade. Database suites remain serial in their owned CI Postgres. Code/config/unknown changes always require full verification; only a narrow docs allowlist can skip runtime jobs. Preserve exact-SHA and successful trusted-main deployment checks.
+All2054 original frontend tests remain; the suite is now2062 with8 new CI safety cases. All136 browser cases and database/security/RLS/business assertions remain. Database files remain serial in disposable GitHub CI Postgres. No production transactions, SQL migration, price-source change, printer change, paid upgrade or dependency upgrade.
 
 ## Baseline
-Verify41889062297:411 frontend files/2054 tests,236.13s unit wall time; cumulative environment428.84s/setup106.07s are not wall time. Browser136 tests/3.7min. Vitest4.1.11 removed environmentMatchGlobs, leaving the former Node-contract optimization ineffective. Browser uses two workers. Fast Verify already avoids duplicating an active same-head full PR check; preserve that existing guard. Full PR and main release checks remain.
+Main #604 Verify41889062297: frontend411 files/2054 tests in236.13s; browser136 tests in3.7min. Vitest4.1.11 removed environmentMatchGlobs, so the old intended Node optimization was ineffective. Setup/environment cumulative sums are not wall-time measurements.
 
 ## Root-cause ledger
-Pure source/schema contracts unnecessarily load jsdom and React cleanup. A removed Vitest config option silently defeats previous intent. Browser jobs are a second critical path. Docs-only edits rerun all app/DB/browser/build gates. The early worklog test starts the whole Vitest environment before the same assertions run in the suite.
+Pure file/schema tests unnecessarily started jsdom and React setup. Browser work was a second critical path. Docs-only edits repeated runtime verification/publication. The early worklog check started Vitest before the same suite ran.
 
 ## Change ledger
-Explicit Vitest4 projects partition an audited allowlist of pure Node tests from DOM tests; new unclassified tests keep their safe DOM default. Node setup omits React/DOM imports. No test/assertion is removed. Browser suite runs two shards with all cases retained and separate artifacts; the original browser-smoke required-check name aggregates both results. The Pages archive locator skips only positively identified non-publication jobs; a missing real publication/archive still blocks deployment. A native Node worklog fail-fast check replaces the duplicate early Vitest invocation. A verified SHA-bound scope artifact permits docs-only changes to skip runtime suites and app publication; missing/invalid scope data fails closed. Runtime tests/build/security gates remain unchanged for code/config changes.
+- Explicit Vitest4 Node/DOM projects:239 audited pure Node files use minimal setup; unclassified tests safely default to DOM. Isolation and assertions retained.
+- Browser136 cases split68/68 into parallel shards; the original browser-smoke check requires both successes and each shard has its own artifact.
+- Native Node worklog fail-fast replaces duplicate early Vitest startup. Existing same-head Fast Verify deduplication is preserved; CI/test configuration edits correctly request app checks.
+- Only a narrow nonempty docs-only range can skip runtime jobs and publication. Unknown/code/config/dependency/test changes, missing bases and manual runs use full verification.
+- Exact-SHA scope metadata is downloaded from the successful trusted main verification run and validated before publication. Old stale-source and production-parity guards remain.
+- Previous Pages asset lookup ignores only positively identified skipped publication jobs; a missing or unconfirmed real deployment/archive still fails closed.
 
 ## Verification ledger
-Local full frontend run passed412 files/2059 tests in46.62s, retaining all2054 baseline tests plus5 scope checks; subsequent safety checks add2 archive cases and1 real multi-commit scope case (expected total2062 tests). This is local timing, not a comparison with GitHub hardware. Both browser shards enumerate68 cases each (136 total). Application/test typechecks and lint pass. Focused CI/asset/worklog checks pass24 cases across6 files after the final safety changes. The full local suite retained all baseline assertions. Exact-head Actions and measured runner timings remain pending. Need prove unchanged original test collection, both browser shards total136 and all DB cases retained. Do not claim a speed improvement before actual CI timings.
+Local full frontend run retained the baseline suite; final exact-head CI proved412 files/2062 tests. Local focused CI/asset/worklog checks:24/24 in880ms. Browser list and actual CI both confirmed68+68=136. Typechecks, lint and YAML/job dependency checks passed.
+PR exact headb953361aa5662e2ecdb7f62f08e5b833e3cb1713, Verify41898860690: every job success; frontend127.98s; browser shards1.5min/2.7min.
+Main Verify41900029976: every job success; frontend129.09s. Frontend suite wall time improved about45% versus236.13s without dropping original tests.
+Pages41900770949: build, production-parity and deploy success. The SHA-bound scope artifact was exercised during real publication.
+Scope safety covers multi-commit code-then-doc pushes, unknown paths, manual/zero-base full verification, malformed/mismatched scope metadata, required browser aggregation and keeping real deployed assets.
 
 ## Production gate
-Only merge after exact-head full workflow success. This PR changes CI/config, so it takes the complete runtime path. Pages must validate the scope artifact from that exact successful trusted main run. No production SQL to apply.
+Runtime code/config changes still require the complete exact-head verification and trusted current-main Pages gate. Documentation-only updates require successful native worklog/scope checks and do not rebuild or republish the app.
 
 ## Next action
-Complete checks, review diff and compare exact-head CI timing to the recorded baseline. Publish one verified change; record release evidence in the PR. Rollback reverts test/CI/config files only and never touches restaurant data.
+The release is complete. This documentation-only follow-up also exercises the short docs path. The latest published application remains the last verified runtime source. Rollback reverts #606 CI/test/config files only, with no database or restaurant data reversal.
 
 ## Mandatory update protocol
-Record actual tests, elapsed times, current PR and release proof. Preserve all security/business coverage and distinguish local timing from GitHub runner timing. Do not disable isolation or parallelize the shared DB fixtures.
+Record actual run IDs and timings. Never equate isolated test timing with whole-system restaurant performance, hide failures, remove operational/security coverage, or parallelize shared DB fixtures.
