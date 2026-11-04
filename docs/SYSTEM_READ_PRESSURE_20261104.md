@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `perf/system-read-pressure-20261104`
-Current PR: `0`
+Current PR: `604`
 Last updated: 2026-11-04
 State: **BLOCKED**
 
@@ -34,7 +34,7 @@ Focused verification:69 tests across10 files passed in2.87s, including20 identic
 Required exact-head Full Verify and permitted merge/publication. No SQL migration to apply. Do not claim deployed until Pages succeeds on merged head.
 
 ## Next action
-Run focused checks, review the full diff, open one PR and complete required verification. Rollback is a revert of this frontend commit; no database rollback or historical recomputation.
+PR #604 is open. Local focused checks and full diff review passed; complete required exact-head verification before merge/publication. Rollback is a revert of this frontend commit; no database rollback or historical recomputation.
 
 ## Mandatory update protocol
 Update this log with real checks, PR, merge and Pages results. Never equate cumulative stats with live usage or a mocked read reduction with production speed.
