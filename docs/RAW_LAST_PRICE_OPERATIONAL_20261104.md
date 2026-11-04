@@ -4,176 +4,140 @@ Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/raw-last-price-partial-cutover-20261104`
 Current PR: #603
 Last updated: 2026-11-04
-State: **BLOCKED**
+State: **DEPLOYED**
 
 ## Work status
-#602 is merged, applied and published. Smouha is fully on the new raw path;
-185 stock coordinates have been converted with quantity and source-cost proofs.
-Finish the single remaining Cleopatra partial source through the verified
-converter-only admission patch. Owner authorization includes merge/application.
+The canonical last-price raw path is enabled in both production branches,
+Smouha and Cleopatra. Automatic future-branch defaults are enabled. #602 and
+#603 are merged, applied and published through verified GitHub Pages deployment.
+No stock-conversion, activation or publication step remains.
+
+186 stock coordinates and1825 legacy debt rows were converted with exact
+net-quantity and source-money preservation. There are0 unconverted open debts
+and0 legacy negative batches outside the aggregate path. The two original
+stock counts remain applied and were not replayed.
 
 ## Guardrails
-Preserve deployed count00008/00009 and #601. Use the existing approved-price
-source, with zero default, and signed batch quantity source. No synthetic writes
-on production, no paid upgrade, no historical sale replay, no discarded debt or
-journal records. Existing permissions and physical lot/expiry metadata remain.
+Use the existing approved-price source, including default0, and the signed-batch
+quantity source. Keep original sales/count money, settlement quantities and
+journals. Preserve branch isolation and existing browser financial visibility.
+Reusable groups resolve and deduct raw components directly; do not recreate
+manufacturing records or manufactured batches. Selling/printing authority and
+station/order identities remain intact. No synthetic live orders or printer
+jobs, paid upgrade, historical sales replay or old FIFO backfill was used.
 
 ## Baseline
-Main da230d7. Private v2 issue/receipt helpers exist for raw counts but general
-coordinate routing remains an unused candidate. Old raw sale/receipt writers are
-still authoritative outside raw-only counts. Last read-only audit showed774/915
-open legacy debt rows (Smouha/Cleopatra), all dated November.
+Started frommainda230d7 and deployed #601. #601 had already unified bounded
+current raw stock/price reads. General raw issue/receipt routing still used
+legacy FIFO outside raw-only counts. The applied original counts are:
+-00008 Smouha:8e04fe58-a5d6-4daa-a02d-8dee6245bed5
+-00009 Cleopatra:4d14a222-5fbc-459a-b5b1-b11dba9cf975
+Their November1 effective dates and November4 posting timestamps were retained.
 
 ## Root-cause ledger
-The unused v2 issue rejected a missing price rather than recording0. Its
-coordinate adapter omitted shortage details on an insufficient-stock failure.
-Both candidate contracts are corrected. Additional reproduction found that
-statement-clock ledger dates escaped the existing purchase-edit transaction-date
-correction, and per-lot currency rounding doubled a one-cent raw movement.
-These candidate defects are fixed and covered by regressions. Old receipts
-still replay historical costs outside activated coordinates.
+The inactive prototype rejected default0, omitted shortage failure fields,
+and used statement-clock dates that escaped purchase correction's original-date
+matching. Independent rounding of physical lots could double a one-cent raw
+movement. Trusted service adapters also needed explicit private dependency
+rights. Transfer receiver prices depended on purchase-history browsing rights.
+These defects are corrected and covered by regressions.
+
+One legacy partial source needed a precise conversion rule: debt0.04, settled
+quantity0.01, source unit12.06 and recorded total-0.48. Applied receipt history
+explains0.4824 at48.24 per unit. Its remaining recognized monetary basis is0;
+using the weighted source unit price again would count settled cost twice.
 
 ## Change ledger
-Candidate writers now use the existing approved-price projection, including0
-and known undated current prices. Frozen void/refund cost is retained. A bounded
-owner-only converter preserves net quantity, original source money, journals and
-settled quantity while marking legacy obligations as archived. Future counts
-ignore archived debts and account for the aggregate shortage. Negative counts
-on active coordinates create no new FIFO debt. Branch-default fixture coverage
-includes newly created fallback raws. Routing/history guards prevent deleting
-an activation marker, settling/deleting archived debt or repricing its source.
-Ordinary ledger INSERTs do not pay for the exceptional repricing lookup.
-Candidate movement money is allocated cumulatively across physical lots;
-the existing per-lot rounding constraint retains all predicates, with its bound
-changed from half a cent to one cent. The movement sum stays exact to cents.
+One canonical resolver body provides the same approved-price source to authorized
+operational writers. Report/source RLS and explicit financial visibility remain.
+Browser roles cannot use its trusted operational mode or activate conversion.
+No second price table, price source or per-sale debt queue was added.
+
+New raw issues use last price including0. Physical lot/expiry selection retains
+traceability and does not determine raw issue valuation. Quantity is normalized
+once to the existing four-decimal physical/ledger/count precision and passed to
+component snapshots. Currency rounding is allocated across lots so the complete
+movement equals its rounded monetary total. The ledger rounding constraint
+retains all other predicates, allowing the residual cent on an individual lot.
+
+Kitchen capture reuses the indexed ledger records already written for that
+event. Void/refund retains the frozen original movement. Purchase corrections
+retain original document dates. Transfers quote and receive at the destination's
+canonical operational price without widening invoice-history visibility.
+
+New shortages use one aggregate stock position per coordinate. Existing debt
+history is archived with its original settled quantity and source money intact.
+Future counts ignore archived obligations and preserve effective dates. Owner-only
+partial admission requires applied settlements, exact settled quantity, matching
+recorded rounded money, matching weighted price and exact source/debt quantity.
+Pending or mismatched evidence is rejected. Old administrative FIFO replay tools
+fail before writes after cutover starts.
 
 ## Verification ledger
-The prior52 focused checks across7 files passed in6.1 seconds. The expanded
-nine-file suite passed67 checks in8.33 seconds before the final history guards.
-Includes old/new real POS sale/refund approval/shift lifecycle, direct reusable-group
-raw deduction without any production/batch creation, frozen snapshot void/refund
-after recipe/price change, destination-branch transfer price and retry/branch
-checks, zero default, aggregate shortages and existing count regressions.
-Application and test typecheck pass. General activation remains blocked.
+Exact #602 head eb2fa15ec9fc3d835ae64c0131361dac65b319c7:
+-PR Verify41824803650: all4 jobs passed.
+-Post-merge Verify41825590321: all4 jobs passed.
+-Pages41826469641: build, production-parity and deploy passed.
+-Merge:b6af68c111ccd5361f3a7f25464a4ab06d78fabf.
 
-The purchase-correction regression failed on the new writer and passed after
-restoring transaction-clock movement timestamps (24 combined checks,3.46s).
-The two-lot rounding regression reproduced -0.02 against -0.01 expected; the
-corrected allocation also covers a three-lot residual exceeding half a cent.
-Seventeen focused checks passed after the rounding-constraint adjustment.
-Final history-guard run:68 checks across9 files passed in11.95 seconds,
-including refusal to remove activation, settle/delete archived debts or reprice
-their original ledger. Typecheck (application and tests), changed-file ESLint,
-four active-worklog contract checks and git diff whitespace checks pass.
-All fixtures use owned localhost transactions and roll back; no live business
-orders, printer jobs or production stock changes were generated.
+Exact #603 head6f0b7bff541317c34e1772cdee75e91ea72a0622:
+-PR Verify41851319679: all4 jobs passed.
+-Post-merge Verify41852574444: all4 jobs passed.
+-Pages41853637144: build, production-parity and deploy passed.
+-Merge:880cbf2c3a360af250316b226c148ef60e009089.
+
+Focused final admission/count/transfer/price/recovery checks:53/53 across5 files,
+2.57s. Includes rejecting invalid reconciliation evidence, preserving old money
+and settled quantity, posting only current receipt variance, and strict-converter
+rollback/reapply. Application/test typechecks, changed-file lint and API/worklog
+contracts passed. Tests use owned rollback fixtures. Untaxed discount fixtures
+explicitly set their intended tax within rollback transactions; production tax
+or discount behavior was not changed. The unpublished768-dispatch October load
+experiment is now explicit manual opt-in; behavioral/security cases stay mandatory.
+
+Final authenticated same-transaction checks covered407 Smouha and402 Cleopatra
+materials:0 quantity mismatches,0 canonical price mismatches and0 quantity-cache
+mismatches in both branches. Source-money hashes and net quantities matched
+before/after every coordinate conversion. The partial source still records-0.48
+and settled quantity0.01. Original count posting timestamps remain08:02:58.735273Z
+and08:03:13.79315Z on November4.
+
+Send-core fingerprint remains09abdc1c2c47a48cc61d1dc3a310fe13. Security advisor
+counts are unchanged:26 rls_enabled_no_policy,254 authenticated security-definer
+execution findings and1 leaked-password protection finding. No new finding
+category/count was introduced. No synthetic live business data was generated.
 
 ## Production gate
-No activation until negative/zero/fractional issues, receipts, partial reversal,
-purchase return, component groups, transfers, second count, retry, source provenance,
-old-debt reconciliation and balanced financial journals all pass. An inactive
-candidate is not completion or live deployment.
+Completed with existing explicit owner approval and exact-head verification.
+Applied production migration versions:
+-20261104142855 raw_last_price_operational_cutover
+-20261104145659 raw_last_price_partial_cutover
+-20261104145834 raw_last_price_new_branch_defaults_enabled
 
-## Next action
-Finish exact-head CI for the converter-only partial patch, merge/apply it,
-convert the remaining Cleopatra coordinate with source-cost and quantity checks,
-finalize Cleopatra, and enable automatic new-branch defaults only after both
-branches have no unconverted legacy positions. Preserve the live Smouha path.
-
-## Coordinated release package
-`20261104111802_raw_last_price_operational_cutover.sql` guards the exact24
-modified pre-release functions, owners and ACLs. It preserves public adapters,
-order-type/payment authority, the original send core and all print bindings.
-One shared canonical resolver body now has an internal trusted-server mode;
-report mode retains source RLS and invoice visibility. Browser roles cannot use
-operational mode. No second price cache or price source is added.
-The existing raw adapters remain INVOKER and retain their trusted service_role
-contract through narrowly scoped private dependency grants; activation mutation
-rights remain owner-only. Browser roles gain no helper/table access.
-Kitchen capture reuses this event's indexed ledger records, including zero;
-the normal group path never creates production or manufactured batches.
-Quantity is normalized once to the existing four-decimal physical/ledger/count
-precision and the actual quantity is passed into component snapshots.
-Activated compatibility valuation uses quantity times the same last price.
-Old administrative FIFO replay tools fail before writes after cutover starts.
-Future raw coordinates inherit the branch default. Future branch defaults are
-installed disabled until the final all-branch switch.
+Both branch defaults are active, with186 coordinate audits and1825 archived
+obligations. New-branch trigger state isO (enabled). Browser activation remains
+revoked. Source migrations use exact baseline guards and bounded lock/query
+limits. Runtime default activation is recorded in
+`scripts/rollout/raw_last_price_enable_new_branches_20261104.sql`.
 
 ## Recovery
-`scripts/rollback/raw_last_price_operational_pre_activation_20261104.sql`
-restores the exact modified writer definitions and their ACLs only while the
-activation table is empty. It never changes unrelated adapter overloads.
-`scripts/recovery/raw_last_price_operational_20261104.sql` restores verified
-last-price writers after activation, preserving quantities, original source
-costs, journals and conversion history. Reverting converted positions to legacy
-FIFO is deliberately blocked. Both paths are rehearsed in owned rollback tests.
+Before any activation, `scripts/rollback/raw_last_price_operational_pre_activation_20261104.sql`
+restores the modified definitions/ACLs only while the activation table is empty.
+After activation, use `scripts/recovery/raw_last_price_operational_20261104.sql`
+to restore verified writers while preserving business records and converted data.
+`scripts/rollback/raw_last_price_partial_cutover_20261104.sql` restores only the
+strict converter admission rule, without reversing stock or changing writers.
+All paths were rehearsed. Never remove routing markers, fake a receipt by changing
+settled quantities, or restore legacy writers against converted stock positions.
 
-## Verification update — fresh database
-The earlier portable test database lacked three current API migrations and used
-Cairo session time and taxed seed defaults. Its26 failures included one actual
-new-writer defect: service_role could not read the private routing dependency.
-That dependency contract is fixed and covered by active backend issue/receipt
-checks. A new owned database was bootstrapped from the complete current canonical
-migration chain with UTC, matching CI. Untaxed discount fixtures now explicitly
-set their intended tax setting within their rollback transactions; no production
-discount/tax behavior is changed.
-The unpublished October load experiment executes768 dispatches and exceeded
-three minutes. Its behavioral/security cases remain mandatory; only that load
-benchmark now requires the explicit `legacy_dispatch_benchmark` workflow input.
-The current full fresh-database result and exact-head CI are recorded below when
-finished. No production business test rows or printer jobs are generated.
+## Next action
+No remaining deployment or conversion work. Retain the shared price/balance
+sources and ordinary operational monitoring; do not replay the applied counts
+or old FIFO tools. Physical lot history and old function names do not authorize
+bringing manufacturing back into the normal component-group path.
 
 ## Mandatory update protocol
-Record actual implementation, tests, PR, CI and production results. Preserve
-earlier published work and never label the general FIFO replacement complete
-while live writer bindings remain legacy.
-
-## Owner clarification — component groups, not manufacturing
-The user confirms the earlier manufacturing retirement: a reusable group is
-expanded to raw components and deducted directly. Confirmed source:
-`resolve_product_raw_components` / `_deduct_kitchen_raw_components`. Internal
-`manufactured` enum/old function names do not authorize restoring production.
-The normal send/sale path must create no `inventory_unit_productions` or
-manufactured batches. Remove the newly proposed old-production caller change
-from this bundle; it was never applied to production. Test the real group path,
-including nested groups, last-price raw snapshots and exact-once void/refund.
-
-Fresh canonical suite:1220 checks passed; the remaining9 failures were the two
-untaxed fixture groups now corrected. Rerun of those groups plus operational
-price/cutover/recovery, service backend, normal groups and POS:44/44 pass across
-8 files in16.4s. Typecheck, changed-file ESLint, API contract generation check,
-4 active-worklog checks and whitespace verification pass. Exact-head CI must
-still pass before merge/application.
-
-Transfer quotes/approval now use the same closed operational price projection,
-so restricted purchase-history access cannot change the receiver price. Existing
-financial-context readers retain their prior visibility. An actual restricted
-operator purchase-source test covers both quote and approval; historical transfer
-rollback is rehearsed on its exact older reader call without weakening guards.
-
-## Production update — #602 and final partial admission
-#602 merged asb6af68c111ccd5361f3a7f25464a4ab06d78fabf. Exact PR CI41824803650,
-post-merge Verify41825590321 and Pages41826469641 all succeeded. Production
-migration20261104142855 `raw_last_price_operational_cutover` applied successfully.
-185 coordinates converted in small transactions, preserving net quantities and
-source-ledger money hashes;1666 legacy debt rows archived without changing their
-settled quantity. Smouha branch default is enabled. Send-core fingerprint remains
-09abdc1c2c47a48cc61d1dc3a310fe13. No synthetic live orders/printer jobs were created.
-
-One Cleopatra material has a partial legacy source: debt0.04, settled0.01,
-source unit12.06, source total-0.48. Its applied settlement records exactly0.4824
-at48.24 per unit. The remaining recognized monetary basis is0, not the weighted
-source unit cost times0.03. New admission requires exact source/debt quantity,
-all settlement statuses applied, matching settled quantity, matching rounded
-recorded money and matching weighted source price. Pending or mismatched evidence
-is rejected. Other unsupported partial cases remain blocked.
-
-The patch changes only the owner-only converter. It never rewrites the original
-ledger, settlement history, journals or runtime raw writers. Tests reproduce the
-actual numeric shape, preserve every historical row, prove future receipts post
-only current variance, and rehearse strict-converter rollback/reapply. Cleopatra
-branch default and automatic future-branch defaults remain pending this patch.
-
-Partial patch verification:53/53 focused checks across5 files pass in2.57s;
-includes invalid-evidence rejection and strict-converter rollback/reapply.
-Application/test typechecks, changed-file lint and whitespace checks pass.
+Record actual commits, CI, migrations and live checks. Preserve earlier released
+work. Do not report an inactive candidate or a merged-only change as deployed.
+Do not change another repository/project or generate production test orders to
+produce verification evidence.
