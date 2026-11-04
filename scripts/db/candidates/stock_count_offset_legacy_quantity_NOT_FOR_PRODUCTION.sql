@@ -70,6 +70,13 @@ BEGIN
     IF NOT FOUND THEN RAISE EXCEPTION 'COUNT_NEGATIVE_BATCH_UNRECONCILED'; END IF;
     UPDATE public.raw_fifo_debts SET settled_quantity=settled_quantity+take_qty,updated_at=clock_timestamp()
       WHERE id=d.id;
+    -- Finalize the legacy provisional quantity without replacing its frozen
+    -- cost. Otherwise settled debt could retain a fictitious open estimate.
+    UPDATE public.raw_fifo_debt_price_estimates
+      SET zero_cost_finalized_quantity=zero_cost_finalized_quantity+least(take_qty,remaining_estimated_quantity),
+          remaining_estimated_quantity=greatest(remaining_estimated_quantity-take_qty,0),
+          updated_at=clock_timestamp()
+      WHERE debt_id=d.id AND remaining_estimated_quantity>0;
     remaining:=remaining-take_qty;
     absorbed:=absorbed+take_qty;
   END LOOP;

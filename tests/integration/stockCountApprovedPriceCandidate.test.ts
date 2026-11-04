@@ -165,6 +165,9 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
       await db.query("INSERT INTO public.raw_material_batches(id,raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type) VALUES($1,$4,$5,$6,'NEG-QA',-19,10,'kitchen_send_oversold'),($2,$4,$5,$6,'REC-QA',$7,10,'stock_count'),($3,$4,$5,$6,'LATER-QA',-8,10,'kitchen_send_oversold')",[negative,receiptBatch,laterBatch,material,branch,warehouse,receiptQty]);
       const sale=(await db.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,created_at) VALUES($1,$2,$3,-19,10,-190,'sale','sale',$4,'2026-10-31') RETURNING id",[material,branch,warehouse,randomUUID()])).rows[0].id;
       await db.query("INSERT INTO public.raw_fifo_debts(source_ledger_id,raw_material_id,branch_id,warehouse_id,oversold_batch_id,debt_quantity,source_created_at) VALUES($1,$2,$3,$4,$5,19,'2026-10-31')",[sale,material,branch,warehouse,negative]);
+      const run=randomUUID();
+      await db.query("INSERT INTO public.raw_fifo_price_fallback_runs(id,branch_id,status) VALUES($1,$2,'applied')",[run,branch]);
+      await db.query("INSERT INTO public.raw_fifo_debt_price_estimates(debt_id,source_ledger_id,run_id,branch_id,raw_material_id,estimated_unit_cost,original_estimated_quantity,remaining_estimated_quantity,candidate_source,candidate_event_id,candidate_at) SELECT id,source_ledger_id,$2,branch_id,raw_material_id,10,19,19,'pricing','QA-ESTIMATE','2026-10-31' FROM public.raw_fifo_debts WHERE source_ledger_id=$1",[sale,run]);
       const futureSale=(await db.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,created_at) VALUES($1,$2,$3,-8,10,-80,'sale','sale',$4,'2026-11-02') RETURNING id",[material,branch,warehouse,randomUUID()])).rows[0].id;
       await db.query("INSERT INTO public.raw_fifo_debts(source_ledger_id,raw_material_id,branch_id,warehouse_id,oversold_batch_id,debt_quantity,source_created_at) VALUES($1,$2,$3,$4,$5,8,'2026-11-02')",[futureSale,material,branch,warehouse,laterBatch]);
       const receipt=(await db.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,total_cost,entry_type,reference_type,reference_id,created_at) VALUES($1,$2,$3,'REC-QA',$6,10,$6::numeric*10,'adjustment','stock_count',$4,$5) RETURNING id",[material,branch,warehouse,doc,time,receiptQty])).rows[0].id;
@@ -178,6 +181,9 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
       expect(Number(applied.qty)).toBe(Math.min(19,receiptQty));
       const retry=(await db.query('SELECT private.offset_stock_count_legacy_quantity($1,$2) qty',[receipt,receiptBatch])).rows[0];
       expect(Number(retry.qty)).toBe(0);
+      const estimate=(await db.query('SELECT remaining_estimated_quantity,zero_cost_finalized_quantity FROM public.raw_fifo_debt_price_estimates WHERE source_ledger_id=$1',[sale])).rows[0];
+      expect(Number(estimate.remaining_estimated_quantity)).toBe(19-Math.min(19,receiptQty));
+      expect(Number(estimate.zero_cost_finalized_quantity)).toBe(Math.min(19,receiptQty));
       const balance=(await db.query("SELECT sum(quantity) qty FROM public.raw_material_batches WHERE raw_material_id=$1",[material])).rows[0];
       expect(Number(balance.qty)).toBe(-27+receiptQty);
       expect(Number((await db.query("SELECT total_cost FROM public.inventory_ledger WHERE id=$1",[sale])).rows[0].total_cost)).toBe(-190);
