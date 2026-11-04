@@ -3,7 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity, AlertTriangle, ArrowLeft, ArrowLeftRight, ArrowRight, BarChart3, BadgeDollarSign, Boxes, BookOpenText, Building2, Calculator, ChefHat,
   ChevronDown, ClipboardCheck, FileSpreadsheet, FileText, FlaskConical,
-  Globe, HandCoins, Landmark, Layers, LayoutDashboard, LogOut, Menu, Moon, NotebookPen,
+  Globe, HandCoins, Headphones, Landmark, Layers, LayoutDashboard, LogOut, Menu, Moon, NotebookPen,
   Package, Receipt, Scale, ScrollText, Settings, ShoppingCart, SlidersHorizontal, Store, Sun,
   Tags, Timer, Trash2, Truck, UserCog, Users, Wallet, Warehouse, X,
 } from 'lucide-react';
@@ -324,6 +324,24 @@ export function Layout({ children }: { children: ReactNode }) {
                 <p className="truncate text-xs text-ui-subtle">{user?.role || 'user'}</p>
               </div>
             </div>
+
+            <button
+              data-testid="mobile-open-customer-support"
+              type="button"
+              onClick={() => {
+                // On phones, the chat is accessed from the navigation drawer
+                // instead of a floating button covering payment/report controls.
+                const root = document.querySelector<HTMLElement>('[data-support-ai-root]');
+                const panel = root?.shadowRoot?.querySelector<HTMLElement>('.panel');
+                const toggle = root?.shadowRoot?.querySelector<HTMLButtonElement>('.toggle');
+                setMobileOpen(false);
+                if (toggle && !panel?.classList.contains('open')) toggle.click();
+              }}
+              className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-ui-border bg-ui-page px-3 text-sm font-bold text-ui-text transition hover:bg-ui-page-alt"
+            >
+              <Headphones className="h-4 w-4 text-ui-primary" />
+              {ar ? 'فتح خدمة العملاء' : 'Open customer support'}
+            </button>
 
             <label className="grid gap-1">
               <span className="text-[11px] font-bold text-ui-subtle">
