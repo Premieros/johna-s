@@ -103,6 +103,10 @@ WHERE source_type='approved_shortage_aggregate';
 ALTER TABLE public.raw_fifo_debts
  ADD COLUMN IF NOT EXISTS approved_conversion_batch_id uuid REFERENCES public.raw_material_batches(id),
  ADD COLUMN IF NOT EXISTS approved_converted_at timestamptz;
+-- Keep receipt/batch removal from scanning archived obligations.
+CREATE INDEX IF NOT EXISTS raw_fifo_debts_approved_conversion_batch
+ ON public.raw_fifo_debts(approved_conversion_batch_id)
+ WHERE approved_conversion_batch_id IS NOT NULL;
 
 -- One routing marker per coordinate, or one branch-wide default after every
 -- old coordinate in that branch is reconciled. No per-sale state table.
