@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-03T19:51:16.220Z",
+  "generated_at": "2026-11-04T09:18:21.407Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -817,6 +817,14 @@
       "name": "get_raw_material_latest_valuation",
       "params": [
         "branch_id"
+      ]
+    },
+    {
+      "name": "get_raw_material_stock_summary",
+      "params": [
+        "branch_id",
+        "limit",
+        "offset"
       ]
     },
     {

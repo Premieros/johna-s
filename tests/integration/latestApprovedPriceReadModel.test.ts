@@ -34,8 +34,8 @@ describe.skipIf(!local)('latest approved price projection, owned localhost only'
   await db.query('ANALYZE private.raw_approved_price_read_model');
  },60000);
  afterAll(async()=>{if(db){await db.query('ROLLBACK').catch(()=>{});await db.end();}});
- it('uses latest approved prices in both branches, leaves never-priced stock unknown, and retains exact as-of kitchen prices',async()=>{
-  const rows=await prices();expect(rows.find(x=>x.raw_material_id===raw)?.unit_cost).toBe('20.000000');expect(rows.find(x=>x.raw_material_id===empty)).toMatchObject({unit_cost:null,price_source:'unpriced'});
+ it('uses latest approved prices in both branches, defaults never-priced stock to zero, and retains exact as-of kitchen prices',async()=>{
+  const rows=await prices();expect(rows.find(x=>x.raw_material_id===raw)?.unit_cost).toBe('20.000000');expect(rows.find(x=>x.raw_material_id===empty)).toMatchObject({unit_cost:'0.000000',price_source:'catalog_zero'});
   expect((await prices('get_raw_material_current_prices',b,[foreign]))[0].unit_cost).toBe('77.000000');await parity();
   for(const asof of['2026-10-01T13:00:00Z','2026-10-02T13:00:00Z','2026-10-03T13:00:00Z']){
    const read=async(fn:string)=>(await db.query(`SELECT * FROM public.${fn}($1,$2,$3)`,[a,[raw],asof])).rows;
@@ -76,6 +76,9 @@ describe.skipIf(!local)('latest approved price projection, owned localhost only'
   // Capture only immutable public definitions; rollback is exercised in savepoint.
   await db.query('SAVEPOINT restore_prices');
   try{
+   // Rehearse the2026-10-16 release on its exact reader baseline, after
+   // rehearsing the newer read-only rollback inside this same savepoint.
+   await db.query(readFileSync('scripts/rollback/unified_raw_stock_last_price_reads_20261104.sql','utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
    const sql=readFileSync('scripts/rollback/latest_approved_price_read_model_20261016.sql','utf8').replace(/^BEGIN;\s*/,'').replace(/COMMIT;\s*$/,'');
    await db.query(sql);
    expect((await db.query("SELECT to_regclass('private.raw_approved_price_read_model') value")).rows[0].value).toBeNull();
@@ -88,6 +91,7 @@ describe.skipIf(!local)('latest approved price projection, owned localhost only'
   await db.query('SAVEPOINT cutover');
   const sql=(path:string)=>readFileSync(path,'utf8').replace(/^BEGIN;\s*/,'').replace(/COMMIT;\s*$/,'');
   try{
+   await db.query(readFileSync('scripts/rollback/unified_raw_stock_last_price_reads_20261104.sql','utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
    await db.query(sql('scripts/rollback/latest_approved_price_read_model_20261016.sql'));
    await db.query('UPDATE public.raw_materials SET default_cost=17 WHERE id=$1',[empty]);
    expect((await prices()).find(x=>x.raw_material_id===empty)?.unit_cost).toBe('17.000000');
@@ -188,7 +192,7 @@ describe.skipIf(!local)('latest approved price projection, owned localhost only'
    await db.query("SELECT set_config('app.user_id',$1,true)",[viewer]);await db.query('SET LOCAL ROLE authenticated');
    const original=await parity();
    const current=(await prices()).find(x=>x.raw_material_id===raw);
-   expect(current?.unit_cost??null).toBe(original[0]?.unit_cost??null);
+   expect(Number(current?.unit_cost)).toBe(Number(original[0]?.unit_cost??0));
    // Nested existing definer must retain explicit purchase history visibility.
    await db.query('RESET ROLE');
    const context=(await db.query('SELECT public._raw_cost_context_for_costing($1,$2) value',[raw,a])).rows[0].value;

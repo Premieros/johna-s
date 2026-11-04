@@ -11,7 +11,7 @@ export type RawCurrentPriceRow = {
 
 export function rawCurrentPrice(row: RawCurrentPriceRow | undefined): number | null {
   const value = Number(row?.unit_cost);
-  return Number.isFinite(value) && value > 0 ? value : null;
+  return row?.unit_cost != null && Number.isFinite(value) && value >= 0 ? value : null;
 }
 export function rawCurrentPriceMap(rows: RawCurrentPriceRow[]): Record<string, number | null> {
   return Object.fromEntries(rows.map(row => [row.raw_material_id, rawCurrentPrice(row)]));

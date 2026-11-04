@@ -1,5 +1,6 @@
 import { supabase } from '@/api';
 import type { Branch, Product, RawMaterial, Warehouse } from '@/lib/types';
+import { fetchAllReportRows } from '@/features/reporting/fetchAllReportRows';
 
 export async function loadStockCountMetadata(): Promise<{
   branches: Branch[];
@@ -27,13 +28,12 @@ export async function loadRawMaterialWarehouseSnapshot(
   branchId: string,
   warehouseId: string,
 ): Promise<Record<string, number>> {
-  const { data, error } = await supabase
-    .from('raw_material_batches')
+  const data = await fetchAllReportRows(supabase
+    .from('raw_material_warehouse_inventory')
     .select('raw_material_id, quantity')
     .eq('branch_id', branchId)
-    .eq('warehouse_id', warehouseId);
-
-  if (error) throw error;
+    .eq('warehouse_id', warehouseId)
+    .order('raw_material_id'), 500);
 
   const snapshot: Record<string, number> = {};
   for (const row of (data || []) as Array<{ raw_material_id: string | null; quantity: number | string | null }>) {

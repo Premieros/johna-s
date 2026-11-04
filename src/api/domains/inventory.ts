@@ -1,5 +1,5 @@
 import type { ApiResult } from '../types';
-import type { RpcResult, LowStockAlertRow, StockValuationRow, StockValuationSummaryRow, ExpiringBatchRow } from '@/lib/types';
+import type { RpcResult, LowStockAlertRow, StockValuationRow, StockValuationSummaryRow, ExpiringBatchRow, RawStockSummaryRow } from '@/lib/types';
 import { rpc } from '../rpc';
 
 type StockCountInputItem = {
@@ -11,6 +11,7 @@ type StockCountInputItem = {
 };
 
 export const inventory = {
+  getRawMaterialStockSummary(p: { p_branch_id: string | null; p_offset: number; p_limit: number }): ApiResult<RawStockSummaryRow[]> { return rpc('get_raw_material_stock_summary', p); },
   adjustStock(p: { p_inventory_id: string; p_new_quantity: number; p_reason: string | null }): ApiResult<RpcResult> { return rpc('adjust_stock', p); },
   adjustRawStock(p: { p_raw_material_id: string; p_branch_id: string; p_new_quantity: number; p_reason: string | null }): ApiResult<RpcResult> { return rpc('adjust_raw_stock', p); },
   createTransfer(p: { p_from_warehouse_id: string; p_to_warehouse_id: string; p_branch_id: string; p_items: { item_type: 'raw_material'; item_id: string; destination_item_id: string; quantity: number; unit_cost: number }[]; p_reason: string | null; p_notes: string | null }): ApiResult<RpcResult> { return rpc('create_warehouse_transfer', p); },

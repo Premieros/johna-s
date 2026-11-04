@@ -30,6 +30,12 @@ export interface RawMaterialInventory {
   branch?: Branch;
 }
 
+export type RawStockSummaryRow = RawMaterialInventory & {
+  price_source: string;
+  priced_at: string | null;
+  reference_number: string | null;
+};
+
 export interface RawMaterialBatch {
   id: string;
   raw_material_id: string;
