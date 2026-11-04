@@ -42,3 +42,20 @@ Push the complete release package, inspect exact-head CI, then merge and apply a
 
 ## Mandatory update protocol
 Update this log after CI, merge, migration and count application. Record real results and remaining blockers. Never label local regression success as production application.
+
+## Follow-up: batch-read correction
+Branch: `fix/historical-count-batch-reads`, follow-up to merged #597.
+The first migration is applied in production. The protected six-second Smouha
+posting attempt timed out and rolled back; both documents remain draft with no
+stock-count ledger or journal rows. Do not increase the execution deadline.
+
+The follow-up snapshots prices and historical/current quantities once under the
+same coordinate locks, then passes the frozen canonical price into private
+movement helpers. Per-item stock/journal checks and debt validation remain. No
+new source or table is introduced. Prior overloads are removed transactionally
+to prevent ambiguous default arguments. A production-function checksum guard
+prevents overwriting a drifted implementation.
+
+Local 407-line negative-stock proof improved from 2433 ms to 1307 ms, with the
+same zero final aggregate quantity and balanced 28490 debit/credit. Full targeted
+regression and exact-head CI are required before this follow-up is applied.

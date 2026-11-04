@@ -1,3 +1,6 @@
+-- Remove the previous internal overloads to keep default-argument calls unambiguous.
+DROP FUNCTION IF EXISTS private.raw_issue_approved_v2(uuid,uuid,uuid,numeric,text,text,uuid,text,uuid,timestamptz,timestamptz);
+DROP FUNCTION IF EXISTS private.raw_receive_approved_v2(uuid,uuid,uuid,numeric,numeric,text,text,uuid,text,uuid,timestamptz,timestamptz);
 -- UNWIRED disposable-Postgres prototype, NEVER a production migration.
 -- Requires scripts/db/candidates/approved_raw_cost_engine_minimal_storage_20261031.sql
 -- See docs/RAW_COST_ENGINE_V2_APPROVED_PRICE_20261031.md.
@@ -9,7 +12,8 @@ CREATE OR REPLACE FUNCTION private.raw_issue_approved_v2(
   p_entry_type text,p_reference_type text,p_reference_id uuid,
   p_reference_number text DEFAULT NULL,p_created_by uuid DEFAULT NULL,
   p_valuation_as_of timestamptz DEFAULT NULL,
-  p_effective_at timestamptz DEFAULT NULL
+  p_effective_at timestamptz DEFAULT NULL,
+  p_frozen_price jsonb DEFAULT NULL
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SET search_path TO 'public','pg_temp'
@@ -54,6 +58,17 @@ BEGIN
     RETURN jsonb_build_object('success',false,'error','LEGACY_FIFO_POSITION_NOT_CUTOVER');
   END IF;
   END IF;
+  IF p_frozen_price IS NOT NULL THEN
+    IF p_reference_type IS DISTINCT FROM 'stock_count'
+      OR (p_frozen_price->>'raw_material_id')::uuid IS DISTINCT FROM p_raw_material_id
+      OR (p_frozen_price->>'branch_id')::uuid IS DISTINCT FROM p_branch_id THEN
+      RAISE EXCEPTION 'STOCK_COUNT_PRICE_CONTEXT_MISMATCH';
+    END IF;
+    SELECT (p_frozen_price->>'unit_cost')::numeric unit_cost,
+      p_frozen_price->>'price_source' price_source,
+      (p_frozen_price->>'priced_at')::timestamptz priced_at,
+      p_frozen_price->>'reference_number' reference_number INTO v_price;
+  ELSE
   SELECT * INTO v_price FROM private.latest_approved_raw_prices(
     p_branch_id,ARRAY[p_raw_material_id],COALESCE(p_valuation_as_of,v_now))
   WHERE raw_material_id=p_raw_material_id;
@@ -61,6 +76,7 @@ BEGIN
     SELECT * INTO v_price FROM private.stock_count_raw_price(
       p_branch_id,ARRAY[p_raw_material_id],COALESCE(p_valuation_as_of,v_now))
     WHERE raw_material_id=p_raw_material_id;
+  END IF;
   END IF;
   IF v_price.unit_cost IS NULL OR v_price.unit_cost<0
     OR v_price.priced_at IS NULL
@@ -181,7 +197,8 @@ CREATE OR REPLACE FUNCTION private.raw_receive_approved_v2(
   p_receipt_unit_cost numeric,p_entry_type text,p_reference_type text,p_reference_id uuid,
   p_reference_number text DEFAULT NULL,p_created_by uuid DEFAULT NULL,
   p_valuation_as_of timestamptz DEFAULT NULL,
-  p_effective_at timestamptz DEFAULT NULL
+  p_effective_at timestamptz DEFAULT NULL,
+  p_frozen_price jsonb DEFAULT NULL
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SET search_path TO 'public','pg_temp'
@@ -238,9 +255,21 @@ BEGIN
   -- Stock-count receipts must use the very same historically approved price
   -- as the posting RPC and persist the source on the physical ledger.
   IF p_reference_type='stock_count' THEN
+    IF p_frozen_price IS NOT NULL THEN
+    IF p_reference_type IS DISTINCT FROM 'stock_count'
+      OR (p_frozen_price->>'raw_material_id')::uuid IS DISTINCT FROM p_raw_material_id
+      OR (p_frozen_price->>'branch_id')::uuid IS DISTINCT FROM p_branch_id THEN
+      RAISE EXCEPTION 'STOCK_COUNT_PRICE_CONTEXT_MISMATCH';
+    END IF;
+    SELECT (p_frozen_price->>'unit_cost')::numeric unit_cost,
+      p_frozen_price->>'price_source' price_source,
+      (p_frozen_price->>'priced_at')::timestamptz priced_at,
+      p_frozen_price->>'reference_number' reference_number INTO v_approved_price;
+    ELSE
     SELECT * INTO v_approved_price FROM private.stock_count_raw_price(
       p_branch_id,ARRAY[p_raw_material_id],COALESCE(p_valuation_as_of,v_now))
     WHERE raw_material_id=p_raw_material_id;
+    END IF;
     IF v_approved_price.unit_cost IS NULL OR v_approved_price.unit_cost<0
        OR v_approved_price.price_source NOT IN ('purchase','pricing','stock_count','catalog_zero')
        OR v_approved_price.unit_cost IS DISTINCT FROM p_receipt_unit_cost THEN
@@ -359,8 +388,8 @@ $fn$;
 
 -- Deliberately NO SECURITY DEFINER, no public RPC, no API execute grant.
 REVOKE ALL ON FUNCTION private.raw_issue_approved_v2(
- uuid,uuid,uuid,numeric,text,text,uuid,text,uuid,timestamptz,timestamptz
+ uuid,uuid,uuid,numeric,text,text,uuid,text,uuid,timestamptz,timestamptz,jsonb
 ) FROM PUBLIC,anon,authenticated,service_role;
 REVOKE ALL ON FUNCTION private.raw_receive_approved_v2(
- uuid,uuid,uuid,numeric,numeric,text,text,uuid,text,uuid,timestamptz,timestamptz
+ uuid,uuid,uuid,numeric,numeric,text,text,uuid,text,uuid,timestamptz,timestamptz,jsonb
 ) FROM PUBLIC,anon,authenticated,service_role;
