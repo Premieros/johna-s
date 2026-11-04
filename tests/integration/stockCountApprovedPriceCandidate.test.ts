@@ -28,6 +28,7 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
     const release=readFileSync('supabase/migrations/20261104062413_historical_raw_counts_latest_price.sql','utf8')
       .replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,'');
     await db.query(release);
+    await db.query(readFileSync('supabase/migrations/20261104070332_batch_historical_count_reads.sql','utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
     await db.query("INSERT INTO public.branches(id,name) VALUES($1,'Latest price QA')",[branch]);
     await db.query("INSERT INTO public.warehouses(id,branch_id,name,is_active) VALUES($1,$2,'Latest price QA WH',true)",[warehouse,branch]);
     await db.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active) VALUES($1,$2,'Zero cost raw',$3,0,true)",[raw,'QA-'+raw.slice(0,8),branch]);

@@ -13,6 +13,9 @@ DECLARE
   v_item public.stock_count_items%ROWTYPE;
   v_current numeric(14,4);
   v_lock_raw uuid;
+  v_prices jsonb;
+  v_positions jsonb;
+  v_price_data jsonb;
   v_valuation_at timestamptz:=statement_timestamp();
   v_later_delta numeric;
   v_ledger_at_creation numeric;
@@ -94,6 +97,28 @@ BEGIN
       END IF;
     END LOOP;
 
+    -- Count lines and all stock coordinates are locked before taking the
+    -- shared snapshots. No per-item full movement-history/price query follows.
+    PERFORM 1 FROM public.stock_count_items WHERE stock_count_id=p_stock_count_id ORDER BY id FOR UPDATE;
+    SELECT jsonb_object_agg(p.raw_material_id::text,to_jsonb(p)) INTO v_prices
+      FROM private.stock_count_raw_price(v_count.branch_id,
+        ARRAY(SELECT raw_material_id FROM public.stock_count_items WHERE stock_count_id=p_stock_count_id),v_valuation_at) p;
+    WITH materials AS MATERIALIZED (
+      SELECT raw_material_id FROM public.stock_count_items WHERE stock_count_id=p_stock_count_id
+    ), history AS (
+      SELECT l.raw_material_id,
+        coalesce(sum(l.quantity) FILTER(WHERE l.created_at<=v_count.created_at),0) historic,
+        coalesce(sum(l.quantity) FILTER(WHERE l.created_at>v_count.created_at),0) later
+      FROM public.inventory_ledger l JOIN materials m ON m.raw_material_id=l.raw_material_id
+      WHERE l.branch_id=v_count.branch_id AND l.warehouse_id=v_count.warehouse_id GROUP BY l.raw_material_id
+    ), physical AS (
+      SELECT b.raw_material_id,sum(b.quantity) qty FROM public.raw_material_batches b
+      JOIN materials m ON m.raw_material_id=b.raw_material_id
+      WHERE b.branch_id=v_count.branch_id AND b.warehouse_id=v_count.warehouse_id GROUP BY b.raw_material_id
+    ) SELECT jsonb_object_agg(m.raw_material_id::text,jsonb_build_object(
+      'current',coalesce(p.qty,0),'historic',coalesce(h.historic,0),'later',coalesce(h.later,0)))
+      INTO v_positions FROM materials m LEFT JOIN history h USING(raw_material_id) LEFT JOIN physical p USING(raw_material_id);
+
     FOR v_item IN
       SELECT *
       FROM public.stock_count_items
@@ -112,11 +137,9 @@ BEGIN
         ));
         -- Price uses the latest published source at posting; the quantity cutoff
         -- remains the count creation time. These timestamps are independent.
-        SELECT p.unit_cost,p.price_source
-          INTO v_final_price,v_price_source
-          FROM private.stock_count_raw_price(
-            v_count.branch_id,ARRAY[v_item.raw_material_id],v_valuation_at
-          ) p WHERE p.raw_material_id=v_item.raw_material_id;
+        v_price_data:=v_prices->v_item.raw_material_id::text;
+        v_final_price:=(v_price_data->>'unit_cost')::numeric;
+        v_price_source:=v_price_data->>'price_source';
         -- Explicitly recorded zero is a valid cost. Missing (NULL / unpriced)
         -- and negative prices are invalid. The source projection must be updated
         -- separately to preserve legitimate zero-priced source events.
@@ -135,22 +158,9 @@ BEGIN
              SET unit_cost = v_final_price
            WHERE id = v_item.id AND stock_count_id = v_count.id;
         END IF;
-        SELECT COALESCE(quantity, 0)
-          INTO v_current
-          FROM public.raw_material_warehouse_inventory
-          WHERE raw_material_id = v_item.raw_material_id
-            AND branch_id = v_count.branch_id
-            AND warehouse_id = v_count.warehouse_id;
-
-        v_current := COALESCE(v_current, 0);
-        -- Preserve activity after the count was opened. Refuse to infer a
-        -- historical baseline where the movement history cannot reconcile.
-        SELECT COALESCE(sum(quantity) FILTER (WHERE created_at > v_count.created_at),0),
-               COALESCE(sum(quantity) FILTER (WHERE created_at <= v_count.created_at),0)
-          INTO v_later_delta,v_ledger_at_creation
-          FROM public.inventory_ledger
-         WHERE raw_material_id=v_item.raw_material_id AND branch_id=v_count.branch_id
-           AND warehouse_id=v_count.warehouse_id;
+        v_current:=(v_positions->v_item.raw_material_id::text->>'current')::numeric;
+        v_later_delta:=(v_positions->v_item.raw_material_id::text->>'later')::numeric;
+        v_ledger_at_creation:=(v_positions->v_item.raw_material_id::text->>'historic')::numeric;
         IF v_current-v_later_delta IS DISTINCT FROM v_ledger_at_creation THEN
           RAISE EXCEPTION 'STOCK_COUNT_HISTORICAL_BASELINE_UNVERIFIED item %',v_item.id;
         END IF;
@@ -166,7 +176,7 @@ BEGIN
           v_res := private.raw_receive_approved_v2(
             v_item.raw_material_id, v_count.branch_id, v_count.warehouse_id,
             v_variance, v_final_price,
-            'adjustment', 'stock_count', v_count.id, v_count.count_number, auth.uid(), v_valuation_at, v_count.created_at
+            'adjustment', 'stock_count', v_count.id, v_count.count_number, auth.uid(), v_valuation_at, v_count.created_at, v_price_data
           );
           IF NOT COALESCE((v_res->>'success')::boolean, false) THEN
             RAISE EXCEPTION 'STOCK_COUNT_ITEM_FAILED: %', 'RAW_ADJUST_FAILED';
@@ -192,7 +202,7 @@ BEGIN
           v_res := private.raw_issue_approved_v2(
             v_item.raw_material_id, v_count.branch_id, v_count.warehouse_id,
             -v_variance, 'adjustment', 'stock_count', v_count.id,
-            v_count.count_number, auth.uid(), v_valuation_at, v_count.created_at
+            v_count.count_number, auth.uid(), v_valuation_at, v_count.created_at, v_price_data
           );
           IF COALESCE((v_res->>'success')::boolean,false) IS NOT TRUE THEN
             RAISE EXCEPTION 'STOCK_COUNT_REMOVE_FAILED: %',COALESCE(v_res->>'error','unknown');
