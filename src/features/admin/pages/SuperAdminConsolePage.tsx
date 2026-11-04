@@ -19,6 +19,7 @@ import {
   Unlock,
   Sliders,
   History,
+  Headphones,
 } from 'lucide-react';
 import { admin } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -33,6 +34,7 @@ import { BranchPulsePanel } from '../components/BranchPulsePanel';
 import { Input, Textarea, Select } from '@/components/Input';
 import { Modal } from '@/components/Modal';
 import { RolesTab } from './RolesTab';
+import { JohnaSupportInboxTab } from './JohnaSupportInboxTab';
 import { formatDate, formatDateTime } from '@/lib/format';
 import {
   fetchTenantStats,
@@ -47,6 +49,7 @@ import { setOrganizationActive, updateSuperAdminUser } from '../services/superAd
 
 type SuperTab =
   | 'tenants'
+  | 'support'
   | 'system_controls'
   | 'general'
   | 'branches_override'
@@ -342,6 +345,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
 
   const TABS: { key: SuperTab; label: string; icon: React.ReactNode }[] = [
     { key: 'tenants', label: ar ? 'المستأجرون والمنظمات' : 'Tenants & Organizations', icon: <Building2 className="w-4 h-4" /> },
+    { key: 'support', label: ar ? 'دعم العملاء' : 'Customer Support', icon: <Headphones className="w-4 h-4" /> },
     { key: 'system_controls', label: ar ? 'التحكم في النظام ومستخدمي المنصة' : 'System Controls & Users', icon: <Sliders className="w-4 h-4" /> },
     { key: 'general', label: ar ? 'إعدادات المنشأة والمتجر المركزية' : 'Enterprise Settings', icon: <Store className="w-4 h-4" /> },
     { key: 'branches_override', label: ar ? 'تخصيصات الفروع' : 'Branch Overrides', icon: <SlidersHorizontal className="w-4 h-4" /> },
@@ -421,6 +425,8 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
       {/* ───────────────────────────────────────────────────────────── */}
       {/* TAB 1: المستأجرون والمنظمات (Tenants)                          */}
       {/* ───────────────────────────────────────────────────────────── */}
+      {activeTab === 'support' && <JohnaSupportInboxTab />}
+
       {activeTab === 'tenants' && (
         <div className="space-y-5 animate-fade-in">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
