@@ -59,3 +59,24 @@ prevents overwriting a drifted implementation.
 Local 407-line negative-stock proof improved from 2433 ms to 1307 ms, with the
 same zero final aggregate quantity and balanced 28490 debit/credit. Full targeted
 regression and exact-head CI are required before this follow-up is applied.
+
+## Follow-up: bounded legacy quantity housekeeping
+Branch: `fix/count-bounded-legacy-cleanup`, follows merged #598.
+The second protected attempt also rolled back at six seconds. Production contains
+11135 open debt rows in Smouha and 9792 in Cleopatra, up to 3977/3441 for one raw
+material. The first small fixture did not represent this per-material history.
+
+Replace per-lot correlated validation with one grouped full join under stock
+locks. Post the count's signed delta and balanced journal immediately, preserving
+all net-stock checks. Quantity-only compatibility cleanup is separately resumable
+from the existing count receipt ledger, at most 500 debt rows per call (a lower
+transaction-local limit can be selected). No queue or alternate price source is
+introduced. Applied count cutoffs prevent a concurrent later purchase from
+repricing covered historical sales while cleanup runs.
+
+59 targeted tests across 12 files pass, including a purchase before cleanup.
+A 407-line /11135-debt local proof posts in 820 ms; subsequent bounded cleanup
+finishes with unchanged zero stock, no pre-count open debt and unchanged balanced
+115420 debit/credit. Largest individual cleanup call:488 ms. These are local
+measurements, not production success. Existing deployed migrations remain intact;
+the new guarded migration is 20261104072139_linear_count_debt_validation.sql.
