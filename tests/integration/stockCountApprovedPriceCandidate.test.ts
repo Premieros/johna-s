@@ -30,6 +30,7 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
     await db.query(release);
     await db.query(readFileSync('supabase/migrations/20261104070332_batch_historical_count_reads.sql','utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
     await db.query(readFileSync('supabase/migrations/20261104072139_linear_count_debt_validation.sql','utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
+    await db.query(readFileSync('supabase/migrations/20261104082017_stock_count_single_value_movement.sql','utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
     await db.query("INSERT INTO public.branches(id,name) VALUES($1,'Latest price QA')",[branch]);
     await db.query("INSERT INTO public.warehouses(id,branch_id,name,is_active) VALUES($1,$2,'Latest price QA WH',true)",[warehouse,branch]);
     await db.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active) VALUES($1,$2,'Zero cost raw',$3,0,true)",[raw,'QA-'+raw.slice(0,8),branch]);
@@ -273,6 +274,51 @@ describe.skipIf(!local)('latest-price stock count candidate in disposable databa
     } finally {
       await db.query('ROLLBACK TO SAVEPOINT integrated_count');
       await db.query('RELEASE SAVEPOINT integrated_count');
+      await db.query('RESET ROLE');
+    }
+  });
+
+  it('rounds one raw-material count movement once and audits consolidation of legacy splits', async () => {
+    await db.query('RESET ROLE');
+    await db.query('SAVEPOINT currency_count');
+    try {
+      const material=randomUUID(),doc=randomUUID();
+      await db.query("INSERT INTO public.raw_materials(id,branch_id,code,name,default_cost) VALUES($1::uuid,$2,$1::uuid::text,'Fractional count fixture',1)",[material,branch]);
+      await db.query("INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,source_type) VALUES($1,$2,$3,'CENT-A',0.003,1,'opening'),($1,$2,$3,'CENT-B',0.003,1,'opening')",[material,branch,warehouse]);
+      await db.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,entry_type,reference_type) VALUES($1,$2,$3,0.006,1,0.01,'adjustment','opening')",[material,branch,warehouse]);
+      await db.query("INSERT INTO public.stock_counts(id,count_number,branch_id,warehouse_id,status,count_type,created_by,approved_by,approved_at) VALUES($1,$5,$2,$3,'approved','partial',$4,$4,now())",[doc,branch,warehouse,actor,'QA-CURRENCY-'+doc.slice(0,8)]);
+      await db.query("INSERT INTO public.stock_count_items(stock_count_id,raw_material_id,system_quantity,counted_quantity,unit_cost) VALUES($1,$2,0.006,0,0)",[doc,material]);
+      await db.query('SELECT public.ensure_chart_of_accounts($1)',[branch]);
+      await db.query('SELECT public.seed_account_mappings($1)',[branch]);
+      await db.query('SET LOCAL ROLE authenticated');
+      const applied=(await db.query('SELECT public.apply_stock_count($1) r',[doc])).rows[0].r;
+      expect(applied.success,JSON.stringify(applied)).toBe(true);
+      await db.query('RESET ROLE');
+      const posted=(await db.query("SELECT id,quantity,total_cost FROM public.inventory_ledger WHERE reference_type='stock_count' AND reference_id=$1",[doc])).rows;
+      expect(posted).toHaveLength(1);
+      expect(Number(posted[0].quantity)).toBe(-0.006);
+      expect(Number(posted[0].total_cost)).toBe(-0.01);
+      // Reconstruct two old, independently rounded lot rows. Net quantity and
+      // the original journal stay correct, but their stored monetary sum is 0.
+      await db.query('UPDATE public.inventory_ledger SET quantity=-0.003,total_cost=0,before_qty=0.006,after_qty=0.003 WHERE id=$1',[posted[0].id]);
+      await db.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,before_qty,after_qty,entry_type,reference_type,reference_id,reference_number,created_by,created_at,approved_cost_basis,approved_price_source,approved_price_at,approved_price_ref,approved_cost_recorded_at) SELECT raw_material_id,branch_id,warehouse_id,-0.003,unit_cost,0,0.003,0,entry_type,reference_type,reference_id,reference_number,created_by,created_at,approved_cost_basis,approved_price_source,approved_price_at,approved_price_ref,approved_cost_recorded_at FROM public.inventory_ledger WHERE id=$1",[posted[0].id]);
+      const repaired=(await db.query('SELECT private.consolidate_stock_count_value($1) r',[doc])).rows[0].r;
+      expect(repaired).toMatchObject({success:true,materials_fixed:1});
+      const retry=(await db.query('SELECT private.consolidate_stock_count_value($1) r',[doc])).rows[0].r;
+      expect(retry).toMatchObject({success:true,materials_fixed:0});
+      const totals=(await db.query("SELECT count(*) n,count(*) FILTER(WHERE quantity<>0) active,sum(quantity) qty,sum(total_cost) value FROM public.inventory_ledger WHERE reference_type='stock_count' AND reference_id=$1",[doc])).rows[0];
+      expect(Number(totals.n)).toBe(2); // Original IDs remain for audit/debt links.
+      expect(Number(totals.active)).toBe(1);
+      expect(Number(totals.qty)).toBe(-0.006);
+      expect(Number(totals.value)).toBe(-0.01);
+      expect(Number((await db.query('SELECT sum(quantity) qty FROM public.raw_material_batches WHERE raw_material_id=$1',[material])).rows[0].qty)).toBe(0);
+      expect(Number((await db.query("SELECT count(*) n FROM public.audit_log WHERE entity_id=$1 AND details->>'kind'='stock_count_currency_consolidation'",[doc])).rows[0].n)).toBe(1);
+      const journal=(await db.query('SELECT sum(debit) debit,sum(credit) credit FROM public.journal_entry_lines WHERE journal_entry_id=$1',[applied.journal_entry_id])).rows[0];
+      expect(Number(journal.debit)).toBe(0.01);
+      expect(Number(journal.credit)).toBe(0.01);
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT currency_count');
+      await db.query('RELEASE SAVEPOINT currency_count');
       await db.query('RESET ROLE');
     }
   });

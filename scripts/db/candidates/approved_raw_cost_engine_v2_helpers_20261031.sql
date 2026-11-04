@@ -103,6 +103,7 @@ BEGIN
     EXIT WHEN v_qty<=0;
     v_take:=LEAST(v_qty,v_batch.quantity);
     UPDATE public.raw_material_batches SET quantity=quantity-v_take WHERE id=v_batch.id;
+    IF p_reference_type IS DISTINCT FROM 'stock_count' THEN
     INSERT INTO public.inventory_ledger(
       raw_material_id,branch_id,warehouse_id,batch_number,quantity,
       unit_cost,total_cost,before_qty,after_qty,entry_type,reference_type,
@@ -117,6 +118,7 @@ BEGIN
       'approved_last_known',v_price.price_source,v_price.priced_at,
       v_price.reference_number,v_now
     );
+    END IF;
     v_running:=v_running-v_take;
     v_qty:=v_qty-v_take;
   END LOOP;
@@ -152,6 +154,7 @@ BEGIN
 
     END IF;
 
+    IF p_reference_type IS DISTINCT FROM 'stock_count' THEN
     INSERT INTO public.inventory_ledger(
       raw_material_id,branch_id,warehouse_id,batch_number,quantity,
       unit_cost,total_cost,before_qty,after_qty,entry_type,reference_type,
@@ -165,6 +168,21 @@ BEGIN
       COALESCE(p_effective_at,v_now),
       'approved_last_known',v_price.price_source,v_price.priced_at,
       v_price.reference_number,v_now
+    ) RETURNING id INTO v_ledger_id;
+    END IF;
+  END IF;
+
+  -- One monetary movement per counted raw material. Lot-level rounding
+  -- must not create a different total from the count and its journal.
+  IF p_reference_type='stock_count' THEN
+    INSERT INTO public.inventory_ledger(
+      raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,total_cost,
+      before_qty,after_qty,entry_type,reference_type,reference_id,reference_number,created_by,created_at,
+      approved_cost_basis,approved_price_source,approved_price_at,approved_price_ref,approved_cost_recorded_at
+    ) VALUES (
+      p_raw_material_id,p_branch_id,p_warehouse_id,NULL,-p_qty,v_price.unit_cost,-round(p_qty*v_price.unit_cost,2),
+      v_before,v_before-p_qty,p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,COALESCE(p_effective_at,v_now),
+      'approved_last_known',v_price.price_source,v_price.priced_at,v_price.reference_number,v_now
     ) RETURNING id INTO v_ledger_id;
     IF v_count_deficit_batch IS NOT NULL THEN
       INSERT INTO public.raw_fifo_debts(source_ledger_id,raw_material_id,branch_id,warehouse_id,oversold_batch_id,
