@@ -7,7 +7,8 @@
 CREATE OR REPLACE FUNCTION private.raw_issue_approved_v2(
   p_raw_material_id uuid,p_branch_id uuid,p_warehouse_id uuid,p_qty numeric,
   p_entry_type text,p_reference_type text,p_reference_id uuid,
-  p_reference_number text DEFAULT NULL,p_created_by uuid DEFAULT NULL
+  p_reference_number text DEFAULT NULL,p_created_by uuid DEFAULT NULL,
+  p_valuation_as_of timestamptz DEFAULT NULL
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SET search_path TO 'public','pg_temp'
@@ -48,11 +49,11 @@ BEGIN
     RETURN jsonb_build_object('success',false,'error','LEGACY_FIFO_POSITION_NOT_CUTOVER');
   END IF;
   SELECT * INTO v_price FROM private.latest_approved_raw_prices(
-    p_branch_id,ARRAY[p_raw_material_id],v_now)
+    p_branch_id,ARRAY[p_raw_material_id],COALESCE(p_valuation_as_of,v_now))
   WHERE raw_material_id=p_raw_material_id;
-  IF v_price.unit_cost IS NULL OR v_price.unit_cost<=0
+  IF v_price.unit_cost IS NULL OR v_price.unit_cost<0
     OR v_price.priced_at IS NULL
-    OR v_price.price_source NOT IN ('purchase','pricing','stock_count') THEN
+    OR v_price.price_source NOT IN ('purchase','pricing','stock_count','catalog_zero') THEN
     RETURN jsonb_build_object('success',false,'error','APPROVED_RAW_PRICE_UNAVAILABLE');
   END IF;
   SELECT COALESCE(SUM(quantity),0) INTO v_before
@@ -76,13 +77,14 @@ BEGIN
     INSERT INTO public.inventory_ledger(
       raw_material_id,branch_id,warehouse_id,batch_number,quantity,
       unit_cost,total_cost,before_qty,after_qty,entry_type,reference_type,
-      reference_id,reference_number,created_by,
+      reference_id,reference_number,created_by,created_at,
       approved_cost_basis,approved_price_source,approved_price_at,
       approved_price_ref,approved_cost_recorded_at
     ) VALUES (
       p_raw_material_id,p_branch_id,p_warehouse_id,v_batch.batch_number,-v_take,
       v_price.unit_cost,-v_take*v_price.unit_cost,v_running,v_running-v_take,
       p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,
+      CASE WHEN p_reference_type='stock_count' THEN COALESCE(p_valuation_as_of,v_now) ELSE v_now END,
       'approved_last_known',v_price.price_source,v_price.priced_at,
       v_price.reference_number,v_now
     );
@@ -116,13 +118,14 @@ BEGIN
     INSERT INTO public.inventory_ledger(
       raw_material_id,branch_id,warehouse_id,batch_number,quantity,
       unit_cost,total_cost,before_qty,after_qty,entry_type,reference_type,
-      reference_id,reference_number,created_by,
+      reference_id,reference_number,created_by,created_at,
       approved_cost_basis,approved_price_source,approved_price_at,
       approved_price_ref,approved_cost_recorded_at
     ) VALUES (
       p_raw_material_id,p_branch_id,p_warehouse_id,v_batch_no,-v_qty,
       v_price.unit_cost,-v_qty*v_price.unit_cost,v_running,v_running-v_qty,
       p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,
+      CASE WHEN p_reference_type='stock_count' THEN COALESCE(p_valuation_as_of,v_now) ELSE v_now END,
       'approved_last_known',v_price.price_source,v_price.priced_at,
       v_price.reference_number,v_now
     ) RETURNING id INTO v_ledger_id;
@@ -151,13 +154,18 @@ $fn$;
 CREATE OR REPLACE FUNCTION private.raw_receive_approved_v2(
   p_raw_material_id uuid,p_branch_id uuid,p_warehouse_id uuid,p_qty numeric,
   p_receipt_unit_cost numeric,p_entry_type text,p_reference_type text,p_reference_id uuid,
-  p_reference_number text DEFAULT NULL,p_created_by uuid DEFAULT NULL
+  p_reference_number text DEFAULT NULL,p_created_by uuid DEFAULT NULL,
+  p_valuation_as_of timestamptz DEFAULT NULL
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SET search_path TO 'public','pg_temp'
 AS $fn$
 DECLARE
   v_shortage public.raw_material_batches%ROWTYPE;
+  v_approved_price record;
+  v_approved_price_source text;
+  v_approved_priced_at timestamptz;
+  v_approved_price_ref text;
   v_shortage_absorbed numeric(18,6):=0;
   v_shortage_basis numeric(20,6):=0;
   v_variance numeric(20,6):=0;
@@ -176,7 +184,7 @@ DECLARE
   v_variance_reference uuid;
 BEGIN
   IF p_qty IS NULL OR p_qty<=0 OR p_receipt_unit_cost IS NULL
-     OR p_receipt_unit_cost<=0 OR p_warehouse_id IS NULL
+     OR p_receipt_unit_cost<0 OR p_warehouse_id IS NULL
      OR p_raw_material_id IS NULL OR p_branch_id IS NULL THEN
     RETURN jsonb_build_object('success',false,'error','APPROVED_RECEIPT_INVALID_INPUT');
   END IF;
@@ -195,6 +203,21 @@ BEGIN
         AND b.branch_id=p_branch_id AND b.quantity<0
         AND b.source_type<>'approved_shortage_aggregate') THEN
     RETURN jsonb_build_object('success',false,'error','LEGACY_FIFO_POSITION_NOT_CUTOVER');
+  END IF;
+  -- Stock-count receipts must use the very same historically approved price
+  -- as the posting RPC and persist the source on the physical ledger.
+  IF p_reference_type='stock_count' THEN
+    SELECT * INTO v_approved_price FROM private.latest_approved_raw_prices(
+      p_branch_id,ARRAY[p_raw_material_id],COALESCE(p_valuation_as_of,v_now))
+    WHERE raw_material_id=p_raw_material_id;
+    IF v_approved_price.unit_cost IS NULL OR v_approved_price.unit_cost<0
+       OR v_approved_price.price_source NOT IN ('purchase','pricing','stock_count','catalog_zero')
+       OR v_approved_price.unit_cost IS DISTINCT FROM p_receipt_unit_cost THEN
+      RETURN jsonb_build_object('success',false,'error','APPROVED_RECEIPT_PRICE_MISMATCH');
+    END IF;
+    v_approved_price_source:=v_approved_price.price_source;
+    v_approved_priced_at:=v_approved_price.priced_at;
+    v_approved_price_ref:=v_approved_price.reference_number;
   END IF;
   SELECT COALESCE(sum(quantity),0) INTO v_before FROM public.raw_material_batches
     WHERE raw_material_id=p_raw_material_id AND branch_id=p_branch_id
@@ -231,11 +254,18 @@ BEGIN
   INSERT INTO public.inventory_ledger(
     raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost,
     total_cost,before_qty,after_qty,entry_type,reference_type,reference_id,
-    reference_number,created_by
+    reference_number,created_by,created_at,
+    approved_cost_basis,approved_price_source,approved_price_at,
+    approved_price_ref,approved_cost_recorded_at
   ) VALUES (
     p_raw_material_id,p_branch_id,p_warehouse_id,v_batch_no,p_qty,
     p_receipt_unit_cost,p_qty*p_receipt_unit_cost,v_before,v_before+p_qty,
-    p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by
+    p_entry_type,p_reference_type,p_reference_id,p_reference_number,p_created_by,
+      CASE WHEN p_reference_type='stock_count' THEN COALESCE(p_valuation_as_of,v_now) ELSE v_now END,
+    CASE WHEN p_reference_type='stock_count' THEN 'approved_last_known' ELSE NULL END,
+    v_approved_price_source,v_approved_priced_at,
+    v_approved_price_ref,
+    CASE WHEN p_reference_type='stock_count' THEN v_now ELSE NULL END
   ) RETURNING id INTO v_receipt_ledger;
 
   v_posted_variance:=round(v_variance,2);
@@ -295,8 +325,9 @@ $fn$;
 
 -- Deliberately NO SECURITY DEFINER, no public RPC, no API execute grant.
 REVOKE ALL ON FUNCTION private.raw_issue_approved_v2(
- uuid,uuid,uuid,numeric,text,text,uuid,text,uuid
+ uuid,uuid,uuid,numeric,text,text,uuid,text,uuid,timestamptz
 ) FROM PUBLIC,anon,authenticated,service_role;
 REVOKE ALL ON FUNCTION private.raw_receive_approved_v2(
- uuid,uuid,uuid,numeric,numeric,text,text,uuid,text,uuid
+ uuid,uuid,uuid,numeric,numeric,text,text,uuid,text,uuid,timestamptz
 ) FROM PUBLIC,anon,authenticated,service_role;
+
