@@ -53,10 +53,16 @@ export function AgentCustomerSupport() {
     const moveOverlay = () => {
       const overlay = document.querySelector<HTMLElement>('[data-support-ai-root]');
       if (!overlay) return;
-      overlay.style.bottom = window.innerWidth < 768 ? '88px' : '14px';
+      const onMobile = window.innerWidth < 768;
+      // Never display a floating toggle over transactional controls on phones.
+      // Staff can open the same widget from Layout's mobile navigation drawer.
+      const toggle = overlay.shadowRoot?.querySelector<HTMLElement>('.toggle');
+      const panel = overlay.shadowRoot?.querySelector<HTMLElement>('.panel');
+      if (toggle) toggle.style.display = onMobile ? 'none' : '';
+      overlay.style.bottom = onMobile ? '88px' : '14px';
       overlay.style.pointerEvents = 'none';
-      const interactive = overlay.shadowRoot?.querySelectorAll<HTMLElement>('button, input, form, .panel');
-      interactive?.forEach(element => { element.style.pointerEvents = 'auto'; });
+      if (panel) panel.style.pointerEvents = 'auto';
+      if (toggle) toggle.style.pointerEvents = 'auto';
     };
     script.addEventListener('load', moveOverlay);
     document.body.appendChild(script);
