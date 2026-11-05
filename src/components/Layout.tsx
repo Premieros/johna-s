@@ -312,6 +312,21 @@ export function Layout({ children }: { children: ReactNode }) {
           </button>
         </div>
         <nav data-testid="app-navigation" className="h-[calc(100%-56px)] overflow-y-auto px-3 py-4">
+          <button
+            data-testid="sidebar-open-customer-support"
+            type="button"
+            onClick={() => {
+              const root = document.querySelector<HTMLElement>('[data-support-ai-root]');
+              const panel = root?.shadowRoot?.querySelector<HTMLElement>('.panel');
+              const toggle = root?.shadowRoot?.querySelector<HTMLButtonElement>('.toggle');
+              setMobileOpen(false);
+              if (toggle && !panel?.classList.contains('open')) toggle.click();
+            }}
+            className="mb-3 flex min-h-11 w-full items-center gap-3 rounded-xl border border-ui-border bg-ui-page-alt px-3 py-2 text-start text-sm font-bold text-ui-text transition hover:bg-ui-primary-soft hover:text-ui-primary"
+          >
+            <Headphones className="h-5 w-5 shrink-0 text-ui-primary" />
+            <span>{ar ? 'خدمة العملاء' : 'Customer Support'}</span>
+          </button>
           <section data-testid="mobile-sidebar-controls" className="mb-4 grid gap-3 rounded-2xl border border-ui-border bg-ui-surface/80 p-3 lg:hidden">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ui-primary-soft text-sm font-black text-ui-primary">
@@ -324,24 +339,6 @@ export function Layout({ children }: { children: ReactNode }) {
                 <p className="truncate text-xs text-ui-subtle">{user?.role || 'user'}</p>
               </div>
             </div>
-
-            <button
-              data-testid="mobile-open-customer-support"
-              type="button"
-              onClick={() => {
-                // On phones, the chat is accessed from the navigation drawer
-                // instead of a floating button covering payment/report controls.
-                const root = document.querySelector<HTMLElement>('[data-support-ai-root]');
-                const panel = root?.shadowRoot?.querySelector<HTMLElement>('.panel');
-                const toggle = root?.shadowRoot?.querySelector<HTMLButtonElement>('.toggle');
-                setMobileOpen(false);
-                if (toggle && !panel?.classList.contains('open')) toggle.click();
-              }}
-              className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-ui-border bg-ui-page px-3 text-sm font-bold text-ui-text transition hover:bg-ui-page-alt"
-            >
-              <Headphones className="h-4 w-4 text-ui-primary" />
-              {ar ? 'فتح خدمة العملاء' : 'Open customer support'}
-            </button>
 
             <label className="grid gap-1">
               <span className="text-[11px] font-bold text-ui-subtle">
