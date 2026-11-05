@@ -10,7 +10,7 @@ export function PeriodCloseDocuments({ kind, branch, from, to }: { kind: Documen
   const { lang } = useLanguage();
   const ar = lang === 'ar';
   const [page, setPage] = useState(0);
-  const [result, setResult] = useState<{ page: number; rows?: Record<string, unknown>[]; count?: number; error?: string }>();
+  const [result, setResult] = useState<{ page: number; rows?: Record<string, unknown>[]; count?: number; total?: number; error?: string }>();
   const size = 50;
   useEffect(() => {
     const controller = new AbortController();
@@ -19,7 +19,7 @@ export function PeriodCloseDocuments({ kind, branch, from, to }: { kind: Documen
       p_from_ts: startIso, p_to_exclusive_ts: endExclusiveIso, p_filters: {}, p_page: page, p_page_size: size }, controller.signal)
       .then(({ data, error }) => {
         if (error || !data) throw error || new Error('REPORT_SOURCE_INVALID');
-        if (!controller.signal.aborted) setResult({ page, rows: data.rows, count: data.summary.count });
+        if (!controller.signal.aborted) setResult({ page, rows: data.rows, count: data.summary.count, total: data.summary.total });
       }).catch(error => {
         if (!controller.signal.aborted) setResult({ page, error: userFacingErrorMessage(error, lang) });
       });
@@ -43,6 +43,7 @@ export function PeriodCloseDocuments({ kind, branch, from, to }: { kind: Documen
             .map((value, i) => <td key={i} className="p-2">{String(value ?? '—')}</td>)}
         </tr>;
       })}</tbody>
+    <tfoot className="border-t border-ui-border font-bold"><tr><th colSpan={5} className="p-2 text-start">{ar ? 'إجمالي الفترة — كل الصفحات' : 'Period total — all pages'}</th><td className="p-2">{format.format(current.total ?? 0)}</td></tr></tfoot>
     </table>
     {!current.rows?.length && <p>{ar ? 'لا توجد مستندات للفترة.' : 'No documents for this period.'}</p>}
     <div className="flex gap-3 p-2">

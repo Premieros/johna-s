@@ -4,6 +4,7 @@ type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Respo
 // Only authoritative, read-only reporting RPCs belong here. Operational writes
 // and live dashboards deliberately use the normal transport.
 const reportRpcs = new Set([
+  'get_period_close_raw_report', 'get_period_close_raw_movements',
   'get_operational_stock_source', 'get_operational_report_metrics', 'get_operational_report_dataset', 'get_operational_report_page',
   'get_trial_balance', 'get_trial_balance_summary', 'get_general_ledger', 'get_income_statement', 'get_balance_sheet',
   'get_ar_aging', 'get_ap_aging', 'get_aging_summary', 'get_cash_flow', 'get_party_statement',

@@ -10,7 +10,7 @@ export type OperationalReportPage = {
 
 export type PeriodCloseMaterial = {
   id: string; name: string; code: string; price: number; source: string | null;
-  opening: number | null; closing: number | null; purchase: number; transfer: number;
+  opening: number | null; closing: number | null; purchase: number; transfer: number; adjustment?: number; other?: number;
 };
 
 export type PeriodCloseRaw = {
@@ -18,6 +18,13 @@ export type PeriodCloseRaw = {
   valued_at: string; opening_complete: boolean; closing_complete: boolean;
   opening: number; closing: number; purchase: number; transfer: number; unpriced: number;
 };
+
+export type PeriodCloseMovement = {
+ id: number; raw_material_id: string; name: string; code: string; created_at: string;
+ entry_type: string; reference_type: string; reference_number: string | null;
+ warehouse_name: string | null; quantity: number; price: number; value: number;
+};
+export type PeriodCloseMovements = { rows: PeriodCloseMovement[]; count: number; total: number };
 
 export type OperationalStockSource = Record<'rawRows' | 'unitRows' | 'rawMasters' | 'rawBalances' | 'unitMasters' | 'unitBatches', Record<string, unknown>[]>;
 
@@ -46,6 +53,7 @@ export const reporting = {
   getSoldRecipeConsumptionReport(p: { p_branch_id: string | null; p_from_date: string; p_to_date: string; p_group_by: 'material' | 'product' | 'unit'; p_search: string; p_page: number; p_page_size: number }, signal?: AbortSignal): ApiResult<ConsumptionLatestResult> { return rpc('get_sold_recipe_consumption_report', p, signal); },
   getConsumptionLatestReport(p: { p_branch_id: string | null; p_from_date: string; p_to_date: string; p_group_by: 'material' | 'product'; p_search: string; p_include_waste: boolean; p_page: number; p_page_size: number }, signal?: AbortSignal): ApiResult<ConsumptionLatestResult> { return rpc('get_consumption_latest_report', p, signal); },
   getOperationalStockSource(p: { p_branch_id: string | null; p_warehouse_id: string | null; p_low_stock: boolean }, signal?: AbortSignal): ApiResult<OperationalStockSource> { return rpc('get_operational_stock_source', p, signal); },
+  getPeriodCloseRawMovements(p: { p_branch_id: string; p_from: string; p_to: string; p_kind: 'all' | 'purchase' | 'transfer'; p_material_id: string | null; p_page: number; p_page_size: number }, signal?: AbortSignal): ApiResult<PeriodCloseMovements> { return rpc('get_period_close_raw_movements', p, signal); },
   getPeriodCloseRaw(p: { p_branch_id: string; p_from: string; p_to: string }, signal?: AbortSignal): ApiResult<PeriodCloseRaw> { return rpc('get_period_close_raw_report', p, signal); },
   getOperationalReportMetrics(p: { p_report_type: 'sales' | 'purchases' | 'expenses'; p_branch_id: string | null; p_from_date: string; p_to_date: string; p_filters: Record<string, string>; p_from_ts: string; p_to_exclusive_ts: string }, signal?: AbortSignal): ApiResult<Record<string, number>> { return rpc('get_operational_report_metrics', p, signal); },
   getOperationalReportDataset(p: { p_report_type: 'sales' | 'purchases' | 'expenses'; p_branch_id: string | null; p_from_date: string; p_to_date: string; p_filters: Record<string, string>; p_from_ts: string; p_to_exclusive_ts: string }, signal?: AbortSignal): ApiResult<OperationalReportPage> { return rpc('get_operational_report_dataset', p, signal); },
