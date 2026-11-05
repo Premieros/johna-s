@@ -41,38 +41,59 @@ export function AgentCustomerSupport() {
     }
     lastUserId.current = user.id;
 
-    if (document.querySelector('[data-support-ai-root]')) return;
+    const syncWidget = () => {
+      const overlay = document.querySelector<HTMLElement>('[data-support-ai-root]');
+      const shadow = overlay?.shadowRoot;
+      if (!overlay || !shadow) return;
+      overlay.style.pointerEvents = 'none';
+      overlay.style.bottom = window.innerWidth < 768 ? '88px' : '14px';
+      const toggle = shadow.querySelector<HTMLButtonElement>('.toggle');
+      const panel = shadow.querySelector<HTMLElement>('.panel');
+      if (toggle) {
+        toggle.style.setProperty('display', 'none', 'important');
+        toggle.style.setProperty('pointer-events', 'none', 'important');
+        if (!shadow.querySelector('[data-johna-hide-launcher]')) {
+          const style = document.createElement('style');
+          style.dataset.johnaHideLauncher = '1';
+          style.textContent = '.toggle { display: none !important; }';
+          shadow.appendChild(style);
+        }
+      }
+      if (!panel) return;
+      panel.style.pointerEvents = 'auto';
+      const header = shadow.querySelector<HTMLElement>('.head');
+      if (header && !shadow.querySelector('[data-johna-close-chat]')) {
+        header.style.display = 'flex';
+        header.style.alignItems = 'center';
+        header.style.justifyContent = 'space-between';
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.dataset.johnaCloseChat = '1';
+        close.setAttribute('aria-label', 'إغلاق خدمة العملاء');
+        close.textContent = '×';
+        close.style.cssText = 'color:white;background:transparent;border:0;cursor:pointer;font-size:25px;line-height:1;padding:0 8px';
+        close.addEventListener('click', () => {
+          if (panel.classList.contains('open')) toggle?.click();
+        });
+        header.appendChild(close);
+      }
+    };
     const script = document.createElement('script');
     script.async = true;
     script.src = SUPPORT_ORIGIN + '/support/widget.js';
     script.dataset.widgetKey = PUBLIC_KEY;
     script.dataset.johnaSupport = '1';
-    // The only chat entry point is the sidebar item on desktop and phone.
-    // Hide the vendor's floating launcher so it cannot obstruct business UI.
-    const moveOverlay = () => {
-      const overlay = document.querySelector<HTMLElement>('[data-support-ai-root]');
-      if (!overlay) return;
-      const onMobile = window.innerWidth < 768;
-      // The sidebar opens the widget through the hidden toggle.
-      const toggle = overlay.shadowRoot?.querySelector<HTMLElement>('.toggle');
-      const panel = overlay.shadowRoot?.querySelector<HTMLElement>('.panel');
-      if (toggle) toggle.style.display = 'none';
-      overlay.style.bottom = onMobile ? '88px' : '14px';
-      overlay.style.pointerEvents = 'none';
-      if (panel) panel.style.pointerEvents = 'auto';
-      if (toggle) toggle.style.pointerEvents = 'none';
-    };
-    script.addEventListener('load', moveOverlay);
+    script.addEventListener('load', syncWidget);
     document.body.appendChild(script);
-    const observer = new MutationObserver(moveOverlay);
+    const observer = new MutationObserver(syncWidget);
     observer.observe(document.body, { childList: true });
-    window.addEventListener('resize', moveOverlay);
-    moveOverlay();
+    window.addEventListener('resize', syncWidget);
+    syncWidget();
 
     return () => {
       observer.disconnect();
-      window.removeEventListener('resize', moveOverlay);
-      script.removeEventListener('load', moveOverlay);
+      window.removeEventListener('resize', syncWidget);
+      script.removeEventListener('load', syncWidget);
       script.remove();
       document.querySelectorAll('[data-support-ai-root]').forEach(root => root.remove());
     };
