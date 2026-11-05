@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/period-close-balances-details-20261105`
-Current PR: `0`
+Current PR: `612`
 Last updated: 2026-11-05
 State: **READY**
 
