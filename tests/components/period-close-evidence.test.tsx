@@ -44,9 +44,17 @@ describe('period close drill-down',()=>{
   await run();const movement={id:1,raw_material_id:'raw',name:'Water',code:'W',created_at:'2026-10-01T10:00:00Z',entry_type:'purchase',reference_type:'purchase',reference_number:'P1',warehouse_name:'Main',quantity:1,price:10,value:10};
   calls.moves.mockImplementation(async(p:{p_page:number})=>({data:{rows:Array.from({length:p.p_page?1:200},(_,i)=>({...movement,id:p.p_page*200+i})),count:201,total:2010}}));
   fireEvent.click(screen.getByRole('button',{name:'Export full report to Excel'}));await waitFor(()=>expect(calls.write).toHaveBeenCalled());
-  expect(calls.moves).toHaveBeenCalledTimes(2);expect(calls.append).toHaveBeenCalledTimes(7);
-  const sheet=calls.append.mock.calls.find(call=>call[2]==='Material movements')?.[1];expect(sheet.records).toHaveLength(201);
+  expect(calls.moves).not.toHaveBeenCalled();expect(calls.append).toHaveBeenCalledTimes(6);
+
   expect(calls.write.mock.calls[0][1]).toBe('period-close-2026-10-01-2026-10-31.xlsx');
+ });
+
+ it('exports every movement page only for the opened evidence report',async()=>{
+  await run();fireEvent.click(screen.getByRole('button',{name:'View details: Net raw purchases at latest prices'}));await screen.findByText('Period total — all pages');calls.moves.mockClear();
+  const movement={id:1,raw_material_id:'raw',name:'Water',code:'W',created_at:'2026-10-01T10:00:00Z',entry_type:'purchase',reference_type:'purchase',reference_number:'P1',warehouse_name:'Main',quantity:1,price:10,value:10};
+  calls.moves.mockImplementation(async(p:{p_page:number})=>({data:{rows:Array.from({length:p.p_page?1:200},(_,i)=>({...movement,id:p.p_page*200+i})),count:201,total:2010}}));
+  fireEvent.click(screen.getByRole('button',{name:'Export all detail pages to Excel'}));await waitFor(()=>expect(calls.write).toHaveBeenCalled());
+  expect(calls.moves).toHaveBeenCalledTimes(2);expect(calls.append.mock.calls[0][1].records).toHaveLength(201);
  });
 
 });

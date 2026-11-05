@@ -155,33 +155,27 @@ export function PeriodCloseReport() {
       }
       // Full evidence is fetched only for an explicit export, inside the same
       // combined row budget as invoices. Never silently export the first page.
-      for (const kind of ['all','consumption'] as const) {
+      {
         const records: Record<string, unknown>[] = [];
         let count: number | undefined;
         for (let page = 0; count === undefined || records.length < count; page++) {
           controller.signal.throwIfAborted();
-          const response = kind === 'all'
-            ? await reporting.getPeriodCloseRawMovements({p_branch_id:branch,p_from:from,p_to:to,p_kind:'all',p_material_id:null,p_page:page,p_page_size:200},controller.signal)
-            : await reporting.getSoldRecipeConsumptionReport({p_branch_id:branch,p_from_date:from,p_to_date:to,p_group_by:'material',p_search:'',p_page:page,p_page_size:200},controller.signal);
+          const response = await reporting.getSoldRecipeConsumptionReport({p_branch_id:branch,p_from_date:from,p_to_date:to,p_group_by:'material',p_search:'',p_page:page,p_page_size:200},controller.signal);
           if (response.error || !response.data) throw response.error ?? new Error('REPORT_SOURCE_INVALID');
           const data = response.data;
-          const totalCount = 'summary' in data ? data.summary.count : data.count;
+          const totalCount = data.summary.count;
           if (count === undefined) count = totalCount;
           if (!Number.isSafeInteger(count) || count < 0 || count !== totalCount) throw new Error('REPORT_SOURCE_INVALID');
           if (count > remaining) throw new Error('REPORT_SOURCE_LIMIT');
           if (data.rows.length !== Math.min(200,count-records.length)) throw new Error('REPORT_SOURCE_INVALID');
-          records.push(...data.rows.map(row => 'consumption_value' in row ? {
+          records.push(...data.rows.map(row => ({
             [label('الخامة','Material')]:row.raw_material_name,[label('الوحدة','Unit')]:row.unit_name,
             [label('استهلاك قبل المرتجع','Gross consumption')]:row.consumed_quantity,[label('المرتجع','Returned')]:row.returned_quantity,
             [label('صافي الاستهلاك','Net consumption')]:row.net_quantity,[label('آخر سعر','Latest price')]:row.unit_price,[label('القيمة','Value')]:row.consumption_value,
-          } : {
-            [label('الخامة','Material')]:row.name,[label('المستند','Document')]:row.reference_number,[label('التاريخ','Date')]:row.created_at,
-            [label('نوع الحركة','Movement')]:row.entry_type,[label('المخزن','Warehouse')]:row.warehouse_name,
-            [label('الكمية','Quantity')]:row.quantity,[label('آخر سعر','Latest price')]:row.price,[label('القيمة','Value')]:row.value,
-          }));
+          })));
         }
         remaining -= records.length;
-        sheet(kind === 'all' ? label('حركات الخامات','Material movements') : label('استهلاك الوصفات','Recipe consumption'),records);
+        sheet(label('استهلاك الوصفات','Recipe consumption'),records);
       }
       controller.signal.throwIfAborted();
       XLSX.writeFile(book, `period-close-${from}-${to}.xlsx`);
@@ -219,7 +213,7 @@ export function PeriodCloseReport() {
         {([['result', 'نتيجة الإقفال', 'Closing result'], ['materials', 'مراجعة المخزون', 'Inventory review'], ['sales', 'فواتير المبيعات', 'Sales invoices'], ['purchases', 'فواتير المشتريات', 'Purchase invoices'], ['expenses', 'مستندات المصروفات', 'Expense documents']] as const).map(([key, label, english]) =>
           <button key={key} type="button" aria-pressed={detail === key} className="rounded border border-ui-border px-3 py-2 aria-pressed:bg-ui-primary aria-pressed:text-ui-primary-fg" onClick={() => { setDetail(key); setSelectedRow(undefined); setMaterialId(undefined); }}>{ar ? label : english}</button>)}
       </div>
-      {detail !== 'result' && <div className="flex flex-wrap items-center gap-3 py-2"><button type="button" className="rounded border border-ui-border px-3 py-2" onClick={() => setDetail('result')}>{ar ? 'العودة لنتيجة الإقفال' : 'Back to closing result'}</button><strong>{selectedRow !== undefined ? (ar ? rows[selectedRow][0] : rows[selectedRow][1]) : ''}</strong><span>{from} — {to}</span></div>}
+      {detail !== 'result' && <div className="flex flex-wrap items-center gap-3 py-2"><button type="button" className="rounded border border-ui-border px-3 py-2" onClick={() => setDetail('result')}>{ar ? 'العودة لنتيجة الإقفال' : 'Back to closing result'}</button><strong>{materialId ? raw?.materials?.find(material => material.id === materialId)?.name : selectedRow !== undefined ? (ar ? rows[selectedRow][0] : rows[selectedRow][1]) : ''}</strong><span>{from} — {to}</span></div>}
       {detail === 'result' && <div className="overflow-auto">
       <table className="w-full text-sm">
         <thead className="sticky top-0 bg-ui-surface"><tr><th className="p-3 text-start">{ar ? 'البيان' : 'Item'}</th><th>{ar ? 'القيمة (جنيه)' : 'Value (EGP)'}</th><th>{ar ? 'من صافي المبيعات' : '% of net sales'}</th><th>{ar ? 'التفاصيل' : 'Details'}</th></tr></thead>
