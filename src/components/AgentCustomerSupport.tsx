@@ -47,22 +47,20 @@ export function AgentCustomerSupport() {
     script.src = SUPPORT_ORIGIN + '/support/widget.js';
     script.dataset.widgetKey = PUBLIC_KEY;
     script.dataset.johnaSupport = '1';
-    // Keep the floating support button away from the phone's persistent
-    // bottom navigation and from modal confirmation buttons. The inactive
-    // container must never absorb pointer events outside the actual button.
+    // The only chat entry point is the sidebar item on desktop and phone.
+    // Hide the vendor's floating launcher so it cannot obstruct business UI.
     const moveOverlay = () => {
       const overlay = document.querySelector<HTMLElement>('[data-support-ai-root]');
       if (!overlay) return;
       const onMobile = window.innerWidth < 768;
-      // Never display a floating toggle over transactional controls on phones.
-      // Staff can open the same widget from Layout's mobile navigation drawer.
+      // The sidebar opens the widget through the hidden toggle.
       const toggle = overlay.shadowRoot?.querySelector<HTMLElement>('.toggle');
       const panel = overlay.shadowRoot?.querySelector<HTMLElement>('.panel');
-      if (toggle) toggle.style.display = onMobile ? 'none' : '';
+      if (toggle) toggle.style.display = 'none';
       overlay.style.bottom = onMobile ? '88px' : '14px';
       overlay.style.pointerEvents = 'none';
       if (panel) panel.style.pointerEvents = 'auto';
-      if (toggle) toggle.style.pointerEvents = 'auto';
+      if (toggle) toggle.style.pointerEvents = 'none';
     };
     script.addEventListener('load', moveOverlay);
     document.body.appendChild(script);
