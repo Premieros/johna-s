@@ -68,14 +68,14 @@ export function ReportsCenterPage() {
     return <Navigate to={`/reports?${fallback}`} replace />;
   }
   const content = <div data-testid="unified-reports-center" data-expanded={expanded} className={`report-workspace space-y-2 bg-ui-page ${expanded ? 'fixed inset-0 z-[60] overflow-auto overscroll-contain p-3 text-ui-text sm:p-4' : ''}`}>
-    <div className="grid min-w-0 gap-4 grid-cols-1">
+    <div className="grid min-w-0 gap-2 grid-cols-1">
       <details className="rounded-lg border border-ui-border bg-ui-surface px-3 py-2"><summary className="cursor-pointer text-sm font-semibold">{ar ? 'اختيار التقرير' : 'Choose report'} · {ar ? report.ar : report.en}</summary><aside className="mt-2 space-y-2" aria-label={ar ? 'التقارير الأساسية' : 'Basic reports'}>
         <div className="relative max-w-sm">
           <Search className="pointer-events-none absolute start-3 top-3 h-4 w-4 text-ui-muted" />
           <input type="search" aria-label={ar ? 'بحث في التقارير' : 'Search reports'} placeholder={ar ? 'ابحث عن تقرير أو عرض' : 'Find a report or view'} value={search} onChange={event => setSearch(event.target.value)} className="h-10 w-full rounded-lg border border-ui-border bg-ui-surface ps-9 pe-3 text-sm" />
         </div>
-        <nav className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-7">
-          {visible.map(item => <button key={item.key} type="button" data-report-primary={item.key} aria-current={item.key === report.key ? 'page' : undefined} onClick={() => select(item.views[0])} className={`min-h-12 rounded-lg border px-3 py-3 text-start text-sm font-bold ${item.key === report.key ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-surface text-ui-text hover:bg-ui-page-alt'}`}>
+        <nav className="flex flex-wrap gap-1.5">
+          {visible.map(item => <button key={item.key} type="button" data-report-primary={item.key} aria-current={item.key === report.key ? 'page' : undefined} onClick={() => select(item.views[0])} className={`rounded-md border px-2.5 py-1.5 text-start text-sm font-semibold ${item.key === report.key ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-surface text-ui-text hover:bg-ui-page-alt'}`}>
             {ar ? item.ar : item.en}
           </button>)}
         </nav>
