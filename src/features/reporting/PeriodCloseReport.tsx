@@ -13,7 +13,7 @@ import { todayISO } from '@/lib/format';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 
-type Summary = { raw: PeriodCloseRaw; sales: number; purchases: number; expenses: number; consumption: number | null; unpriced: number; missingRecipes: number; invalidUnits: number; unattributed: number; partial: boolean; recipeError?: string };
+type Summary = { raw: PeriodCloseRaw; sales: number; collection: number; purchases: number; expenses: number; consumption: number | null; unpriced: number; missingRecipes: number; invalidUnits: number; unattributed: number; partial: boolean; recipeError?: string };
 
 export function PeriodCloseReport() {
   const { lang } = useLanguage();
@@ -50,19 +50,22 @@ export function PeriodCloseReport() {
         if (response.error) throw response.error;
         const value = response.data?.[key];
         if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error('REPORT_SOURCE_INVALID');
-        return value;
+        return { value, metrics: response.data! };
       };
       const response = await reporting.getPeriodCloseRaw({ p_branch_id: branch, p_from: from, p_to: to }, controller.signal);
       if (response.error) throw response.error;
       if (!response.data) throw new Error('REPORT_SOURCE_INVALID');
-      const sales = await financial('sales', 'Net Sales');
-      const purchases = await financial('purchases', 'Net Purchases');
-      const expenses = await financial('expenses', 'Amount');
+      const salesSource = await financial('sales', 'Net Sales');
+      const sales = salesSource.value;
+      const collection = salesSource.metrics['Net Collection'];
+      if (typeof collection !== 'number' || !Number.isFinite(collection)) throw new Error('REPORT_SOURCE_INVALID');
+      const purchases = (await financial('purchases', 'Net Purchases')).value;
+      const expenses = (await financial('expenses', 'Amount')).value;
       const recipe = await reporting.getSoldRecipeConsumptionReport({ p_branch_id: branch, p_from_date: from, p_to_date: to,
         p_group_by: 'material', p_search: '', p_page: 0, p_page_size: 1 }, controller.signal);
       const costs = recipe.data?.summary;
       const usable = costs && !recipe.error && Number.isFinite(costs.total);
-      if (!controller.signal.aborted) setState({ scope, data: { raw: response.data, sales, purchases, expenses,
+      if (!controller.signal.aborted) setState({ scope, data: { raw: response.data, sales, collection, purchases, expenses,
         consumption: usable ? costs.total : null, unpriced: costs?.unpriced_count ?? 0,
         missingRecipes: costs?.missing_recipe_count ?? 0, invalidUnits: costs?.invalid_unit_count ?? 0,
         unattributed: costs?.unattributed_count ?? 0, partial: Boolean(costs && !costs.complete),
@@ -78,7 +81,9 @@ export function PeriodCloseReport() {
   const cost = data && consumption !== null ? consumption + data.expenses : null;
   const format = new Intl.NumberFormat(lang, { maximumFractionDigits: 2, minimumFractionDigits: 2 });
   const rows: [string, string, number | null][] = data ? [
-    ['صافي المبيعات', 'Net sales', data.sales],
+    ['صافي المبيعات شامل الآجل', 'Net sales', data.sales],
+    ['المتبقي مستحقًا آجلًا على فواتير الفترة', 'Outstanding credit on period invoices', Math.max(0,data.sales - data.collection)],
+    ['الصافي المحصّل بعد استبعاد الآجل', 'Net collected after credit', data.collection],
     ['رصيد الخامات أول المدة', 'Opening raw stock balance', data.raw.opening],
     ['صافي مشتريات الخامات بآخر سعر', 'Net raw purchases at latest prices', data.raw.purchase],
     ['صافي تحويلات الخامات بآخر سعر', 'Net raw transfers at latest prices', data.raw.transfer],
@@ -91,7 +96,7 @@ export function PeriodCloseReport() {
     ['الربح أو الخسارة التقديرية', 'Estimated profit or loss', cost !== null ? data.sales - cost : null],
   ] : [];
   function openRow(index: number) {
-    const target = (['sales','materials','purchase','transfer','materials','consumption','purchases','expenses','components','components','components'] as const)[index];
+    const target = (['sales','sales','sales','materials','purchase','transfer','materials','consumption','purchases','expenses','components','components','components'] as const)[index];
     setMaterialId(undefined); setSelectedRow(index); setDetail(target);
   }
   const evidence = detail === 'all' || detail === 'purchase' || detail === 'transfer' || detail === 'consumption';
@@ -147,7 +152,9 @@ export function PeriodCloseReport() {
             return { [label('المستند', 'Document')]: row.invoice_number ?? row.expense_number ?? row.reference_number ?? row.id,
               [label('التاريخ', 'Date')]: row.expense_date ?? row.created_at, [label('الطرف أو التصنيف', 'Party or category')]: party?.name ?? row.description,
               [label('القيمة', 'Amount')]: total, [label('المرتجع', 'Returned')]: returned,
-              [label('الصافي', 'Net')]: kind === 'expenses' ? total : Math.max(0, total - returned) };
+              [label('الصافي', 'Net')]: kind === 'expenses' ? total : Math.max(0, total - returned),
+              ...(kind === 'sales' ? { [label('المحصّل بعد المرتجع','Collected after refunds')]: Math.max(0,Number(row.paid_amount ?? 0)-returned),
+                [label('المتبقي آجلًا','Outstanding credit')]: Math.max(0,total-returned-Math.max(0,Number(row.paid_amount ?? 0)-returned)) } : {}) };
           }));
         }
         remaining -= records.length;
@@ -208,6 +215,7 @@ export function PeriodCloseReport() {
       {data.unpriced > 0 && <p role="status">{ar ? 'خامات استهلاك المبيعات بلا سعر محسوبة بصفر:' : 'Unpriced sales-consumption materials counted at zero:'} {data.unpriced}</p>}
       {data.raw.unpriced > 0 && <p role="status">{ar ? 'خامات بلا سعر محسوبة بصفر:' : 'Unpriced materials counted at zero:'} {data.raw.unpriced}</p>}
       <p className="text-sm">{ar ? 'أول المدة: قبل بداية اليوم الأول. آخر المدة: بعد حركات اليوم الأخير، بتوقيت القاهرة. الأرصدة من الحركات المسجلة، والجرد يؤثر بعد تطبيقه فقط.' : 'Opening: before the first day. Closing: after the final day’s movements, Cairo time. Balances follow posted movements; counts affect stock only after application.'}</p>
+      <p className="text-sm">{ar ? 'المحصّل والآجل حسب حالة سداد فواتير الفترة عند عرض التقرير. الآجل ضمن المبيعات والربح، وليس مصروفًا. هذا ليس إجمالي حركات الخزينة للفترة.' : 'Collected and credit amounts reflect the payment status of period invoices when the report runs. Credit remains part of sales and profit. This is not the period treasury cash flow.'}</p>
       <h2 className="mt-4 font-bold">{ar ? 'تفاصيل بنود الإقفال' : 'Period close details'}</h2>
       <div className="flex flex-wrap gap-2 py-2">
         {([['result', 'نتيجة الإقفال', 'Closing result'], ['materials', 'مراجعة المخزون', 'Inventory review'], ['sales', 'فواتير المبيعات', 'Sales invoices'], ['purchases', 'فواتير المشتريات', 'Purchase invoices'], ['expenses', 'مستندات المصروفات', 'Expense documents']] as const).map(([key, label, english]) =>
@@ -225,12 +233,12 @@ export function PeriodCloseReport() {
         </tr>)}</tbody>
       </table>
       </div>}
-      {(detail === 'sales' || detail === 'purchases' || detail === 'expenses') && branch && <PeriodCloseDocuments key={scope + detail} kind={detail} branch={branch} from={from} to={to} />}
+      {(detail === 'sales' || detail === 'purchases' || detail === 'expenses') && branch && <PeriodCloseDocuments key={scope + detail + selectedRow} emphasis={selectedRow === 1 ? 'receivable' : selectedRow === 2 ? 'collected' : undefined} kind={detail} branch={branch} from={from} to={to} />}
       {evidence && branch && <PeriodCloseEvidence key={scope + detail + materialId} kind={detail as EvidenceKind} material={materialId} branch={branch} from={from} to={to} expected={detail === 'purchase' ? data.raw.purchase : detail === 'transfer' ? data.raw.transfer : detail === 'consumption' ? consumption : undefined} />}
       {detail === 'components' && <div className="space-y-2">
         <p>{ar ? 'تفصيل الحساب — اضغط على كل مكوّن لعرض مستنداته:' : 'Calculation breakdown — open each component for its evidence:'}</p>
-        {(selectedRow === 8 ? [6,7] : selectedRow === 9 ? [5,7] : [0,5,7]).map(index => <div key={index} className="flex items-center gap-4 border-b border-ui-border p-3"><span>{ar ? rows[index][0] : rows[index][1]}</span><strong>{rows[index][2] === null ? '—' : format.format(rows[index][2]!)}</strong><button type="button" onClick={() => openRow(index)}>{ar ? 'عرض التفاصيل' : 'View details'}</button></div>)}
-        <p>{selectedRow === 8 ? (ar ? 'فواتير المشتريات + المصروفات' : 'Purchase invoices + expenses') : selectedRow === 9 ? (ar ? 'استهلاك المبيعات + المصروفات' : 'Sales consumption + expenses') : (ar ? 'صافي المبيعات − استهلاك المبيعات − المصروفات' : 'Net sales − sales consumption − expenses')}</p>
+        {(selectedRow === 10 ? [8,9] : selectedRow === 11 ? [7,9] : [0,7,9]).map(index => <div key={index} className="flex items-center gap-4 border-b border-ui-border p-3"><span>{ar ? rows[index][0] : rows[index][1]}</span><strong>{rows[index][2] === null ? '—' : format.format(rows[index][2]!)}</strong><button type="button" onClick={() => openRow(index)}>{ar ? 'عرض التفاصيل' : 'View details'}</button></div>)}
+        <p>{selectedRow === 10 ? (ar ? 'فواتير المشتريات + المصروفات' : 'Purchase invoices + expenses') : selectedRow === 11 ? (ar ? 'استهلاك المبيعات + المصروفات' : 'Sales consumption + expenses') : (ar ? 'صافي المبيعات − استهلاك المبيعات − المصروفات' : 'Net sales − sales consumption − expenses')}</p>
       </div>}
       {detail === 'materials' && (!raw?.materials ? <p role="status">{ar ? 'لم تصل تفاصيل الخامات؛ أعد عرض التقرير.' : 'Material details were not returned; run the report again.'}</p> : <>
         <p>{ar ? 'كل رصيد يعرض الكمية والقيمة بآخر سعر. اضغط حركات الخامة لمراجعة تسلسل المستندات خلال الفترة.' : 'Balances show quantity and value at the latest price. Open material movements for the period document history.'}</p>

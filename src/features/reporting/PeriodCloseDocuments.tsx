@@ -6,11 +6,11 @@ import { useLanguage } from '@/context/LanguageContext';
 
 export type DocumentKind = 'sales' | 'purchases' | 'expenses';
 
-export function PeriodCloseDocuments({ kind, branch, from, to }: { kind: DocumentKind; branch: string; from: string; to: string }) {
+export function PeriodCloseDocuments({ kind, branch, from, to, emphasis }: { kind: DocumentKind; branch: string; from: string; to: string; emphasis?: 'receivable' | 'collected' }) {
   const { lang } = useLanguage();
   const ar = lang === 'ar';
   const [page, setPage] = useState(0);
-  const [result, setResult] = useState<{ page: number; rows?: Record<string, unknown>[]; count?: number; total?: number; error?: string }>();
+  const [result, setResult] = useState<{ page: number; rows?: Record<string, unknown>[]; count?: number; total?: number; collected?: number; error?: string }>();
   const size = 50;
   useEffect(() => {
     const controller = new AbortController();
@@ -19,7 +19,7 @@ export function PeriodCloseDocuments({ kind, branch, from, to }: { kind: Documen
       p_from_ts: startIso, p_to_exclusive_ts: endExclusiveIso, p_filters: {}, p_page: page, p_page_size: size }, controller.signal)
       .then(({ data, error }) => {
         if (error || !data) throw error || new Error('REPORT_SOURCE_INVALID');
-        if (!controller.signal.aborted) setResult({ page, rows: data.rows, count: data.summary.count, total: data.summary.total });
+        if (!controller.signal.aborted) setResult({ page, rows: data.rows, count: data.summary.count, total: data.summary.total, collected: data.metrics?.['Net Collection'] });
       }).catch(error => {
         if (!controller.signal.aborted) setResult({ page, error: userFacingErrorMessage(error, lang) });
       });
@@ -32,18 +32,20 @@ export function PeriodCloseDocuments({ kind, branch, from, to }: { kind: Documen
   const format = new Intl.NumberFormat(lang, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return <>
     <table className="w-full text-sm">
-      <thead><tr>{(ar ? ['المستند', 'التاريخ', 'الطرف أو التصنيف', 'القيمة', 'المرتجع', 'الصافي'] : ['Document', 'Date', 'Party or category', 'Amount', 'Returned', 'Net']).map(label => <th key={label} className="p-2 text-start">{label}</th>)}</tr></thead>
+      <thead><tr>{(ar ? ['المستند', 'التاريخ', 'الطرف أو التصنيف', 'القيمة', 'المرتجع', 'الصافي', ...(kind === 'sales' ? ['المحصّل بعد المرتجع','المتبقي آجلًا'] : [])] : ['Document', 'Date', 'Party or category', 'Amount', 'Returned', 'Net', ...(kind === 'sales' ? ['Collected after refunds','Outstanding credit'] : [])]).map(label => <th key={label} className="p-2 text-start">{label}</th>)}</tr></thead>
       <tbody>{current.rows?.map(row => {
         const total = number(kind === 'expenses' ? row.amount : row.total);
         const returned = number(kind === 'sales' ? row.refunded_amount : kind === 'purchases' ? row.returned_amount : 0);
+        const collected = Math.max(0,number(row.paid_amount)-returned);
+        const receivable = Math.max(0,total-returned-collected);
         const party = (kind === 'sales' ? row.customer : kind === 'purchases' ? row.supplier : row.expense_account) as { name?: string } | null;
         return <tr key={String(row.id)} className="border-t border-ui-border">
           {[row.invoice_number ?? row.expense_number ?? row.reference_number ?? row.id, String(row.expense_date ?? row.created_at ?? '').slice(0, 10), party?.name ?? row.description ?? '—',
-            format.format(total), format.format(returned), format.format(kind === 'expenses' ? total : Math.max(0, total - returned))]
-            .map((value, i) => <td key={i} className="p-2">{String(value ?? '—')}</td>)}
+            format.format(total), format.format(returned), format.format(kind === 'expenses' ? total : Math.max(0, total - returned)), ...(kind === 'sales' ? [format.format(collected),format.format(receivable)] : [])]
+            .map((value, i) => <td key={i} className={`p-2 ${emphasis === 'collected' && i === 6 || emphasis === 'receivable' && i === 7 ? 'bg-ui-primary/10 font-bold' : ''}`}>{String(value ?? '—')}</td>)}
         </tr>;
       })}</tbody>
-    <tfoot className="border-t border-ui-border font-bold"><tr><th colSpan={5} className="p-2 text-start">{ar ? 'إجمالي الفترة — كل الصفحات' : 'Period total — all pages'}</th><td className="p-2">{format.format(current.total ?? 0)}</td></tr></tfoot>
+    <tfoot className="border-t border-ui-border font-bold"><tr><th colSpan={5} className="p-2 text-start">{ar ? 'إجمالي الفترة — كل الصفحات' : 'Period total — all pages'}</th><td className="p-2">{format.format(current.total ?? 0)}</td>{kind === 'sales' && <><td className="p-2">{current.collected === undefined ? '—' : format.format(current.collected)}</td><td className="p-2">{current.collected === undefined ? '—' : format.format(Math.max(0,(current.total ?? 0)-current.collected))}</td></>}</tr></tfoot>
     </table>
     {!current.rows?.length && <p>{ar ? 'لا توجد مستندات للفترة.' : 'No documents for this period.'}</p>}
     <div className="flex gap-3 p-2">
