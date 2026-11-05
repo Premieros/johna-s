@@ -317,10 +317,10 @@ export function Layout({ children }: { children: ReactNode }) {
             type="button"
             onClick={() => {
               const root = document.querySelector<HTMLElement>('[data-support-ai-root]');
-              const panel = root?.shadowRoot?.querySelector<HTMLElement>('.panel');
               const toggle = root?.shadowRoot?.querySelector<HTMLButtonElement>('.toggle');
               setMobileOpen(false);
-              if (toggle && !panel?.classList.contains('open')) toggle.click();
+              // The sidebar item opens and closes the SAME chat panel.
+              toggle?.click();
             }}
             className="mb-3 flex min-h-11 w-full items-center gap-3 rounded-xl border border-ui-border bg-ui-page-alt px-3 py-2 text-start text-sm font-bold text-ui-text transition hover:bg-ui-primary-soft hover:text-ui-primary"
           >
