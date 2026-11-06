@@ -678,7 +678,6 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
  */
 export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP', lang: Language = 'ar'): string {
   const isAr = lang === 'ar';
-  const latestRawPricing = summary.ingredientsConsumed.some(m => m.pricingBasis === 'latest_approved');
   const dir = isAr ? 'rtl' : 'ltr';
   const diffColor = Math.abs(summary.difference) > 0.01 ? '#dc2626' : '#16a34a';
   const paymentSummary = summarizeShiftPayments(summary.paymentMethods);
