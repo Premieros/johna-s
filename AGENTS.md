@@ -54,3 +54,10 @@
 - The repository already has `verify`, `verify:full`, unit and integration test scripts.
 - The GitHub Pages deployment workflow is gated on the `Verify main` workflow. Preserve and inspect these gates before proposing modifications.
 - Do not promise a zero-risk release. Minimize blast radius, make changes observable, and prepare recovery.
+
+## Automated PR review gate
+
+- `.github/PULL_REQUEST_TEMPLATE.md` asks for Impact, Verification, Rollback, and Production status on risky changes.
+- `scripts/ci/premier-safety-gate.mjs` checks those declarations in seconds as part of the existing `Verify main` scope job; its Node built-in unit tests are also run there.
+- The gate blocks restaurant print-agent changes until the owner explicitly authorizes a deliberate policy revision. Do not attempt to bypass or edit the gate to ship an agent change.
+- This gate documents risk and blocks omissions; it cannot verify the truth of declarations or replace GitHub branch protection, human review, operational checks, or explicit production approval.
