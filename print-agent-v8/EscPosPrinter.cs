@@ -49,22 +49,35 @@ internal sealed class EscPosPrinter
         }).ConfigureAwait(false);
     }
 
-    // Reports use the installed Windows driver, never raw ESC/POS bytes. Some
-    // thermal firmwares interpret oversized GS v 0 images as printable symbols.
-    // No automatic transport fallback: a failed spool can already have printed.
+    // Use the same RAW ESC/POS raster transport as working receipts, but split
+    // the longer Z image into bounded strips within ONE spool job and ONE cut.
+    // Do not retry a spool whose physical outcome is unknown.
     internal async Task PrintReportAsync(string printerName, string text, int paperWidthMm)
     {
         await WithPrinterLaneAsync(printerName, () =>
         {
             using var image = RenderLegacyText(text, paperWidthMm <= 58 ? 384 : 576, true);
-            using var document = CreateReportDocument(printerName, image, paperWidthMm);
-            try { document.Print(); }
-            catch
-            {
-                // Exact terminal queue code; do not automatically reprint pages.
-                throw new InvalidOperationException("PRINT_OUTCOME_UNKNOWN");
-            }
+            try { SendRaw(printerName, BuildChunkedReportRaster(image)); }
+            catch { throw new InvalidOperationException("PRINT_OUTCOME_UNKNOWN"); }
         }).ConfigureAwait(false);
+    }
+
+    internal static byte[] BuildChunkedReportRaster(Bitmap image)
+    {
+        const int stripRows = 192;
+        using var output = new MemoryStream();
+        output.WriteByte(0x1B);
+        output.WriteByte(0x40);
+        for (var y = 0; y < image.Height; y += stripRows)
+        {
+            var rows = Math.Min(stripRows, image.Height - y);
+            using var strip = image.Clone(new Rectangle(0, y, image.Width, rows), PixelFormat.Format32bppArgb);
+            var command = BuildEscPosRaster(strip);
+            // Reuse the exact receipt raster encoding, without its reset/cut per strip.
+            output.Write(command, 2, command.Length - 2 - 7);
+        }
+        output.Write(new byte[] { 0x0A, 0x0A, 0x0A, 0x1D, 0x56, 0x42, 0x00 });
+        return output.ToArray();
     }
 
     internal static PrintDocument CreateReportDocument(string printerName, Bitmap image, int paperWidthMm)
