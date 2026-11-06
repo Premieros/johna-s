@@ -56,3 +56,25 @@ using (var realtime = new RealtimeWakeClient("synthetic", () => { }, (connected,
     Require(!realtime.ConnectionStale(DateTime.UtcNow), "Inbound heartbeat restores liveness");
 }
 Console.WriteLine("Realtime recovery protocol checks passed without network or printing.");
+
+using (var image = (Bitmap)render.Invoke(null, new object[] { string.Join("\\r\\n", Enumerable.Range(0, 59).Select(i => $"تقرير Z {i}: 123 EGP")), 576, true })!)
+{
+    var bytes = EscPosPrinter.BuildChunkedReportRaster(image);
+    Require(bytes[0] == 0x1B && bytes[1] == 0x40, "One receipt-style reset");
+    var offset = 2;
+    var totalRows = 0;
+    var strips = 0;
+    while (offset + 8 < bytes.Length && bytes[offset] == 0x1D && bytes[offset + 1] == 0x76)
+    {
+        Require(bytes[offset + 2] == 0x30 && bytes[offset + 3] == 0, "Receipt GS v 0 raster");
+        var widthBytes = bytes[offset + 4] + (bytes[offset + 5] << 8);
+        var rows = bytes[offset + 6] + (bytes[offset + 7] << 8);
+        Require(widthBytes == 72 && rows > 0 && rows <= 192, "Bounded 80mm raster strips");
+        totalRows += rows; strips++;
+        offset += 8 + widthBytes * rows;
+    }
+    Require(strips > 1 && totalRows == image.Height, "All Z report rows emitted exactly once");
+    Require(bytes.Length - offset == 7, "Exactly one final feed and cut");
+    Require(bytes[offset + 3] == 0x1D && bytes[offset + 4] == 0x56, "Single final cut");
+}
+Console.WriteLine("PASS: Z report uses receipt raster encoding with bounded strips and one cut.");
