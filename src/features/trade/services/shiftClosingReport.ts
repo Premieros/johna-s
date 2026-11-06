@@ -678,7 +678,6 @@ export function buildThermalZReportHtml(summary: ShiftClosingSummary, currency =
  */
 export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP', lang: Language = 'ar'): string {
   const isAr = lang === 'ar';
-  const latestRawPricing = summary.ingredientsConsumed.some(m => m.pricingBasis === 'latest_approved');
   const dir = isAr ? 'rtl' : 'ltr';
   const diffColor = Math.abs(summary.difference) > 0.01 ? '#dc2626' : '#16a34a';
   const paymentSummary = summarizeShiftPayments(summary.paymentMethods);
@@ -959,53 +958,7 @@ export function buildA4ZReportHtml(summary: ShiftClosingSummary, currency = 'EGP
       </table>
     ` : ''}
 
-    <!-- Products Sold -->
-    <h3 class="section-heading">${isAr ? 'المنتجات والأصناف المباعة' : 'Products Sold Summary'}</h3>
-    <table>
-      <thead>
-        <tr>
-          <th>${isAr ? 'اسم المنتج' : 'Product Name'}</th>
-          <th class="text-center">${isAr ? 'الكمية المباعة' : 'Qty Sold'}</th>
-          <th class="text-end">${isAr ? 'إجمالي المبيعات' : 'Total Sales'}</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${summary.productsSold.map((p) => `
-          <tr>
-            <td>${escapeHtml(p.productName)}</td>
-            <td class="text-center font-bold">${p.quantity} ${escapeHtml(p.unitName)}</td>
-            <td class="text-end font-bold">${formatCurrency(p.total, currency, lang)}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-
-    <!-- Ingredients Consumed -->
-    ${summary.ingredientsConsumed.length > 0 ? `
-      <h3 class="section-heading">${isAr ? 'المكونات والمواد الخام المستهلكة (الخصم التلقائي للوصفات)' : 'Raw Materials & Ingredients Consumed (Recipe Deductions)'}</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>${isAr ? 'المادة الخام / المكون' : 'Raw Material'}</th>
-            <th class="text-center">${isAr ? 'الكمية المستهلكة' : 'Consumed Qty'}</th>
-            ${!latestRawPricing ? `<th class="text-end">${isAr ? 'التكلفة الفعلية' : 'Actual Cost'}</th>` : ''}
-            ${!latestRawPricing ? `<th class="text-end">${isAr ? 'السالب التقديري' : 'Negative Estimate'}</th>` : ''}
-            <th class="text-end">${latestRawPricing ? (isAr ? 'التكلفة بآخر سعر' : 'Latest-price cost') : (isAr ? 'الإجمالي المعروض' : 'Displayed Total')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${summary.ingredientsConsumed.map((m) => `
-            <tr>
-              <td>${escapeHtml(m.materialName)}</td>
-              <td class="text-center font-bold">${m.quantity} ${escapeHtml(m.unit)}</td>
-              ${!latestRawPricing ? `<td class="text-end">${formatCurrency(m.actualCost, currency, lang)}</td>` : ''}
-              ${!latestRawPricing ? `<td class="text-end">${m.estimatedQuantity > 0 ? formatCurrency(m.estimatedCost, currency, lang) : '-'}</td>` : ''}
-              <td class="text-end font-bold">${m.priceMissing ? (isAr ? 'غير مسعر' : 'Unpriced') : formatCurrency(m.displayedCost, currency, lang)}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    ` : ''}
+    <!-- Compact Z report: financial totals only; product and raw-material details belong to dedicated reports. -->
 
     ${summary.notes ? `
       <div style="margin-top: 16px; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">

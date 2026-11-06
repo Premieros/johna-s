@@ -28,7 +28,13 @@ describe('compact financial thermal shift closing', () => {
       expect(output).not.toContain('INGREDIENTS');expect(output).not.toContain('PRODUCTS SOLD');
     }
     expect(input).toEqual(before);
-    const a4=buildA4ZReportHtml(input,'EGP',lang);expect(a4).toContain('Burger');expect(a4).toContain('دجاج');
+    const a4=buildA4ZReportHtml(input,'EGP',lang);
+    expect(a4).not.toContain('Burger');
+    expect(a4).not.toContain('دجاج');
+    expect(a4).not.toContain('Sauce');
+    expect(a4).toContain('Captain A');
+    expect(a4).toContain('300');
+    expect(a4).toContain('245');
   });
   it('does not grow when hundreds of products and materials exist',()=>{
     const large={...summary,productsSold:Array(500).fill(summary.productsSold[0]),ingredientsConsumed:Array(500).fill(summary.ingredientsConsumed[0])};
