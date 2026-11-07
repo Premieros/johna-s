@@ -6,9 +6,9 @@
 --
 -- READ ONLY policy change. Do not alter posted expenses, accounting journals,
 -- RLS historical visibility sampling, grants, or any write policy.
--- Safe rollout: brief transactional ALTER POLICY; fail if policy drifted or
--- table lock is unavailable within 2 seconds. Requires separate production approval.
-BEGIN;
+-- Safe rollout: execute through the transactional migration runner; fail if
+-- policy drifted or table lock is unavailable within 2 seconds.
+-- Production execution requires a separate explicit approval.
 SET LOCAL lock_timeout = '2s';
 SET LOCAL statement_timeout = '10s';
 
@@ -55,4 +55,3 @@ ALTER POLICY auth_select_expenses ON public.expenses
     )
   );
 
-COMMIT;
