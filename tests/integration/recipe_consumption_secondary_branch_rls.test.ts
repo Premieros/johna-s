@@ -87,7 +87,16 @@ describe.skipIf(!local)('owner secondary-branch recipe consumption and sale-line
     const owner=await recipeCost(ids.users.owner,ids.branchB);
     const admin=await recipeCost(ids.users.super_admin,ids.branchB);
     expect(owner).toEqual(admin);
-    expect(owner).toMatchObject({total:50,count:1,complete:true,missing_recipe_count:0});
+    // The shared fixture also contains a zero-cost ingredient line. Assert
+    // the actual recipe cost and completeness, not the number of fixture rows.
+    expect(owner).toMatchObject({total:50,complete:true,missing_recipe_count:0});
+    expect(owner.count).toBeGreaterThan(0);
+    const detail=await runAs(db,ids.users.owner,`SELECT public.get_sold_recipe_consumption_report(
+      $1,CURRENT_DATE-2,CURRENT_DATE+2,'material','',0,100) AS report`,[ids.branchB]);
+    expect(detail.error).toBeUndefined();
+    expect((detail.rows[0].report as {rows:Array<Record<string,unknown>>}).rows).toContainEqual(
+      expect.objectContaining({raw_material_id:rawB,net_quantity:0.5,unit_price:100,consumption_value:50})
+    );
     expect(await lines(ids.users.cashier,ids.branchB)).toEqual([]);
 
     await db.query('SAVEPOINT recipe_refund');
