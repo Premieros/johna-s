@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-05T20:28:32.606Z",
+  "generated_at": "2026-11-11T14:43:11.370Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -133,6 +133,14 @@
       "name": "complete_bank_reconciliation",
       "params": [
         "reconciliation_id"
+      ]
+    },
+    {
+      "name": "complete_own_organization_signup",
+      "params": [
+        "organization_name",
+        "owner_name",
+        "phone"
       ]
     },
     {
@@ -1408,6 +1416,12 @@
         "notes",
         "order_id",
         "status"
+      ]
+    },
+    {
+      "name": "set_public_tenant_registration_enabled",
+      "params": [
+        "enabled"
       ]
     },
     {

@@ -47,8 +47,8 @@ const ROLE_REFRESH_INTERVAL_MS = 5 * 60_000;
 export function RolesProvider({ children }: { children: ReactNode }) {
   const [rolesList, setRolesList] = useState<RoleDefRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const { session } = useAuth();
-  const sessionUserId = session?.user?.id ?? null;
+  const { session, needsOrganizationSetup } = useAuth();
+  const sessionUserId = needsOrganizationSetup ? null : session?.user?.id ?? null;
 
   const reportPermissionsKey = JSON.stringify(rolesList.map(row => [row.role, row.scope, row.branch_id, row.is_active, [...row.permissions].sort()]).sort());
   useLayoutEffect(() => { invalidateReportPermissions(); }, [reportPermissionsKey]);

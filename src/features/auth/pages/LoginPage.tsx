@@ -1,4 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { admin } from '@/api';
+import { APP_ROUTES } from '@/core/navigation/routes';
+import { OrganizationSignupForm } from '../components/OrganizationSignupForm';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
@@ -9,8 +13,13 @@ import { Logo } from '@/components/Logo';
 import { useToast } from '@/components/Toast';
 import { DesignSurface } from '@/components/design/DesignSurface';
 
-export function LoginPage() {
-  const { signIn, signInWithUsername } = useAuth();
+export function LoginPage({initialSignup=false}:{initialSignup?:boolean}={}) {
+  const { signIn, signInWithUsername, needsOrganizationSetup, signOut } = useAuth();
+  const navigate=useNavigate();
+  const [registration,setRegistration]=useState<boolean>();
+  const [registrationFailed,setRegistrationFailed]=useState(false);
+  useEffect(()=>{let active=true;void admin.getPublicTenantRegistrationStatus().then(({data,error})=>{if(active){setRegistration(error?false:data?.enabled===true);setRegistrationFailed(Boolean(error));}}).catch(()=>{if(active){setRegistration(false);setRegistrationFailed(true);}});return()=>{active=false;};},[]);
+  const signup=initialSignup || needsOrganizationSetup;
   const { t, lang, setLang } = useLanguage();
   const { show } = useToast();
   const [mode, setMode] = useState<'pin' | 'password'>('pin');
@@ -80,6 +89,7 @@ export function LoginPage() {
           <div data-testid="login-panel" className="w-full max-w-md animate-fade-in">
             <div className="lg:hidden mb-8 flex justify-center"><Logo variant="horizontal" size={40} tone="navy" tagline={isAr ? 'منصة إدارة الأعمال' : 'Business Management Platform'} /></div>
             <div className="bg-ui-surface dark:bg-navy-900 rounded-3xl shadow-xl border border-ui-border dark:border-navy-800 p-8">
+              {signup ? registration === undefined ? <p role="status">{isAr?'جارٍ تحميل التسجيل…':'Loading registration…'}</p> : registration ? <OrganizationSignupForm onCancel={()=>navigate(APP_ROUTES.login,{replace:true})}/> : <div className="space-y-4"><p role="status">{registrationFailed?(isAr?'تعذر تحميل إعداد التسجيل؛ أعد فتح الصفحة.':'Could not load registration settings; reload this page.'):(isAr?'إنشاء المؤسسات الجديدة متوقف حاليًا.':'New organization registration is currently paused.')}</p><Link onClick={()=>{if(needsOrganizationSetup)void signOut({scope:'local'});}} to={APP_ROUTES.login} className="underline">{isAr?'تسجيل الدخول':'Sign in'}</Link></div> : <>
               <div className="mb-6"><h2 className="text-2xl font-bold text-ui-text dark:text-white">{isAr ? 'مرحباً بك' : 'Welcome back'}</h2><p className="text-sm text-ui-subtle dark:text-ui-subtle mt-1">{isAr ? 'سجّل دخولك للوصول إلى منصة premier.os' : 'Sign in to access premier.os'}</p></div>
               <div data-testid="login-mode-toggle" className="flex rounded-xl bg-ui-page-alt dark:bg-navy-800 p-1 mb-5">
                 <button type="button" onClick={() => setMode('pin')} className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${mode === 'pin' ? 'bg-ui-surface dark:bg-navy-700 text-brand-700 dark:text-gold-400 shadow-sm' : 'text-ui-subtle dark:text-ui-subtle hover:text-ui-text dark:hover:text-ui-text'}`}>{t('loginWithPin')}</button>
@@ -95,9 +105,9 @@ export function LoginPage() {
                 </>}
                 <Button data-testid="login-submit" type="submit" size="lg" className="w-full" disabled={loading}>{loading ? <><BrandLoading size={24} /><span>{isAr ? 'جارٍ الدخول…' : 'Signing in…'}</span></> : <>{t('signIn')}<ArrowRight className="w-4 h-4" /></>}</Button>
               </form>
-              <p className="mt-5 text-center text-xs text-ui-subtle dark:text-ui-subtle">
-                {isAr ? 'إنشاء وإدارة الحسابات يتم من خلال إدارة النظام فقط.' : 'Accounts are created and managed by system administrators only.'}
-              </p>
+              {registration && <Link to={APP_ROUTES.register} className="mt-5 block text-center text-sm font-semibold text-ui-primary underline">{isAr?'إنشاء مؤسسة جديدة':'Create an organization'}</Link>}
+              </>}
+
             </div>
           </div>
         </div>
