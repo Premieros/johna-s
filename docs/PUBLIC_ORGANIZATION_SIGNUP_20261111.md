@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `feat/public-organization-signup-20261111`
-Current PR: `0`
+Current PR: `623`
 Last updated: 2026-11-11
 State: **READY**
 
