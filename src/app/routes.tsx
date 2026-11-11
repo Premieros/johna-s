@@ -86,12 +86,12 @@ function resolveLandingRoute(can: (permission: Permission) => boolean, role?: st
 }
 
 function ProtectedRoute({ children, permission, permissionsAny, fullscreen, superAdminOnly = false, ownerOnly = false }: { children: ReactNode; permission?: Permission; permissionsAny?: Permission[]; fullscreen?: boolean; superAdminOnly?: boolean; ownerOnly?: boolean }) {
-  const { session, loading, user } = useAuth();
+  const { session, loading, user, needsOrganizationSetup } = useAuth();
   const { loading: rolesLoading } = useRoles();
   const can = useCan();
   if (loading || rolesLoading) return <PageLoadFallback />;
   if (!session) return <Navigate to={APP_ROUTES.login} replace />;
-  if (!user) return <PageLoadFallback />;
+  if (!user) return needsOrganizationSetup ? <Navigate to={APP_ROUTES.login} replace /> : <PageLoadFallback />;
   const landingRoute = resolveLandingRoute(can, user.role);
   if (superAdminOnly && user.role !== 'super_admin') return landingRoute ? <Navigate to={landingRoute} replace /> : <NoAccessPage />;
   if (ownerOnly && !isAdminRole(user.role)) return landingRoute ? <Navigate to={landingRoute} replace /> : <NoAccessPage />;
@@ -111,12 +111,12 @@ function PublicRoute({ children }: { children: ReactNode }) {
 }
 
 function DefaultRoute() {
-  const { session, loading, user } = useAuth();
+  const { session, loading, user, needsOrganizationSetup } = useAuth();
   const { loading: rolesLoading } = useRoles();
   const can = useCan();
   if (loading || rolesLoading) return <PageLoadFallback />;
   if (!session) return <Navigate to={APP_ROUTES.login} replace />;
-  if (!user) return <PageLoadFallback />;
+  if (!user) return needsOrganizationSetup ? <Navigate to={APP_ROUTES.login} replace /> : <PageLoadFallback />;
   const landingRoute = resolveLandingRoute(can, user.role);
   return landingRoute ? <Navigate to={landingRoute} replace /> : <NoAccessPage />;
 }
@@ -126,7 +126,7 @@ export function AppRoutes() {
     <Suspense fallback={<PageLoadFallback />}>
       <Routes>
         <Route path={APP_ROUTES.login} element={<PublicRoute><LoginPage /></PublicRoute>} />
-        <Route path={APP_ROUTES.register} element={<Navigate to={APP_ROUTES.login} replace />} />
+        <Route path={APP_ROUTES.register} element={<PublicRoute><LoginPage initialSignup /></PublicRoute>} />
         <Route path={APP_ROUTES.frontendV2} element={<ProtectedRoute fullscreen><V2GatewayPage /></ProtectedRoute>} />
         <Route path={`${APP_ROUTES.frontendV2}/pos`} element={<ProtectedRoute permission="pos.view" fullscreen><Navigate to={APP_ROUTES.pos} replace /></ProtectedRoute>} />
         <Route path={`${APP_ROUTES.frontendV2}/shifts`} element={<ProtectedRoute permission="shifts.view" fullscreen><Navigate to={APP_ROUTES.shifts} replace /></ProtectedRoute>} />

@@ -9,7 +9,7 @@ vi.mock('@/lib/supabase', () => ({ supabase: {
 } }));
 vi.mock('@/api', () => ({ admin: { recordLoginSuccess: vi.fn() } }));
 vi.mock('@/lib/reportRequestCache', () => ({ invalidateReportPermissions: vi.fn() }));
-function State() { const { loading, user } = useAuth(); return <span>{loading ? 'loading' : user ? 'operator' : 'signed-out'}</span>; }
+function State() { const { loading, user, needsOrganizationSetup } = useAuth(); return <span>{loading ? 'loading' : user ? 'operator' : needsOrganizationSetup ? 'pending-organization' : 'signed-out'}</span>; }
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getSession.mockResolvedValue({ data: { session: { user: { id: 'operator' } } } });
@@ -64,3 +64,20 @@ describe('session recovery during outages', () => {
     expect(mocks.profile).not.toHaveBeenCalled();
   });
 });
+
+ describe('unprovisioned organization signup sessions',()=>{
+  it('retains a verified pending identity without granting an application user',async()=>{
+   mocks.getSession.mockResolvedValue({data:{session:{user:{id:'new-owner',email_confirmed_at:'2026-11-11',user_metadata:{organization_signup:true}}}}});
+   mocks.profile.mockResolvedValue({data:null,error:null});
+   render(<AuthProvider><State/></AuthProvider>);
+   await waitFor(()=>expect(document.body.textContent).toContain('pending-organization'));expect(mocks.signOut).not.toHaveBeenCalled();
+  });
+  it('still rejects inactive profiles even when signup metadata is present',async()=>{
+   mocks.getSession.mockResolvedValue({data:{session:{user:{id:'new-owner',email_confirmed_at:'2026-11-11',user_metadata:{organization_signup:true}}}}});
+   mocks.profile.mockResolvedValue({data:{id:'new-owner',is_active:false},error:null});
+   render(<AuthProvider><State/></AuthProvider>);await waitFor(()=>expect(mocks.signOut).toHaveBeenCalledOnce());
+  });
+  it('still rejects missing ordinary profiles',async()=>{
+   mocks.profile.mockResolvedValue({data:null,error:null});render(<AuthProvider><State/></AuthProvider>);await waitFor(()=>expect(mocks.signOut).toHaveBeenCalledOnce());
+  });
+ });

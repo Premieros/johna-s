@@ -33,6 +33,7 @@ import { Card } from '@/components/PageHeader';
 import { BranchPulsePanel } from '../components/BranchPulsePanel';
 import { Input, Textarea, Select } from '@/components/Input';
 import { Modal } from '@/components/Modal';
+import { PublicOrganizationRegistrationControl } from '../components/PublicOrganizationRegistrationControl';
 import { RolesTab } from './RolesTab';
 import { JohnaSupportInboxTab } from './JohnaSupportInboxTab';
 import { formatDate, formatDateTime } from '@/lib/format';
@@ -512,6 +513,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
       {/* ───────────────────────────────────────────────────────────── */}
       {activeTab === 'system_controls' && (
         <div className="space-y-6 max-w-4xl animate-fade-in">
+          <PublicOrganizationRegistrationControl />
           {/* User Registration Master Toggle */}
           <Card className="p-6 space-y-6 border-2 border-brand-500/20">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-ui-border">
@@ -525,8 +527,8 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
                   </h3>
                   <p className="text-xs text-ui-subtle mt-1 max-w-xl">
                     {ar
-                      ? 'مفتاح مركزي للسماح أو منع إنشاء حسابات الموظفين من داخل النظام. التسجيل العام للزوار يظل مغلقًا.'
-                      : 'Master toggle for creating staff accounts from inside the system. Public visitor registration remains disabled.'}
+                      ? 'مفتاح مركزي لإنشاء حسابات الموظفين من داخل المؤسسة. تسجيل المؤسسات الجديدة له مفتاح منفصل.'
+                      : 'Master toggle for staff accounts within an organization. New organization signup has a separate control.'}
                   </p>
                 </div>
               </div>
@@ -579,7 +581,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
                 <p className="text-xs text-ui-subtle mt-2 leading-relaxed">
                   {ar
                     ? 'يستطيع المستخدمون المخولون داخل النظام إنشاء موظفين جدد وفق صلاحياتهم. لا توجد صفحة تسجيل عامة للزوار.'
-                    : 'Authorized users can create staff accounts according to their permissions. There is no public visitor sign-up page.'}
+                    : 'Authorized users can create staff accounts according to their permissions.'}
                 </p>
               </div>
 
