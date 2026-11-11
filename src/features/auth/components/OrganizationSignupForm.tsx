@@ -26,7 +26,7 @@ export function OrganizationSignupForm({onCancel}:{onCancel:()=>void}) {
     await refreshUser();
    } else {
     const result=await supabase.auth.signUp({email:email.trim().toLowerCase(),password,options:{
-     emailRedirectTo:new URL(import.meta.env.BASE_URL,window.location.origin).href,
+     emailRedirectTo:new URL('./',window.location.href).href,
      data:{organization_signup:true,organization_name:organization.trim(),owner_name:owner.trim(),organization_phone:phone.trim()},
     }});
     if(result.error)throw result.error;
