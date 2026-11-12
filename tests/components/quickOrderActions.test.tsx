@@ -67,3 +67,7 @@ describe('human action buttons do not control print-agent execution',()=>{
   expect(headerProps.onPrint).toHaveBeenCalledOnce();expect(headerProps.onPay).toHaveBeenCalledOnce();expect(headerProps.onSendKitchen).not.toHaveBeenCalled();
  });
 });
+
+ it.each([{kitchenSending:true,completing:false},{kitchenSending:false,completing:true}])('blocks authorized send clicks while busy: %j',(busy)=>{
+  render(<PosOrderHeaderBar {...headerProps} {...busy}/>);const button=screen.getByTestId('pos-action-send-kitchen');expect(button).toBeDisabled();fireEvent.click(button);expect(headerProps.onSendKitchen).not.toHaveBeenCalled();
+ });
