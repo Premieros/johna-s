@@ -1,3 +1,4 @@
+import { reportDateRangeUtc } from '@/lib/businessTime';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { reporting } from '@/api';
 import type { ConsumptionLatestResult, ConsumptionLatestRow, ManufacturedUnitConsumptionRow } from '@/api/domains/reporting';
@@ -20,7 +21,7 @@ import { MAX_REPORT_SOURCE_ROWS } from '../reportReadLimits';
 import { useSearchParams } from 'react-router-dom';
 
 type Query = { from: string; to: string; group: 'material' | 'product' | 'unit'; search: string };
-type Snapshot = { scope: string; query: Query; page: number; result: ConsumptionLatestResult };
+type Snapshot = { scope: string; query: Query; page: number; result: ConsumptionLatestResult; sales: number | null };
 const validDate = (value: string | null) => value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : todayISO();
 
 export function ConsumptionReportPage({fixedGroup}: {fixedGroup?: Query['group']} = {}) {
@@ -76,7 +77,20 @@ export function ConsumptionReportPage({fixedGroup}: {fixedGroup?: Query['group']
  async function run(page=0,q=query) {
   if (!allowed) return; pending.current?.abort(); const controller=new AbortController(); pending.current=controller;
   const requestScope=scope; setBusy(true); setError(null);
-  try { const data=await fetchPage(q,page,100,controller.signal); if(liveScope.current===requestScope) setSnapshot({scope:requestScope,query:{...q},page,result:data}); }
+  try {
+   const data=await fetchPage(q,page,100,controller.signal);
+   let sales: number | null = null;
+   if (q.group !== 'unit') {
+    if (page !== 0 && result?.query === q) sales = result.sales;
+    else {
+     const {startIso,endExclusiveIso}=reportDateRangeUtc(data.from,data.to);
+     const response=await reporting.getOperationalReportMetrics({p_report_type:'sales',p_branch_id:branch || null,p_from_date:data.from,p_to_date:data.to,p_filters:{},p_from_ts:startIso,p_to_exclusive_ts:endExclusiveIso},controller.signal);
+     const amount=response.data?.['Net Sales'];
+     if (!response.error && typeof amount==='number' && Number.isFinite(amount)) sales=amount;
+    }
+   }
+   if(!controller.signal.aborted && liveScope.current===requestScope) setSnapshot({scope:requestScope,query:{...q},page,result:data,sales});
+  }
   catch(failure) { if(!controller.signal.aborted && liveScope.current===requestScope) { setSnapshot(null); setError(failure); } }
   finally { if(pending.current===controller && liveScope.current===requestScope) setBusy(false); }
  }
@@ -130,6 +144,10 @@ export function ConsumptionReportPage({fixedGroup}: {fixedGroup?: Query['group']
     {can('reports.export') && <Button variant="outline" disabled={busy || !columns.length} onClick={()=>void exportAll('excel')}>Excel</Button>}
     {can('reports.print') && <Button variant="outline" disabled={busy || !columns.length} onClick={()=>void exportAll('print')}>{text('طباعة / PDF','Print / PDF')}</Button>}</div>
    </div>
+   {!units && <p className="text-sm">
+    {text('صافي مبيعات الفترة (قبل فلتر الخامة أو المنتج)','Period net sales (before material or product filter)')}: {result.sales === null ? text('غير متاح','Unavailable') : money(result.sales)}
+    {' · '}{text('تكلفة الاستهلاك المعروض ÷ صافي مبيعات الفترة','Displayed consumption cost ÷ period net sales')}: {result.sales !== null && result.sales > 0 ? number(100 * result.result.summary.total / result.sales) + '%' : '—'}
+   </p>}
    {result.result.summary.unpriced_count>0 && <p role="status" className="rounded bg-ui-warning-soft p-3">{text('صفوف محسوبة بسعر صفر','Rows counted with zero price')}: {result.result.summary.unpriced_count}</p>}
    {!!((result.result.summary.missing_recipe_count || 0)+(result.result.summary.invalid_unit_count || 0)) && <p role="status" className="rounded bg-ui-warning-soft p-3">{text('الإجمالي جزئي: توجد وصفات أو وحدات بيع ناقصة؛ راجع المنتجات التالية قبل الاعتماد على التكلفة.','Partial total: recipes or sale units are missing. Review these products before relying on the cost.')} {result.result.recipe_issues?.map(issue=>issue.product_name || text('منتج محذوف أو غير متاح','Deleted or unavailable product')).join('، ')}</p>}
    <div className="report-grid rounded-lg border border-ui-border" data-explicit-primary="true"><table className="w-full border-collapse text-sm"><thead className="sticky top-0 z-10 bg-ui-page-alt"><tr>{columns.map(key=><th key={key} data-primary={key===(columns.includes(units?labels.inventory_unit_name:labels.raw_material_name)?(units?labels.inventory_unit_name:labels.raw_material_name):columns[0])} scope="col" className="whitespace-nowrap border-b border-ui-border px-3 py-3 text-start">{key}</th>)}</tr></thead><tbody>{records(reportRows(result.result)).map((row,index)=><tr key={index} className="odd:bg-ui-surface even:bg-ui-page-alt hover:bg-ui-primary/5">{columns.map(key=><td key={key} data-primary={key===(columns.includes(units?labels.inventory_unit_name:labels.raw_material_name)?(units?labels.inventory_unit_name:labels.raw_material_name):columns[0])} className="whitespace-nowrap border-b border-ui-border px-3 py-2 tabular-nums">{display(key,row[key])}</td>)}</tr>)}</tbody><tfoot><tr data-testid="consumption-grand-total">{columns.map(key=><td key={key} data-primary={key===(columns.includes(units?labels.inventory_unit_name:labels.raw_material_name)?(units?labels.inventory_unit_name:labels.raw_material_name):columns[0])}>{key===labels.consumption_value ? `${money(result.result.summary.total)}` : key===(units?labels.inventory_unit_name:labels.raw_material_name) ? `${text('إجمالي التقرير الكامل','Full report total')} · ${reportCount(result.result)}` : ''}</td>)}</tr></tfoot></table>{!reportRows(result.result).length && <p className="p-6 text-center">{units?text('لا توجد وحدات مصنعة مرتبطة بالمباع في الفترة المختارة','No manufactured units related to sold products in this period'):text('لا توجد خامات لوصفات المباع في الفترة المختارة','No sold-recipe materials in this period')}</p>}</div>
