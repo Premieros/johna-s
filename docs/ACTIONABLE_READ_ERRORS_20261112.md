@@ -4,10 +4,10 @@ Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/actionable-read-errors-20261112`
 Current PR: `628`
 Last updated: 2026-11-12
-State: **READY**
+State: **BLOCKED**
 
 ## Work status
-Owner requests understandable actionable errors, hidden technical internals, and repair of the underlying failures.
+Owner requests understandable actionable errors, hidden technical internals, and repair of the underlying failures. Error handling and bounded costing reads are released in PR628. Further monthly read-pressure reduction remains unfinished because the execution environment became unavailable.
 
 ## Guardrails
 Keep all RLS/visibility and invoker security, canonical prices, results and writer/print contracts. No production business tests, role grants, timeout increases or polling. Owned rollback-only database tests.
@@ -28,7 +28,14 @@ Production inspection is read-only. Scoped-only candidate still exceeded3s and s
 Owner authorizes repair and deployment; apply only verified bounded function-body change. Do not weaken authorization or visibility, and do not raise timeout budgets.
 
 ## Next action
-Complete final focused checks and exact-head CI, then apply the guarded read-only schema change, measure one authenticated month read, merge and verify actual Pages. Rollback is scripts/rollback/costing_historical_scoped_lookups_20261112.sql.
+Restore an owned execution environment before further implementation. Profile and reduce repeated branch authorization inside row-level reads, reusing the canonical user_may_access_branch rule and retaining tenant/history/active-user behavior. Use statement-local context only; no client-trusted GUC, shared cross-user authorization cache, new price/balance source or timeout increase. Any new migration must be generated separately; the released migration is already applied and must not be edited. Both consumption RPCs now pin the exact ledger-policy fingerprint; any subsequent policy optimization must retarget both fail-closed guards atomically and test additional restrictive policies. Rollback for this release is scripts/rollback/costing_historical_scoped_lookups_20261112.sql.
 
 ## Mandatory update protocol
 Record exact tested head, CI, migration and actual publication; do not claim system-wide performance from an isolated read improvement.
+
+## Release evidence and remaining limitation
+PR628 merged at c6a36186f50a568cce6654a0320a7b3e7b7e419f (tree c7dd3c5b76ac77ce276d15e0ce987a9a00aea4e0). Exact tested head abec43be7f8eeaa6a269675703cecd3b5a745b72 passed full Verify43194467166:2091 frontend tests,1276 DB tests/1 skipped, both browser shards, smoke and Pages continuity. Exact-main Verify43196003395 and actual Pages43196629736 succeeded, including production-parity and deploy. Build artifact contains index-BlIuFKsG.js. Native served-module inspection was unavailable after the execution environment stopped; the public web tool cannot retrieve the JS asset. Publication is evidenced by the actual successful deployment, not an invented browser check.
+
+Production migration20261112095212 (costing_historical_scoped_lookups; source20261112092131) applied. Both public consumption RPCs remain SECURITY INVOKER with unchanged postgres/service_role/authenticated execution ACL and no anon execution. Security advisor groups are unchanged. The protected print-function fingerprint, ordered by pg_proc.oid for this comparison, is5bf7d460c2c450eea250b8a66424eda8 before/after. No business rows, role grants or print operations were written.
+
+The authenticated October2026 read for branch19c3fd23-d784-455b-8840-f4f2ac619651 still exceeded a5-second diagnostic cutoff. Verified authenticated/authenticator role configuration remains statement_timeout=8s; no system limit was raised. A single full RPC measurement within that existing8s budget succeeded in6351.63ms, with77753 shared hits and3 disk reads. This proves that sampled read completed, not that all load or all monthly timeouts are eliminated. Observed remaining hotspot includes repeated user_may_access_branch/is_pos_admin evaluation. Do not report the full performance task as complete. The owner was informed that further work is blocked by unavailable local execution, while the verified release is live.
