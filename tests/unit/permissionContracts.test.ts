@@ -72,6 +72,12 @@ describe('permission operational contracts', () => {
     expect(POS_INTERACTIVE_PRESET_SCOPE).not.toContain('pos.print_kitchen');
   });
 
+  it('separates purchase receiving view and execution without granting purchase management',()=>{
+    const expanded=expandPermissionDependencies(['procurement.receive']);
+    expect(expanded).toContain('purchases.receiving');expect(expanded).not.toContain('purchases.manage');
+    expect(permissionContract('purchases.receiving').kind).toBe('screen');
+  });
+
   it('does not expose the obsolete pos.refund alias', () => {
     expect(ALL_PERMISSIONS).not.toContain('pos.refund' as Permission);
     expect(ALL_PERMISSIONS).toContain('sales.refund.create');

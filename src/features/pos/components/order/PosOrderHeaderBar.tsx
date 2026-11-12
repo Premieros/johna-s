@@ -74,6 +74,8 @@ export function PosOrderHeaderBar({
   const isAr = lang === 'ar';
   const perms = usePosPermissions();
 
+  const canManageOrderCustomer = perms.canManageCustomer && canModifyOrder;
+  const permissionHint = isAr ? 'لا تملك صلاحية تنفيذ هذا الإجراء.' : 'You do not have permission for this action.';
   const canSendKitchen = perms.canOperateType(orderType, activeTable?.id);
 
   const elapsedText = useMemo(() => {
@@ -130,62 +132,71 @@ export function PosOrderHeaderBar({
       </div>
 
       <div className="flex items-center gap-1.5 flex-wrap shrink-0">
-        {perms.canManageCustomer && canModifyOrder && (
+        {(orderId || itemsCount > 0) && (
           <button
             data-testid="pos-top-action-customer"
             type="button"
             onClick={onOpenCustomer}
-            className="flex items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1.5 font-black text-ui-text hover:border-ui-primary hover:text-ui-primary hover:bg-ui-primary-soft transition active:scale-95 shadow-ui-xs"
+            disabled={!canManageOrderCustomer}
+            title={!canManageOrderCustomer ? permissionHint : undefined}
+            className="flex items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1.5 font-black text-ui-text hover:border-ui-primary hover:text-ui-primary hover:bg-ui-primary-soft transition active:scale-95 shadow-ui-xs disabled:cursor-not-allowed disabled:opacity-40"
           >
             <UserPlus className="h-3.5 w-3.5 text-ui-primary" />
             <span className="max-w-[140px] truncate">{customerName || (isAr ? 'إضافة عميل' : 'Customer')}</span>
           </button>
         )}
 
-        {perms.canTransferOrder && activeTable && orderId && onOpenTransferModal && (
+        {activeTable && orderId && onOpenTransferModal && (
           <button
             data-testid="pos-top-action-merge-transfer"
             type="button"
             onClick={onOpenTransferModal}
-            className="flex items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1.5 font-black text-ui-text hover:border-ui-primary hover:text-ui-primary hover:bg-ui-primary-soft transition active:scale-95 shadow-ui-xs"
+            disabled={!perms.canTransferOrder}
+            title={!perms.canTransferOrder ? permissionHint : undefined}
+            className="flex items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1.5 font-black text-ui-text hover:border-ui-primary hover:text-ui-primary hover:bg-ui-primary-soft transition active:scale-95 shadow-ui-xs disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ArrowRightLeft className="h-3.5 w-3.5 text-ui-primary" />
             <span className="hidden sm:inline">{isAr ? 'دمج / نقل' : 'Merge / Transfer'}</span>
           </button>
         )}
 
-        {perms.canPrint && canPrintSentReceipt && (
+        {canPrintSentReceipt && (
           <button
             data-testid="pos-action-print"
             type="button"
             onClick={onPrint}
-            className="flex items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1.5 font-black text-ui-text hover:bg-ui-page-alt transition active:scale-95 shadow-ui-xs"
+            disabled={!perms.canPrint}
+            title={!perms.canPrint ? permissionHint : undefined}
+            className="flex items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1.5 font-black text-ui-text hover:bg-ui-page-alt transition active:scale-95 shadow-ui-xs disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Printer className="h-3.5 w-3.5 text-ui-primary" />
             <span className="hidden sm:inline">{isAr ? 'طباعة' : 'Print'}</span>
           </button>
         )}
 
-        {perms.canHoldOrder && itemsCount > 0 && (
+        {itemsCount > 0 && (
           <button
             data-testid="pos-action-hold"
             type="button"
             onClick={onHoldOrder}
-            className="flex items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1.5 font-black text-ui-text hover:bg-ui-page-alt transition active:scale-95 shadow-ui-xs"
+            disabled={!perms.canHoldOrder}
+            title={!perms.canHoldOrder ? permissionHint : undefined}
+            className="flex items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1.5 font-black text-ui-text hover:bg-ui-page-alt transition active:scale-95 shadow-ui-xs disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Pause className="h-3.5 w-3.5 text-amber-600" />
             <span className="hidden sm:inline">{isAr ? 'تعليق' : 'Hold'}</span>
           </button>
         )}
 
-        {canSendKitchen && itemsCount > 0 && (
+        {itemsCount > 0 && (
           <button
             data-testid="pos-action-send-kitchen"
             type="button"
             onClick={onSendKitchen}
-            disabled={kitchenActionBusy}
+            disabled={!canSendKitchen || kitchenActionBusy}
+            title={!canSendKitchen ? permissionHint : undefined}
             aria-busy={kitchenActionBusy}
-            className="flex items-center gap-1 rounded-xl bg-amber-500 px-2.5 py-1.5 font-black text-xs text-white transition hover:bg-amber-600 active:scale-95 shadow-ui-xs shadow-amber-500/20 disabled:cursor-wait disabled:opacity-50"
+            className="flex items-center gap-1 rounded-xl bg-amber-500 px-2.5 py-1.5 font-black text-xs text-white transition hover:bg-amber-600 active:scale-95 shadow-ui-xs shadow-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <ChefHat className="h-3.5 w-3.5" />
             <span>{kitchenSending
@@ -200,12 +211,13 @@ export function PosOrderHeaderBar({
           </button>
         )}
 
-        {perms.canPay && hasSent && itemsCount > 0 && (
+        {hasSent && itemsCount > 0 && (
           <button
             data-testid="pos-action-pay"
             type="button"
             onClick={onPay}
-            disabled={completing}
+            disabled={!perms.canPay || completing}
+            title={!perms.canPay ? permissionHint : undefined}
             className="flex items-center gap-1 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 px-3 py-1.5 font-black text-xs transition active:scale-95 shadow-ui-xs disabled:opacity-40"
           >
             <Banknote className="h-3.5 w-3.5" />

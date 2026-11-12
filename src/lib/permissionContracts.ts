@@ -53,6 +53,7 @@ const REQUIREMENTS: Partial<Record<Permission, Permission[]>> = {
   'categories.manage': ['categories.view'],
   'components.manage': ['components.view'],
 
+  'procurement.receive': ['purchases.receiving'],
   'purchases.manage': ['purchases.view'],
   'purchases.print': ['purchases.view'],
   'purchases.delete': ['purchases.view'],
@@ -193,6 +194,8 @@ const SENSITIVE = new Set<Permission>([
 ]);
 
 const EFFECTS: Partial<Record<Permission, { ar: string; en: string; notesAr?: string; notesEn?: string }>> = {
+  'purchases.receiving': { ar: 'عرض شاشة استلام المشتريات وسجل الاستلام؛ التنفيذ له صلاحية مستقلة.', en: 'View purchase receiving and receipt history; execution requires a separate capability.' },
+  'procurement.receive': { ar: 'تنفيذ استلام المشتريات داخل الفروع المسموح بها دون منح إدارة المشتريات.', en: 'Receive purchases inside accessible branches without granting purchase management.', notesAr: 'صلاحية إدارة المشتريات الحالية تستمر في شمول الاستلام للتوافق مع المسارات القائمة.', notesEn: 'Existing purchase-management capability continues to include receiving for established callers.' },
   'pos.view': {
     ar: 'يفتح مساحة نقطة البيع فقط؛ لا يمنح إنشاء أو تعديل أو دفع تلقائيًا.',
     en: 'Opens the POS workspace only; it does not implicitly grant create, edit, or payment.',
@@ -334,7 +337,8 @@ function kindOf(permission: Permission): PermissionContractKind {
   if (APPROVAL.has(permission)) return 'approval';
   if (ADMIN.has(permission)) return 'administration';
   if (
-    permission.endsWith('.view')
+    permission === 'purchases.receiving'
+    || permission.endsWith('.view')
     || permission === 'reports.financial'
     || permission === 'reports.costing'
   ) {
