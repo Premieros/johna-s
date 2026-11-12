@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { SupportLauncher } from '@/features/support/SupportLauncher';
 import { useLocation } from 'react-router-dom';
 import { AppProviders } from './providers';
 import { AppRoutes } from './routes';
@@ -52,6 +53,7 @@ export default function App() {
               <AppRoutes />
               <RouteScopedExtras />
               <AgentCustomerSupport />
+              <SupportLauncher />
             </>
           </WorkAuthorizationAppBoundary>
           <CloudPrintAgent />
