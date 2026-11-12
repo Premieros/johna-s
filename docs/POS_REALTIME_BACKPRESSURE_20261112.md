@@ -4,8 +4,8 @@ Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `hotfix/pos-read-initplans-20261112`
 Current PR: #633
-Last updated: 2026-11-12 18:41 UTC
-State: **BLOCKED**
+Last updated: 2026-11-12 19:01 UTC
+State: **DEPLOYED**
 
 ## Work status
 Emergency restoration was requested without questions, followed by finding and stopping the source of pressure. Database reboot and migration 20261112183157 were applied and verified in the preceding incident response. This candidate fixes a reproducible event-driven full-snapshot loop; it does not establish that this loop alone initiated the memory/swap incident.
@@ -39,10 +39,17 @@ Main dbe0373b6f20ee1c2aba3f9a6393f3059e10fd5b. Since reboot, top repeated applic
 - First exact-head CI: browser shards and asset continuity passed;1,283 DB checks passed, but historical order-type rollback rehearsal correctly rejected the newer SELECT-policy fingerprint. Add a guarded inverse for the read optimization, peel it before the historical rehearsal, reapply afterward and assert exact current policy digests. Historical drift guards remain unchanged. No production change in this correction.
 
 ## Production gate
-State BLOCKED until exact-head CI succeeds. User emergency repair authorization covers verified merge/publication; never bypass existing checks. Backend emergency migration is already applied; the frontend scheduler is not yet published.
+DEPLOYED at main a9639adbd887fde01ab15e80b0829c28f7edb4f0. PR Verify43283537430, main Verify43284486022, and actual Pages43285153519 all passed. User emergency repair authorization covers this verified publication. Backend migration20261112183157 is applied. No operational test writes or paid changes.
 
 ## Next action
-Push reviewed candidate, require exact-head CI, merge only on success, wait for verified main and actual Pages deployment, then verify published source and live POS reads.
+Release is verified. Existing open browser sessions require one normal refresh after saving any work to receive the updated frontend. The initiating process behind swap pressure remains unproven; do not claim the fixed load amplifier was the sole cause.
 
 ## Mandatory update protocol
 Update this log and the first active work entry after new findings, verification failures or release transitions. Do not claim that a load contributor is the sole initiating cause or claim deployment from local tests alone.
+
+## Release evidence
+- Exact-head PR and main verification: all frontend, DB/RLS, browser shards and retained-asset checks passed. DB:1,284 passed/1 optional historical benchmark skipped. Frontend:2,102 passed.
+- PR#633 merged as a9639adbd887fde01ab15e80b0829c28f7edb4f0; actual Pages43285153519 succeeded.
+- Public served index-B7F66TTx.js loads format-CeZRuzay.js; both bounded snapshot scheduler markers verified in the served JavaScript.
+- Fresh signed-in browser POS at the published URL loaded Smouha tables, products and17 active orders, without console errors; no order/payment/print action was invoked.
+- Database check at19:00:06 UTC:0 active authenticated requests,0 older than5 seconds,0 blocked. This remains point-in-time evidence, not a guarantee against recurrence.

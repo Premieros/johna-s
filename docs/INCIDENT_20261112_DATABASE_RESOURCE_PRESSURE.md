@@ -42,3 +42,6 @@ COMMIT;
 
 ## Open investigation
 The initiating workload or change is not identified. Latest manual print recovery PR #632 adds user-invoked functions and its dialog loads only on opening; this review does not prove it is unrelated. Investigate resource history before the incident and repeat recovery checks under real branch workload. Do not treat successful deployment checks or a healthy project metadata status as proof of application availability.
+
+## Verified follow-up release
+PR#633 was merged/published after full PR and main verification. The old same-branch trailing-read loop (introduced September21) is now bounded to snapshot starts no more often than every2 seconds, with one final refresh and branch-safe initial loading. Full release evidence is in docs/POS_REALTIME_BACKPRESSURE_20261112.md. This is a confirmed load amplifier repair, not proof of the sole initiating memory-pressure cause.
