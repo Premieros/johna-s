@@ -51,7 +51,7 @@ describe('performance repair contracts', () => {
     expect(realtime).toContain('return loadCyclePromiseRef.current;');
     expect(realtime).toContain('setData(EMPTY_POS_REALTIME);');
     expect(realtime).toContain('eventRefreshTimerRef.current = window.setTimeout');
-    expect(realtime).toContain('}, 150);');
+    expect(realtime).toContain('SNAPSHOT_REFRESH_MIN_INTERVAL_MS');
     expect(realtime).toContain('while (targetBranch)');
   });
 });
