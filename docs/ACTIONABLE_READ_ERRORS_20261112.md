@@ -4,10 +4,10 @@ Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/actionable-read-errors-20261112`
 Current PR: `628`
 Last updated: 2026-11-12
-State: **BLOCKED**
+State: **DEPLOYED**
 
 ## Work status
-Owner requests understandable actionable errors, hidden technical internals, and repair of the underlying failures. Error handling and bounded costing reads are released in PR628. Further monthly read-pressure reduction remains unfinished because the execution environment became unavailable.
+Owner requests understandable actionable errors, hidden technical internals, and repair of the underlying failures. Error handling and bounded costing reads are released in PR628. The environment interruption was resolved; the measured monthly branch-check follow-up is released in PR630 (see docs/BRANCH_READ_INITPLANS_20261112.md).
 
 ## Guardrails
 Keep all RLS/visibility and invoker security, canonical prices, results and writer/print contracts. No production business tests, role grants, timeout increases or polling. Owned rollback-only database tests.
@@ -28,7 +28,7 @@ Production inspection is read-only. Scoped-only candidate still exceeded3s and s
 Owner authorizes repair and deployment; apply only verified bounded function-body change. Do not weaken authorization or visibility, and do not raise timeout budgets.
 
 ## Next action
-Restore an owned execution environment before further implementation. Profile and reduce repeated branch authorization inside row-level reads, reusing the canonical user_may_access_branch rule and retaining tenant/history/active-user behavior. Use statement-local context only; no client-trusted GUC, shared cross-user authorization cache, new price/balance source or timeout increase. Any new migration must be generated separately; the released migration is already applied and must not be edited. Both consumption RPCs now pin the exact ledger-policy fingerprint; any subsequent policy optimization must retarget both fail-closed guards atomically and test additional restrictive policies. Rollback for this release is scripts/rollback/costing_historical_scoped_lookups_20261112.sql.
+The formerly blocked continuation is released in PR630; see docs/BRANCH_READ_INITPLANS_20261112.md for final application/publication and both-branch measurements. There is no remaining environment blocker for this work. Preserve the fail-closed policy guards and execute the PR630 rollback before any PR628 rollback. Already-applied migrations must not be edited.
 
 ## Mandatory update protocol
 Record exact tested head, CI, migration and actual publication; do not claim system-wide performance from an isolated read improvement.
@@ -39,3 +39,6 @@ PR628 merged at c6a36186f50a568cce6654a0320a7b3e7b7e419f (tree c7dd3c5b76ac77ce2
 Production migration20261112095212 (costing_historical_scoped_lookups; source20261112092131) applied. Both public consumption RPCs remain SECURITY INVOKER with unchanged postgres/service_role/authenticated execution ACL and no anon execution. Security advisor groups are unchanged. The protected print-function fingerprint, ordered by pg_proc.oid for this comparison, is5bf7d460c2c450eea250b8a66424eda8 before/after. No business rows, role grants or print operations were written.
 
 The authenticated October2026 read for branch19c3fd23-d784-455b-8840-f4f2ac619651 still exceeded a5-second diagnostic cutoff. Verified authenticated/authenticator role configuration remains statement_timeout=8s; no system limit was raised. A single full RPC measurement within that existing8s budget succeeded in6351.63ms, with77753 shared hits and3 disk reads. This proves that sampled read completed, not that all load or all monthly timeouts are eliminated. Observed remaining hotspot includes repeated user_may_access_branch/is_pos_admin evaluation. Do not report the full performance task as complete. The owner was informed that further work is blocked by unavailable local execution, while the verified release is live.
+
+## Resolved continuation — PR630
+The unavailable-execution note above records the earlier interruption. After restoration, five read policies cache an already-existing zero-argument predicate per statement while retaining canonical branch checks for other callers. Production migration20261112111021 and Pages43208126835 succeeded at9fa35c99896d25adb9a4820bc8e49d6ed2d57518. Smouha October historical cost measured3.04s (previous6.35s), Cleopatra4.95s; both within unchanged8s. Shared print contracts, security/ACLs, prices and business data are preserved. This closes the observed blocked continuation, without claiming all possible queries or traffic levels were benchmarked.
