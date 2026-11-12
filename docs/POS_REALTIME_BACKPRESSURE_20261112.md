@@ -36,6 +36,7 @@ Main dbe0373b6f20ee1c2aba3f9a6393f3059e10fd5b. Since reboot, top repeated applic
 - Application/test TypeScript, changed-file ESLint, production build and diff whitespace pass.
 - Local npm11 clean install rejected pre-existing optional lock entries; npm10 clean install succeeded without a lockfile change (CI uses Node22/npm10).
 - Exact-head GitHub frontend, DB/RLS, retained asset continuity and browser checks remain required.
+- First exact-head CI: browser shards and asset continuity passed;1,283 DB checks passed, but historical order-type rollback rehearsal correctly rejected the newer SELECT-policy fingerprint. Add a guarded inverse for the read optimization, peel it before the historical rehearsal, reapply afterward and assert exact current policy digests. Historical drift guards remain unchanged. No production change in this correction.
 
 ## Production gate
 State BLOCKED until exact-head CI succeeds. User emergency repair authorization covers verified merge/publication; never bypass existing checks. Backend emergency migration is already applied; the frontend scheduler is not yet published.

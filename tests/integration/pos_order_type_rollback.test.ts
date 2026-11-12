@@ -10,6 +10,8 @@ const migration = read('supabase/migrations/20261025185720_pos_order_type_capabi
 const inverse = read('scripts/rollback/pos_order_type_permissions_20261025.sql');
 const discountHandoff = read('supabase/migrations/20261028111145_discount_handoff_authority.sql');
 const discountHandoffInverse = read('scripts/rollback/discount_handoff_authority_20261028.sql');
+const readInitplans = read('supabase/migrations/20261112183157_pos_read_permission_initplans.sql');
+const readInitplansInverse = read('scripts/rollback/pos_read_permission_initplans_20261112.sql');
 const baseline = JSON.parse(read('scripts/db/candidates/pos_order_type_permissions_baseline.json')) as {functions: Array<{signature: string; body_md5: string}>};
 const roles = JSON.parse(read('scripts/db/candidates/pos_order_type_role_conversion.json')) as Array<{role: string; before: string[]; after: string[]}>;
 const originals = [...JSON.parse(read('scripts/db/candidates/pos_order_type_original_print_target_defs.json')), ...JSON.parse(read('scripts/db/candidates/pos_order_type_original_order_defs.json'))] as Array<{proname: string; definition: string}>;
@@ -20,6 +22,13 @@ describe.skipIf(!local)('production-specific order-type rollback rehearsal — o
   beforeAll(async () => { db = openDb(url!); await db.connect(); await db.query('BEGIN'); });
   afterAll(async () => { if (db) { await db.query('ROLLBACK').catch(() => {}); await db.end(); } });
   it('restores exact captured function digests and permissions, then reapplies without touching business rows', async () => {
+    const policyDigests = () => db.query<{polname: string; digest: string}>(`SELECT polname,md5(pg_get_expr(polqual,polrelid)) digest FROM pg_policy
+      WHERE (polrelid='public.order_items'::regclass AND polname='auth_select_order_items')
+      OR (polrelid='public.order_kitchen_sends'::regclass AND polname='auth_select_order_kitchen_sends') ORDER BY polname`);
+    const currentPolicies = (await policyDigests()).rows;
+    // Peel the newer equivalent read-policy optimization before rehearsing the
+    // historical exact policy guards. Never relax the historical drift checks.
+    await db.query(inTransaction(readInitplansInverse));
     // Peel the later dependent repair before rehearsing the historical snapshot.
     // Keep the exact original digest assertions; reapply in forward order below.
     await db.query(inTransaction(discountHandoffInverse));
@@ -53,5 +62,7 @@ describe.skipIf(!local)('production-specific order-type rollback rehearsal — o
       expect(converted.rows[0].permissions).toEqual(role.after);
     }
     await db.query(inTransaction(discountHandoff));
+    await db.query(inTransaction(readInitplans));
+    expect((await policyDigests()).rows).toEqual(currentPolicies);
   });
 });
