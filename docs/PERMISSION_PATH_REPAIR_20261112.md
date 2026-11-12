@@ -2,7 +2,7 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `fix/permission-paths-20261112`
-Current PR: `0`
+Current PR: `627`
 Last updated: 2026-11-12
 State: **READY**
 
