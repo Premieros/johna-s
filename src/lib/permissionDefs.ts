@@ -14,7 +14,7 @@ export type Permission =
   | 'dashboard.view' | 'history.unlimited'
   | 'pos.view' | 'pos.order.dine_in' | 'pos.order.takeaway' | 'pos.order.drive_thru' | 'pos.order.delivery' | 'pos.order.edit' | 'pos.payment.take'
   | 'pos.order.split' | 'pos.order.transfer' | 'pos.receipt.print'
-  | 'pos.discount' | 'pos.change_price' | 'pos.reprint'
+  | 'pos.print_recovery' | 'pos.discount' | 'pos.change_price' | 'pos.reprint'
   | 'pos.hold' | 'pos.kds_view' | 'pos.kds_update' | 'pos.print_kitchen'
   | 'pos.void' | 'pos.cancel_order' | 'pos.change_branch'
   | 'sales.print' | 'sales.export'
@@ -60,7 +60,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'dashboard.view', 'history.unlimited',
   'pos.view', 'pos.order.dine_in', 'pos.order.takeaway', 'pos.order.drive_thru', 'pos.order.delivery', 'pos.order.edit', 'pos.payment.take',
   'pos.order.split', 'pos.order.transfer', 'pos.receipt.print',
-  'pos.discount', 'pos.change_price', 'pos.reprint', 'pos.hold',
+  'pos.print_recovery', 'pos.discount', 'pos.change_price', 'pos.reprint', 'pos.hold',
   'pos.kds_view', 'pos.kds_update', 'pos.print_kitchen', 'pos.void', 'pos.cancel_order', 'pos.change_branch',
   'floor_plan.view', 'floor_plan.manage',
   'sales.print', 'sales.export',
@@ -110,6 +110,7 @@ export const PERMISSION_LABELS: Record<Permission, { ar: string; en: string }> =
   'pos.hold': { ar: 'تعليق واستئناف الطلب', en: 'Hold & Resume Orders' },
   'pos.kds_view': { ar: 'عرض شاشة وطلبات المطبخ', en: 'View Kitchen / KDS' },
   'pos.kds_update': { ar: 'تحديث حالة طلبات المطبخ', en: 'Update Kitchen / KDS Status' },
+  'pos.print_recovery': { ar: 'طباعة يدوية للتذاكر المتأخرة', en: 'Manually recover delayed print tickets' },
   'pos.print_kitchen': { ar: 'تشغيل طباعة المطبخ والبار', en: 'Operate kitchen and bar printing' },
   'pos.void': { ar: 'إلغاء صنف مرسل للمطبخ (حتى طلب مستخدم آخر)', en: 'Void Sent Kitchen Item (Including Other Operator Orders)' },
   'pos.cancel_order': { ar: 'إلغاء الطلب بالكامل', en: 'Cancel Full Order' },
@@ -226,7 +227,7 @@ export interface PermissionGroup {
 export const PERMISSION_GROUPS: PermissionGroup[] = [
   { key: 'dashboard', ar: 'لوحة التحكم', en: 'Dashboard', permissions: ['dashboard.view'] },
   { key: 'data_access', ar: 'نطاق البيانات التاريخية', en: 'Historical Data Access', permissions: ['history.unlimited'] },
-  { key: 'pos', ar: 'نقطة البيع', en: 'POS', permissions: ['pos.view', 'pos.order.dine_in', 'pos.order.takeaway', 'pos.order.drive_thru', 'pos.order.delivery', 'pos.order.edit', 'pos.payment.take', 'pos.order.split', 'pos.order.transfer', 'pos.receipt.print', 'pos.discount', 'pos.change_price', 'pos.reprint', 'pos.hold', 'pos.kds_view', 'pos.kds_update', 'pos.print_kitchen', 'pos.void', 'pos.cancel_order', 'pos.change_branch', 'floor_plan.view', 'floor_plan.manage'] },
+  { key: 'pos', ar: 'نقطة البيع', en: 'POS', permissions: ['pos.view', 'pos.order.dine_in', 'pos.order.takeaway', 'pos.order.drive_thru', 'pos.order.delivery', 'pos.order.edit', 'pos.payment.take', 'pos.order.split', 'pos.order.transfer', 'pos.receipt.print', 'pos.print_recovery', 'pos.discount', 'pos.change_price', 'pos.reprint', 'pos.hold', 'pos.kds_view', 'pos.kds_update', 'pos.print_kitchen', 'pos.void', 'pos.cancel_order', 'pos.change_branch', 'floor_plan.view', 'floor_plan.manage'] },
   { key: 'products', ar: 'المنتجات', en: 'Products', permissions: ['products.view', 'products.create', 'products.edit', 'products.delete', 'products.modifiers.manage', 'products.print', 'products.export', 'products.import'] },
   { key: 'categories', ar: 'الأصناف', en: 'Categories', permissions: ['categories.view', 'categories.manage'] },
   { key: 'components', ar: 'المكونات', en: 'Components', permissions: ['components.view', 'components.manage'] },

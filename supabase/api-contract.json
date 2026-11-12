@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-11T14:43:11.370Z",
+  "generated_at": "2026-11-12T16:23:58.914Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -364,6 +364,14 @@
       "params": [
         "branch_id",
         "order_id"
+      ]
+    },
+    {
+      "name": "finish_manual_cloud_print_job",
+      "params": [
+        "agent_id",
+        "confirmed",
+        "job_id"
       ]
     },
     {
@@ -991,6 +999,12 @@
       ]
     },
     {
+      "name": "list_delayed_cloud_print_jobs",
+      "params": [
+        "branch_id"
+      ]
+    },
+    {
       "name": "list_pos_order_transfer_targets",
       "params": [
         "order_id"
@@ -1351,6 +1365,13 @@
       "params": [
         "product_id",
         "units"
+      ]
+    },
+    {
+      "name": "reserve_manual_cloud_print_job",
+      "params": [
+        "agent_id",
+        "job_id"
       ]
     },
     {

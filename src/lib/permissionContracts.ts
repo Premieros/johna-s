@@ -41,6 +41,7 @@ const REQUIREMENTS: Partial<Record<Permission, Permission[]>> = {
   'pos.change_branch': ['pos.view'],
   'pos.kds_update': ['pos.kds_view'],
   'pos.reprint': ['pos.receipt.print'],
+  'pos.print_recovery': ['pos.view'],
 
   'floor_plan.manage': ['floor_plan.view'],
 
@@ -239,6 +240,10 @@ const EFFECTS: Partial<Record<Permission, { ar: string; en: string; notesAr?: st
     en: 'Shows full cancellation for eligible unsent orders after a required reason.',
     notesAr: 'الطلب الذي أُرسل للمطبخ يجب إلغاء عناصره المرسلة عبر Void أولًا.',
     notesEn: 'Sent orders must void their sent lines through the controlled Void flow first.',
+  },
+  'pos.print_recovery': {
+    ar: 'يتيح حجز تذكرة متأخرة لم يستلمها الوكيل وطباعتها يدويًا من متصفح جهاز الفرع، مع صلاحية طباعة نوع التذكرة. لا يتيح إعادة طباعة تذكرة منفذة.',
+    en: 'Reserves and manually prints a delayed, never-claimed ticket from the branch browser; also requires its print-kind permission. Does not authorize reprinting completed tickets.',
   },
   'pos.receipt.print': {
     ar: 'يسمح بالطباعة الأولى للإيصال، ويُستخدم أيضًا بواسطة وكيل الطباعة الخلفي المصرح.',
