@@ -42,6 +42,37 @@ describe.skipIf(!dbUrl)('historical zero consumption priced independently of sto
   });
   afterAll(async () => { if (db) { await db.query('ROLLBACK').catch(() => {}); await db.end(); } });
 
+  it('preserves results, read guards and metadata through branch InitPlan rollback/reapply', async () => {
+    const strip = (sql: string) => sql.replace(/^BEGIN;$/gm, '').replace(/^COMMIT;$/gm, '');
+    const metadata = async () => (await db.query(`SELECT jsonb_build_object(
+      'policies',(SELECT jsonb_agg(to_jsonb(p) ORDER BY p.polrelid,p.polname) FROM pg_policy p WHERE polrelid IN ('public.sales'::regclass,'public.inventory_ledger'::regclass,'public.order_kitchen_inventory_events'::regclass)),
+      'rpcs',(SELECT jsonb_agg(jsonb_build_object('definition',pg_get_functiondef(oid),'owner',proowner,'acl',proacl,'definer',prosecdef) ORDER BY oid) FROM pg_proc WHERE oid IN ('public.get_historical_sale_cost_estimates(uuid,date,date)'::regprocedure,'public.get_consumption_latest_report(uuid,date,date,text,text,boolean,integer,integer)'::regprocedure,'public.user_may_access_branch(uuid)'::regprocedure))
+    ) AS state`)).rows[0].state;
+    await db.query('SAVEPOINT branch_initplan_parity');
+    try {
+      const before = await metadata(), optimized = await estimates();
+      await db.query(strip(readFileSync('scripts/rollback/branch_read_initplans_20261112.sql','utf8')));
+      expect(await estimates()).toEqual(optimized);
+      await db.query(strip(readFileSync('supabase/migrations/20261112104610_branch_read_initplans.sql','utf8')));
+      expect(await metadata()).toEqual(before);
+      expect(await estimates()).toEqual(optimized);
+    } finally { await db.query('ROLLBACK TO SAVEPOINT branch_initplan_parity'); }
+  });
+
+  it('short-circuits per-row branch calls in admin read policies without changing the canonical function', async () => {
+    await db.query('SAVEPOINT branch_initplan_probe');
+    try {
+      // Owned fixture only: a branch predicate invocation must fail. The three
+      // direct reads prove cached existing platform authorization avoids it.
+      await db.query(`CREATE OR REPLACE FUNCTION public.user_may_access_branch(p_branch_id uuid) RETURNS boolean LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $probe$ BEGIN RAISE EXCEPTION 'UNEXPECTED_PER_ROW_BRANCH_CHECK'; END; $probe$`);
+      await db.query(`SELECT set_config('app.user_id',$1,true)`,[admin]);
+      await db.query('SET LOCAL ROLE authenticated');
+      expect((await db.query('SELECT count(*)::int n FROM public.sales WHERE id=ANY($1::uuid[])',[[legacy,kitchen]])).rows[0].n).toBe(2);
+      expect((await db.query('SELECT count(*)::int n FROM public.order_kitchen_inventory_events WHERE id=$1',[event])).rows[0].n).toBe(1);
+      expect((await db.query("SELECT count(*)::int n FROM public.inventory_ledger WHERE reference_type='kitchen_send' AND reference_id=$1",[event])).rows[0].n).toBe(1);
+    } finally { await db.query('ROLLBACK TO SAVEPOINT branch_initplan_probe'); }
+  });
+
   it('preserves results and security across scoped lookups and exact rollback', async () => {
     const migration = readFileSync('supabase/migrations/20261112092131_costing_historical_scoped_lookups.sql', 'utf8');
     const rollback = readFileSync('scripts/rollback/costing_historical_scoped_lookups_20261112.sql', 'utf8');
@@ -50,6 +81,8 @@ describe.skipIf(!dbUrl)('historical zero consumption priced independently of sto
       FROM pg_proc WHERE oid='public.get_historical_sale_cost_estimates(uuid,date,date)'::regprocedure`)).rows[0];
     await db.query('SAVEPOINT scoped_lookup_parity');
     try {
+      // Rehearse the older release beneath the newer policy optimization.
+      await db.query(strip(readFileSync('scripts/rollback/branch_read_initplans_20261112.sql', 'utf8')));
       const optimized = await estimates();
       const before = await metadata();
       expect(before.prosecdef).toBe(false);

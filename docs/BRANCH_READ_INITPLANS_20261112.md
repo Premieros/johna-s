@@ -2,9 +2,9 @@
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `perf/branch-read-initplans-20261112`
-Current PR: `0`
+Current PR: `630`
 Last updated: 2026-11-12
-State: **BLOCKED**
+State: **READY**
 
 ## Work status
 Execution environment restored. Continue authorized reduction of read pressure after released PR628; current authenticated October read6351.63ms under the unchanged8s limit.
@@ -22,7 +22,7 @@ Canonical user_may_access_branch is STABLE DEFINER and begins is_pos_admin() OR 
 Candidate guarded five read-policy substitutions on sales, kitchen inventory events and inventory ledger. Rebind both public consumption reader fingerprints atomically; no grants or function security change. Need exact rollback and actor/result parity plus a behavioral short-circuit probe.
 
 ## Verification ledger
-43 focused owned DB checks passed in3.62s, including actor/history/reference parity, exact policy/RPC metadata rollback/reapply and a behavioral probe that makes the canonical per-row predicate throw while authorized direct reads still succeed. The older PR628 rollback is rehearsed beneath the newer rollback in order. Production inspection found only the two known RPC policy-fingerprint dependents; both are updated atomically. Monthly scale and typechecks/lint pending; full exact-head CI remains mandatory.
+43 focused owned DB checks passed in3.62s, including actor/history/reference parity, exact policy/RPC metadata rollback/reapply and a behavioral probe that makes the canonical per-row predicate throw while authorized direct reads still succeed. The older PR628 rollback is rehearsed beneath the newer rollback in order. Production inspection found only the two known RPC policy-fingerprint dependents; both are updated atomically. All3 existing monthly scale checks passed serially (46 focused DB checks in total). Application/test typechecks and focused lint passed; full exact-head CI remains mandatory.
 
 ## Production gate
 Owner already authorizes repair, merge and application. Apply only after full required CI and verify a bounded authenticated month read. No operational business tests.
