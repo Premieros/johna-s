@@ -42,6 +42,23 @@ describe.skipIf(!dbUrl)('historical zero consumption priced independently of sto
   });
   afterAll(async () => { if (db) { await db.query('ROLLBACK').catch(() => {}); await db.end(); } });
 
+  it('refuses a busy sales table immediately instead of queuing behind operational writes', async () => {
+    const blocker = openDb(dbUrl!);
+    await blocker.connect();
+    await db.query('SAVEPOINT branch_busy_probe');
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query("SET LOCAL lock_timeout='1s'");
+      await blocker.query('LOCK TABLE public.sales IN ROW EXCLUSIVE MODE');
+      const migration = readFileSync('supabase/migrations/20261112104610_branch_read_initplans.sql','utf8').replace(/^BEGIN;$/gm,'').replace(/^COMMIT;$/gm,'');
+      await expect(db.query(migration)).rejects.toMatchObject({ code: '55P03', message: expect.stringContaining('could not obtain lock') });
+    } finally {
+      await db.query('ROLLBACK TO SAVEPOINT branch_busy_probe');
+      await blocker.query('ROLLBACK').catch(()=>{});
+      await blocker.end();
+    }
+  });
+
   it('preserves results, read guards and metadata through branch InitPlan rollback/reapply', async () => {
     const strip = (sql: string) => sql.replace(/^BEGIN;$/gm, '').replace(/^COMMIT;$/gm, '');
     const metadata = async () => (await db.query(`SELECT jsonb_build_object(

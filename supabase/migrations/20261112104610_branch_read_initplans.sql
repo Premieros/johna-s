@@ -1,6 +1,8 @@
 BEGIN;
 SET LOCAL lock_timeout='1s';
 SET LOCAL statement_timeout='5s';
+-- Fail immediately on busy operational tables; never wait holding a subset.
+LOCK TABLE public.sales, public.order_kitchen_inventory_events, public.inventory_ledger IN ACCESS EXCLUSIVE MODE NOWAIT;
 -- user_may_access_branch begins with is_pos_admin() OR ... . Cache that
 -- unchanged zero-argument term per statement; retain the canonical branch
 -- predicate for every other caller. No new authorization source or grants.

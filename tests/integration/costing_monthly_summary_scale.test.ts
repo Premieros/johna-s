@@ -130,7 +130,18 @@ describe.skipIf(!url)('monthly costing source aggregation at production-sized ca
       expect(JSON.stringify(before.plan)).not.toContain('idx_inventory_ledger_zero_raw_issue_ref');
       expect(JSON.stringify(after.plan)).toContain('idx_inventory_ledger_zero_raw_issue_ref');
       const root=(value:{[key:string]:unknown}[]) => (value[0]['QUERY PLAN'] as {Plan:Record<string,unknown>}[])[0].Plan;
-      expect(Number(root(after.plan)['Shared Hit Blocks'])).toBeLessThan(Number(root(before.plan)['Shared Hit Blocks']));
+      // Interleaved priced/unpriced rows may occupy identical heap pages, so
+      // cache hits can tie even when the partial index avoids700 priced tuples.
+      // Measure the actual scan work; retain cache hits in the diagnostic log.
+      const visited=(plan:unknown):number=>{
+        if(!plan||typeof plan!=='object')return 0;
+        const node=plan as Record<string,unknown>;
+        const own=node['Relation Name']==='inventory_ledger'
+          ? (Number(node['Actual Rows']||0)+Number(node['Rows Removed by Filter']||0)+Number(node['Rows Removed by Index Recheck']||0))*Number(node['Actual Loops']||0):0;
+        return own+Object.values(node).reduce<number>((sum,value)=>sum+visited(value),0);
+      };
+      expect(visited(after.plan)).toBe(300);
+      expect(visited(before.plan)).toBeGreaterThanOrEqual(1000);
       // Measure incremental index WAL on a private, trigger-free clone with the
       // real column/index definitions. This is not whole operational-write latency.
       await db.query('CREATE TABLE public.qa_costing_issue_write_probe (LIKE public.inventory_ledger INCLUDING ALL)');

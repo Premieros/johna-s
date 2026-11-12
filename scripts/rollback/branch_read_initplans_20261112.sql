@@ -1,6 +1,8 @@
 BEGIN;
 SET LOCAL lock_timeout='1s';
 SET LOCAL statement_timeout='5s';
+-- Fail immediately on busy operational tables; never wait holding a subset.
+LOCK TABLE public.sales, public.order_kitchen_inventory_events, public.inventory_ledger IN ACCESS EXCLUSIVE MODE NOWAIT;
 DO $rollback$
 DECLARE target record; definition text; before_hash text; after_hash text; rpc_name text;
 BEGIN
