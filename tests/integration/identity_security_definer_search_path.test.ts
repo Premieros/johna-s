@@ -59,8 +59,11 @@ describe.skipIf(!dbUrl)('identity SECURITY DEFINER hardening', () => {
     const byName = new Map(rows.rows.map((row) => [row.name, row.definition]));
 
     expect(byName.get('login_as_user')).toContain('auth.uid()');
-    expect(byName.get('login_as_user')).toContain("v_admin.role <> 'super_admin'");
-    expect(byName.get('login_as_user')).toContain("v_target.role = 'super_admin'");
+    expect(byName.get('login_as_user')).toContain('public.is_super_admin()');
+    expect(byName.get('login_as_user')).toContain('r.permissions');
+    expect(byName.get('login_as_user')).toContain("? 'platform.admin'");
+    expect(byName.get('login_as_user')).not.toContain("v_admin.role <> 'super_admin'");
+    expect(byName.get('login_as_user')).not.toContain("v_target.role = 'super_admin'");
     expect(byName.get('password_matches')).toContain('public.is_pos_admin()');
   });
 });

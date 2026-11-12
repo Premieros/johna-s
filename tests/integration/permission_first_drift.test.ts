@@ -54,7 +54,9 @@ describe.skipIf(skip)('Permission-First final-state drift sentinel', () => {
     `);
     const adminDef = r.rows[0].admin_def;
     const permissionDef = r.rows[0].permission_def;
-    expect(adminDef).toContain("u.role = 'super_admin'");
+    expect(adminDef).toContain('r.permissions');
+    expect(adminDef).toContain("? 'platform.admin'");
+    expect(adminDef).not.toContain("u.role = 'super_admin'");
     expect(adminDef).not.toContain("'owner'");
     expect(permissionDef).toContain('JOIN public.roles');
     expect(permissionDef).toContain('r.permissions');

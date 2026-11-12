@@ -61,8 +61,23 @@ async function mockAuthenticatedApp(page: Page) {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([fakeUser]) });
   });
 
-  await page.route(new RegExp(`${SUPABASE_ORIGIN.replace('.', '\\.')}/rest/v1/roles(?:\\?.*)?$`), async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+
+  await page.route(`${SUPABASE_ORIGIN}/rest/v1/roles**`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{
+        role: 'super_admin',
+        name_ar: 'مدير المنصة',
+        name_en: 'Platform Admin',
+        permissions: ['platform.admin'],
+        scope: 'global',
+        branch_id: null,
+        description_ar: null,
+        description_en: null,
+        is_active: true,
+      }]),
+    });
   });
 
   await page.route(new RegExp(`${SUPABASE_ORIGIN.replace('.', '\\.')}/rest/v1/rpc/get_login_email(?:\\?.*)?$`), async (route) => {

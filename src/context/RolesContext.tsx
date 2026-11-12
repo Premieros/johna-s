@@ -221,6 +221,9 @@ export function RolesProvider({ children }: { children: ReactNode }) {
 function normalizePermissions(value: unknown): Permission[] {
   if (!Array.isArray(value)) return [];
   const known = new Set<string>(ALL_PERMISSIONS);
+  // Internal capability: accepted from the DB for the platform-admin template,
+  // but intentionally omitted from the user-facing permission catalogue.
+  known.add('platform.admin');
   return value.filter((p): p is Permission => typeof p === 'string' && known.has(p));
 }
 
