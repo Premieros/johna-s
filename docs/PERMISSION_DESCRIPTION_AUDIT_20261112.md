@@ -4,7 +4,7 @@ Production Supabase: `azzdesuowpdcoflmyezn`
 Branch: `audit/permission-description-20261112`
 Current PR: `0`
 Last updated: 2026-11-12
-State: **BLOCKED**
+State: **DEPLOYED**
 
 ## Work status
 Owner requests verification that permissions behave according to their descriptions. Audit UI access/actions, canonical capabilities, backend guards and branch isolation, prioritizing POS/order types, receipt/agent printing, approvals, finance, inventory and user administration.
@@ -42,3 +42,6 @@ Audit complete. Any follow-up must disable unauthorized human action buttons wit
 
 ## Mandatory update protocol
 Record evidence and actual test counts. Preserve deployed print alert removal and organization signup; do not infer authorization from role names or conflate assigned full-access roles with a code defect.
+
+## Follow-up resolution
+The owner subsequently authorized implementation. PR627 repaired inactive roles, dedicated receiving and disabled human POS buttons. Production migration20261112091133 and actual Pages43190070183 succeeded at69e495ca7e7298253bcfd832100fb0f38fe26978. See docs/PERMISSION_PATH_REPAIR_20261112.md. Original audit text above is historical evidence. Shared print fingerprint and transport contract remain unchanged.

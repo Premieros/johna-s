@@ -42,6 +42,83 @@ describe.skipIf(!dbUrl)('historical zero consumption priced independently of sto
   });
   afterAll(async () => { if (db) { await db.query('ROLLBACK').catch(() => {}); await db.end(); } });
 
+  it('preserves results and security across scoped lookups and exact rollback', async () => {
+    const migration = readFileSync('supabase/migrations/20261112092131_costing_historical_scoped_lookups.sql', 'utf8');
+    const rollback = readFileSync('scripts/rollback/costing_historical_scoped_lookups_20261112.sql', 'utf8');
+    const strip = (sql: string) => sql.replace(/^BEGIN;$/gm, '').replace(/^COMMIT;$/gm, '');
+    const metadata = async () => (await db.query(`SELECT pg_get_functiondef(oid) definition,prosecdef,proowner,proacl,proconfig
+      FROM pg_proc WHERE oid='public.get_historical_sale_cost_estimates(uuid,date,date)'::regprocedure`)).rows[0];
+    await db.query('SAVEPOINT scoped_lookup_parity');
+    try {
+      const optimized = await estimates();
+      const before = await metadata();
+      expect(before.prosecdef).toBe(false);
+      await db.query(strip(rollback));
+      expect(await estimates()).toEqual(optimized);
+      expect((await metadata()).definition).not.toContain('COSTING_SCOPED_REFERENCE_LOOKUPS');
+      await db.query(strip(migration));
+      expect(await metadata()).toEqual(before);
+      expect(await estimates()).toEqual(optimized);
+      const definition = before.definition as string;
+      const body = definition.slice(definition.indexOf('WITH history_bounds'), definition.indexOf('INTO result FROM totals t;')) + ' FROM totals t';
+      await asAdmin(async () => {
+        await db.query('SET LOCAL enable_seqscan=off');
+        const plan = await db.query('EXPLAIN (ANALYZE, FORMAT JSON) ' + body
+          .replace(/\bp_branch_id\b/g, '$1::uuid').replace(/\bp_from\b/g, '$2::date').replace(/\bp_to\b/g, '$3::date'), [branch, '2000-01-01', '9999-01-01']);
+        const scans: Record<string,unknown>[] = [];
+        const visit = (value: unknown): void => {
+          if (!value || typeof value !== 'object') return;
+          const node = value as Record<string,unknown>;
+          if (node['Relation Name']==='inventory_ledger') scans.push(node);
+          Object.values(node).forEach(visit);
+        };
+        visit(plan.rows);
+        expect(scans).toHaveLength(2);
+        for (const scan of scans) {
+          expect(String(scan['Index Cond'])).toContain('reference_id');
+          expect(String(scan['Index Cond'])).toContain('reference_type');
+          expect(String(scan['Node Type'])).toMatch(/Index|Bitmap/);
+        }
+      });
+    } finally { await db.query('ROLLBACK TO SAVEPOINT scoped_lookup_parity'); }
+  });
+
+  it('matches the original ledger visibility predicate for restricted and unrestricted readers', async () => {
+    const viewer = randomUUID(), foreignBranch = randomUUID();
+    await db.query('SAVEPOINT ledger_visibility_parity');
+    try {
+      await db.query(`INSERT INTO public.branches(id,name,organization_id) VALUES($1,'Predicate foreign',$2)`, [foreignBranch,org]);
+      await db.query(`INSERT INTO public.roles(role,name_ar,name_en,permissions,is_active) VALUES('cost_predicate_viewer','اختبار','Predicate','["reports.costing","sales.view","raw_materials.view"]',true)`);
+      await db.query(`INSERT INTO public.users(id,email,full_name,role,branch_id,is_active) VALUES($1,$2,'Predicate Viewer','cost_predicate_viewer',$3,true)`, [viewer,`${viewer}@test.local`,branch]);
+      const policy = (await db.query(`SELECT pg_get_expr(polqual,polrelid) expression FROM pg_policy WHERE polrelid='public.inventory_ledger'::regclass AND polname='financial_visibility_inventory_ledger'`)).rows[0].expression;
+      const sql = `WITH candidates AS (
+        SELECT i::bigint id,b.branch_id,t.reference_type,r.reference_id,d.created_at
+        FROM generate_series(1,12) i
+        CROSS JOIN (VALUES ($1::uuid),($2::uuid)) b(branch_id)
+        CROSS JOIN (VALUES ('kitchen_send'),('transfer'),('SALE'),('purchase'),('expense'),('customer_payment'),('supplier_payment'),(NULL::text)) t(reference_type)
+        CROSS JOIN (VALUES ($3::uuid),($4::uuid),(NULL::uuid)) r(reference_id)
+        CROSS JOIN (VALUES (now()),(now()-interval '40 days'),(NULL::timestamptz)) d(created_at)
+      ) SELECT count(*) FILTER(WHERE (private.financial_reference_visible(reference_type,reference_id,(md5(id::text))::uuid,branch_id,created_at))
+        IS DISTINCT FROM (${policy}))::int mismatches FROM candidates`;
+      for (const actor of [admin,viewer]) {
+        await db.query(`SELECT set_config('app.user_id',$1,true)`, [actor]);
+        await db.query('SET LOCAL ROLE authenticated');
+        try { expect((await db.query(sql,[branch,foreignBranch,legacy,randomUUID()])).rows[0].mismatches).toBe(0); }
+        finally { await db.query('RESET ROLE'); await db.query('RESET app.user_id'); }
+      }
+    } finally { await db.query('ROLLBACK TO SAVEPOINT ledger_visibility_parity'); }
+  });
+
+  it('fails closed if the ledger visibility policy changes after release', async () => {
+    await db.query('SAVEPOINT historical_policy_drift');
+    try {
+      await db.query('ALTER POLICY financial_visibility_inventory_ledger ON public.inventory_ledger USING (true)');
+      await db.query(`SELECT set_config('app.user_id',$1,true)`, [admin]);
+      await db.query('SET LOCAL ROLE authenticated');
+      await expect(db.query(`SELECT public.get_historical_sale_cost_estimates($1,CURRENT_DATE-1,CURRENT_DATE+1)`,[branch])).rejects.toThrow('CONSUMPTION_RLS_BASELINE_CHANGED');
+    } finally { await db.query('ROLLBACK TO SAVEPOINT historical_policy_drift'); }
+  });
+
   it('preserves complete costing results at Cairo date boundaries and rehearses exact rollback', async () => {
     const migration = readFileSync('supabase/migrations/20261029195303_costing_date_range_read_optimization.sql', 'utf8');
     const rollback = readFileSync('scripts/rollback/costing_date_range_read_optimization_20261029.sql', 'utf8');

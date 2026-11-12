@@ -1,6 +1,7 @@
 import { isDynamicImportError } from './chunkRecovery';
 
 export type ErrorLanguage = 'ar' | 'en';
+export type ErrorContext = { operation?: 'read' | 'write' };
 
 const ARABIC_RE = /[\u0600-\u06FF]/;
 const TECHNICAL_MARKERS = [
@@ -482,6 +483,7 @@ function extractMessage(input: unknown): string {
       return `PERMISSION_DENIED:${permission}`;
     }
     if (error && error !== 'TRANSACTION_FAILED' && mappedCode(error)) return error;
+    if (/^(57014|55P03|40P01|40001|23505|23503|23514|42501|42P01|42703)$/.test(code)) return `${code} ${typeof obj.message === 'string' ? obj.message : ''}`.trim();
     for (const key of ['detail', 'message', 'error', 'code']) {
       if (typeof obj[key] === 'string' && obj[key]) return String(obj[key]).trim();
     }
@@ -490,7 +492,7 @@ function extractMessage(input: unknown): string {
 }
 
 function permissionLabel(code: string, lang: ErrorLanguage): string {
-  return permissionLabels[code]?.[lang] || code;
+  return permissionLabels[code]?.[lang] || (lang === 'ar' ? 'الصلاحية اللازمة لهذا الإجراء' : 'the permission for this action');
 }
 
 function mappedCode(text: string): string | null {
@@ -509,10 +511,11 @@ function looksTechnical(text: string): boolean {
   return TECHNICAL_MARKERS.some((marker) => lower.includes(marker))
     || /\b(?:SQLSTATE|PGRST|PostgREST|PostgreSQL)\b/i.test(text)
     || /\b(?:23505|23503|23514|42501|42P01|42703)\b/i.test(text)
+    || /\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b/.test(text)
     || /^[A-Z][A-Z0-9_]{2,}$/.test(text.trim());
 }
 
-export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = currentLanguage()): string {
+export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = currentLanguage(), context: ErrorContext = {}): string {
   const text = extractMessage(input);
   if (!text) {
     return lang === 'ar'
@@ -530,8 +533,8 @@ export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = cur
   if (assignPermission) {
     const permission = assignPermission[1];
     return lang === 'ar'
-      ? `لا يمكنك تعيين هذا الدور لأنه يحتوي على صلاحية لا تملكها: ${permissionLabel(permission, lang)} (${permission}). اطلب إضافة الصلاحية لك أو اختر دورًا بصلاحيات ضمن نطاقك.`
-      : `You cannot assign this role because it contains a permission you do not have: ${permissionLabel(permission, lang)} (${permission}). Ask for that permission or choose a role within your permissions.`;
+      ? `لا يمكنك تعيين هذا الدور لأنه يحتوي على صلاحية لا تملكها: ${permissionLabel(permission, lang)}. اطلب إضافة الصلاحية لك أو اختر دورًا بصلاحيات ضمن نطاقك.`
+      : `You cannot assign this role because it contains a permission you do not have: ${permissionLabel(permission, lang)}. Ask for that permission or choose a role within your permissions.`;
   }
 
   const requiredPermission = text.match(/PERMISSION_DENIED:\s*([a-z0-9_.-]+)/i)
@@ -539,8 +542,8 @@ export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = cur
   if (requiredPermission && requiredPermission[1].includes('.')) {
     const permission = requiredPermission[1];
     return lang === 'ar'
-      ? `لا تملك الصلاحية المطلوبة لتنفيذ العملية: ${permissionLabel(permission, lang)} (${permission}).`
-      : `You do not have the required permission: ${permissionLabel(permission, lang)} (${permission}).`;
+      ? `لا تملك الصلاحية المطلوبة لتنفيذ العملية: ${permissionLabel(permission, lang)}.`
+      : `You do not have the required permission: ${permissionLabel(permission, lang)}.`;
   }
 
   const code = mappedCode(text);
@@ -566,6 +569,11 @@ export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = cur
       ? 'إحدى القيم المدخلة غير مسموح بها. راجع البيانات المطلوبة ثم حاول مرة أخرى.'
       : 'One of the entered values is not allowed. Review the required data and retry.';
   }
+  if (context.operation === 'read' && /failed to fetch|fetch failed|networkerror|network request failed|connection/i.test(text)) {
+    return lang === 'ar'
+      ? 'تعذر تحميل البيانات لعدم الاتصال بالخادم. تحقق من اتصال الإنترنت ثم اضغط إعادة المحاولة.'
+      : 'Data could not be loaded because the server could not be reached. Check your internet connection, then retry.';
+  }
   if (/failed to fetch|fetch failed|networkerror|network request failed|connection/i.test(text)) {
     return lang === 'ar'
       ? 'تعذر الاتصال بالخادم. تحقق من الإنترنت وراجع حالة العملية قبل إعادة المحاولة لتجنب تكرارها.'
@@ -576,10 +584,15 @@ export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = cur
       ? 'انتهت جلسة الدخول. سجّل الدخول مرة أخرى ثم أعد المحاولة.'
       : 'Your session has expired. Sign in again and retry.';
   }
-  if (/timeout|timed out|57014|55P03|40P01|40001/i.test(text)) {
+  if (/55P03|40P01|40001|deadlock|lock timeout/i.test(text)) {
     return lang === 'ar'
-      ? 'تعذر إكمال الطلب بسبب مهلة انتظار أو تعارض مؤقت. راجع حالة الطلب قبل إعادة المحاولة.'
-      : 'The request hit a timeout or temporary conflict. Check the order state before retrying.';
+      ? (context.operation === 'read' ? 'البيانات مشغولة بعملية أخرى. انتظر قليلًا ثم أعد تحميل التقرير.' : 'توجد عملية أخرى تعدّل البيانات الآن. راجع حالة العملية ثم حاول مجددًا.')
+      : (context.operation === 'read' ? 'Another operation is using this data. Wait briefly, then reload the report.' : 'Another operation is changing this data. Check the operation state, then retry.');
+  }
+  if (/timeout|timed out|57014/i.test(text)) {
+    return lang === 'ar'
+      ? (context.operation === 'read' ? 'استغرق تحميل البيانات وقتًا أطول من المسموح. أعد المحاولة، وإذا تكرر التأخير أبلغ المسؤول باسم التقرير والفترة المختارة.' : 'تأخر رد الخادم ولم نتمكن من تأكيد نتيجة العملية. راجع حالة العملية قبل تكرارها، وإذا استمر التأخير أبلغ المسؤول بالرقم المرجعي.')
+      : (context.operation === 'read' ? 'Loading data took longer than allowed. Retry; if the delay continues, give the report name and selected dates to an administrator.' : 'The server response was delayed and the outcome could not be confirmed. Check the operation state before repeating it; report persistent delays with the reference number.');
   }
   if (/invalid input syntax|invalid uuid|malformed/i.test(text)) {
     return lang === 'ar'
@@ -595,6 +608,10 @@ export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = cur
   if (ARABIC_RE.test(text) && !looksTechnical(text)) return text;
   if (lang === 'en' && !looksTechnical(text) && text.length <= 220) return text;
 
+  if (context.operation === 'read') return lang === 'ar'
+    ? 'تعذر تحميل البيانات بسبب مشكلة في النظام. أعد المحاولة، وإذا استمرت المشكلة أبلغ المسؤول باسم الشاشة والفترة المختارة.'
+    : 'Data could not be loaded because of a system error. Retry; if it persists, report the screen name and selected dates to an administrator.';
+
   return lang === 'ar'
     ? 'حدث خطأ في النظام ولم نتمكن من تأكيد النتيجة. راجع حالة العملية قبل تكرارها، وأرسل الرقم المرجعي إلى المسؤول.'
     : 'A system error occurred and the result could not be confirmed. Check the operation before repeating it and give the reference number to an administrator.';
@@ -606,7 +623,9 @@ export function userFacingErrorCategory(input: unknown, lang: ErrorLanguage = cu
   let category: [string, string];
   if (/KITCHEN_STATION_NOT_CONFIGURED|WAREHOUSE.*MISMATCH|إعدادات|محطة تجهيز/i.test(text)) category = ['إعدادات التشغيل', 'Operation setup'];
   else if (/PERMISSION|AUTH_REQUIRED|DENIED|صلاحية|صلاحيات/i.test(text)) category = ['الصلاحيات', 'Permissions'];
-  else if (/network|fetch|connection|timeout|57014|55P03|40P01|40001|الاتصال|مهلة/i.test(text)) category = ['الاتصال أو الانتظار', 'Connection or timeout'];
+  else if (/55P03|40P01|40001|deadlock|lock timeout/i.test(text)) category = ['البيانات مشغولة', 'Data busy'];
+  else if (/timeout|timed out|57014|مهلة|تأخر رد|استغرق تحميل/i.test(text)) category = ['تأخر استجابة الخادم', 'Server response delayed'];
+  else if (/network|fetch|connection|الاتصال/i.test(text)) category = ['تعذر الاتصال', 'Connection unavailable'];
   else if (/ORDER_(CLOSED|CANCELLED|NOT_FOUND|NOT_EDITABLE)|TABLE_BUSY|STALE_|TRANSFER_SOURCE_CHANGED|طلب.*(مغلق|ملغى|منتهي)/i.test(text)) category = ['حالة الطلب', 'Order status'];
   else if (/REQUIRED|INVALID|EMPTY|EXCEEDS|2350[35]|23514|أدخل|اختر|اكتب|يجب|لا يمكن إغلاق|تعذر إغلاق/i.test(text)) category = ['مراجعة البيانات', 'Check input'];
   else if (/TRANSACTION_FAILED|SQLSTATE|PGRST|postgres|constraint|syntax|relation|column|TypeError|ReferenceError|SyntaxError|RangeError/i.test(text) || !ARABIC_RE.test(text)) category = ['خطأ بالنظام', 'System error'];

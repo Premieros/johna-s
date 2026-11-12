@@ -9,7 +9,7 @@ describe('userFacingErrorMessage', () => {
     );
     expect(msg).toContain('لا يمكنك تعيين هذا الدور');
     expect(msg).toContain('تحصيل المدفوعات');
-    expect(msg).toContain('pos.payment.take');
+    expect(msg).not.toContain('pos.payment.take');
   });
 
   it('explains explicit required permissions', () => {
@@ -22,7 +22,7 @@ describe('userFacingErrorMessage', () => {
       'ar',
     );
     expect(msg).toContain('تحصيل المدفوعات');
-    expect(msg).toContain('pos.payment.take');
+    expect(msg).not.toContain('pos.payment.take');
   });
 
   it('translates common POS/KDS operational codes instead of exposing raw codes', () => {
@@ -158,5 +158,26 @@ describe('operational error clarity', () => {
   });
   it('does not match a known error as a substring of an unknown code', () => {
     expect(userFacingErrorMessage('NOT_ORDER_CLOSED_EXTRA', 'en')).not.toContain('already closed');
+  });
+});
+
+
+describe('read failures and distinct error categories', () => {
+  it('does not tell a report reader to check an order or blame the internet for a database timeout', () => {
+    const error = { code: '57014', message: 'canceling statement due to statement timeout' };
+    const message = userFacingErrorMessage(error, 'ar', { operation: 'read' });
+    expect(message).toContain('تحميل البيانات');
+    expect(message).not.toContain('راجع حالة');
+    expect(message).not.toContain('الإنترنت');
+    expect(message).not.toContain('57014');
+    expect(userFacingErrorCategory(error, 'ar')).toBe('تأخر استجابة الخادم');
+    expect(userFacingErrorCategory('55P03 lock timeout', 'ar')).toBe('البيانات مشغولة');
+    expect(userFacingErrorCategory('Failed to fetch', 'ar')).toBe('تعذر الاتصال');
+  });
+  it('keeps validation and safe write-outcome guidance while hiding unknown permission codes', () => {
+    expect(userFacingErrorMessage('INVALID_AMOUNT', 'ar', { operation: 'read' })).toContain('مبلغ');
+    expect(userFacingErrorMessage('57014 timeout', 'ar')).toContain('راجع حالة العملية');
+    expect(userFacingErrorMessage('PERMISSION_DENIED:private.internal', 'ar')).not.toContain('private.internal');
+    expect(userFacingErrorMessage('Failed to fetch', 'en', { operation: 'read' })).toContain('Data could not be loaded');
   });
 });

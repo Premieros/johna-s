@@ -122,7 +122,7 @@ export function ConsumptionReportPage({fixedGroup}: {fixedGroup?: Query['group']
   </form></details>
   <Button size="sm" disabled={busy} onClick={()=>void run()}>{busy?text('جارٍ التحميل…','Loading…'):text('عرض التقرير','Run report')}</Button>
   {dirty && <p role="status">{text('تغيّرت الفلاتر؛ اضغط عرض التقرير لتطبيقها. النتيجة أدناه للفترة السابقة.','Filters changed. Run the report to apply them; results below use the previous selection.')}</p>}
-  {!!error && <p role="alert" className="text-ui-danger">{userFacingErrorMessage(error,lang)}</p>}
+  {!!error && <p role="alert" className="text-ui-danger">{userFacingErrorMessage(error, lang, { operation: 'read' })}</p>}
   {result && <>
    <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
     <p>{result.result.from} — {result.result.to} · {text('وقت استخراج البيانات','Data generated')}: {new Date(result.result.generated_at).toLocaleString(lang,{timeZone:'Africa/Cairo'})} · {text('عدد الصفوف','Rows')}: {reportCount(result.result)} {!units && <>· <strong>{text('إجمالي قيمة الاستهلاك','Total consumption value')}: {money(result.result.summary.total)}</strong></>}</p>

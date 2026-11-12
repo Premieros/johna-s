@@ -21,7 +21,7 @@ export function PeriodCloseDocuments({ kind, branch, from, to, emphasis }: { kin
         if (error || !data) throw error || new Error('REPORT_SOURCE_INVALID');
         if (!controller.signal.aborted) setResult({ page, rows: data.rows, count: data.summary.count, total: data.summary.total, collected: data.metrics?.['Net Collection'] });
       }).catch(error => {
-        if (!controller.signal.aborted) setResult({ page, error: userFacingErrorMessage(error, lang) });
+        if (!controller.signal.aborted) setResult({ page, error: userFacingErrorMessage(error, lang, { operation: 'read' }) });
       });
     return () => controller.abort();
   }, [branch, from, to, kind, page, lang]);
