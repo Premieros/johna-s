@@ -155,9 +155,20 @@ describe('costing selected-period reports', () => {
     render(<MemoryRouter><CostingCenterPage /></MemoryRouter>);
     expect(mocks.summary).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId('costing-run-report'));
-    await waitFor(() => expect(mocks.show).toHaveBeenCalledWith(expect.stringContaining('Price read failed'), 'error', expect.objectContaining({action:'costing_historical_estimate'})));
+    await waitFor(() => expect(mocks.show).toHaveBeenCalledWith(expect.stringContaining('Historical sales cost supplement could not be loaded'), 'error', expect.objectContaining({action:'costing_historical_estimate'})));
     expect(screen.queryByTestId('historical-cost-summary')).toBeNull();
+    expect(screen.queryByText(/Sales summary could not be loaded/)).toBeNull();
   });
+  it('recovers from a rejected report request without leaving loading stuck or exposing technical detail', async () => {
+    mocks.orders.mockRejectedValueOnce(new Error('PostgREST PGRST999 internal failure'));
+    render(<MemoryRouter><CostingCenterPage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'orderMargin' }));
+    fireEvent.click(screen.getByTestId('costing-run-report'));
+    await waitFor(() => expect(mocks.show).toHaveBeenCalledWith(expect.stringContaining('Data could not be loaded'), 'error', expect.objectContaining({ action: 'costing_orders', operation: 'read' })));
+    expect(screen.getByTestId('costing-run-report')).toBeEnabled();
+    expect(screen.queryByText(/PGRST999/)).toBeNull();
+  });
+
   it('does not load unrelated selectors or rerun overview when branch selectors finish', async () => {
     render(<MemoryRouter><CostingCenterPage /></MemoryRouter>);
     expect(mocks.summary).not.toHaveBeenCalled();

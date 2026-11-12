@@ -1402,7 +1402,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
 
       {exporting && <p role="status" className="mb-3 text-sm">{lang === 'ar' ? 'جاري تجهيز التقرير الكامل…' : 'Preparing complete report…'}</p>}
       {data.length > 0 && columns.length === 0 && <p role="status" className="mb-3 text-sm text-ui-muted">{lang === 'ar' ? 'اختر عمودًا واحدًا على الأقل للعرض والتصدير من قائمة الأعمدة.' : 'Choose at least one column to display and export from Columns.'}</p>}
-      {exportError != null && <p role="alert" className="mb-3 text-sm text-ui-danger">{userFacingErrorMessage(exportError, lang)}</p>}
+      {exportError != null && <p role="alert" className="mb-3 text-sm text-ui-danger">{userFacingErrorMessage(exportError, lang, { operation: 'read' })}</p>}
       {!history.unlimited && (
         <div className="mb-3 rounded-xl border border-ui-warning/30 bg-ui-warning-soft px-4 py-3 text-sm text-ui-warning">
           {lang === 'ar'
@@ -1424,7 +1424,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
 
       {!!optionsError && (
         <div role="alert" aria-label={lang === 'ar' ? 'خطأ تحميل الفلاتر' : 'Filter loading error'} className="mb-3 rounded-xl border border-ui-warning/30 bg-ui-warning-soft p-3">
-          <p>{lang === 'ar' ? 'تعذر تحميل خيارات الفلاتر.' : 'Filter options could not be loaded.'} {userFacingErrorMessage(optionsError, lang)}</p>
+          <p>{lang === 'ar' ? 'تعذر تحميل خيارات الفلاتر.' : 'Filter options could not be loaded.'} {userFacingErrorMessage(optionsError, lang, { operation: 'read' })}</p>
           <Button size="sm" variant="outline" onClick={() => { void retryOptions(); }}>{lang === 'ar' ? 'إعادة تحميل الفلاتر' : 'Retry filters'}</Button>
         </div>
       )}
@@ -1504,7 +1504,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
           <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" /></div>
         ) : reportError ? (
           <div role="alert" className="space-y-3 py-12 text-center">
-            <p>{userFacingErrorMessage(reportError, lang)}</p>
+            <p>{userFacingErrorMessage(reportError, lang, { operation: 'read' })}</p>
             <Button variant="outline" onClick={() => { void retryReport(); }}>{lang === 'ar' ? 'إعادة المحاولة' : 'Retry'}</Button>
           </div>
         ) : data.length === 0 ? (

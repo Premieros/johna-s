@@ -1,9 +1,9 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import { CheckCircle, XCircle, AlertCircle, Info, X } from 'lucide-react';
-import { userFacingErrorMessage, userFacingErrorCategory } from '@/lib/userFacingError';
+import { userFacingErrorMessage, userFacingErrorCategory, type ErrorContext } from '@/lib/userFacingError';
 import { reportUserIssue, type ReportUserIssueOptions } from '@/lib/userIssueTelemetry';
 
-type ToastErrorContext = ReportUserIssueOptions & { source?: unknown };
+type ToastErrorContext = ReportUserIssueOptions & ErrorContext & { source?: unknown };
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -21,9 +21,9 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
-function normalizeToastMessage(message: string, type: ToastType): string {
+function normalizeToastMessage(message: string, type: ToastType, context?: ErrorContext): string {
   const text = String(message || '').trim();
-  return type === 'error' ? userFacingErrorMessage(text) : text;
+  return type === 'error' ? userFacingErrorMessage(text, undefined, context) : text;
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -31,7 +31,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const show = useCallback((message: string, type: ToastType = 'success', context?: ToastErrorContext) => {
     const id = Date.now() + Math.random();
-    const normalizedMessage = normalizeToastMessage(message, type);
+    const normalizedMessage = normalizeToastMessage(message, type, context);
     const source = context?.source ?? message;
     const category = type === 'error' ? userFacingErrorCategory(source) : undefined;
     const reference = type === 'error'
@@ -39,7 +39,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       : undefined;
     if (type === 'error') {
       if (context) {
-        const { source, ...options } = context;
+        const { source, operation: _operation, ...options } = context;
+        void _operation;
         void reportUserIssue(source ?? message, { action: 'toast_error', ...options, correlationId: reference });
       } else {
         void reportUserIssue(message, { action: 'toast_error', correlationId: reference });
