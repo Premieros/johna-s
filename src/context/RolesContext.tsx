@@ -130,7 +130,7 @@ export function RolesProvider({ children }: { children: ReactNode }) {
 
   const rolePermissionsMap = useMemo(() => {
     const map: Record<string, Permission[]> = {};
-    for (const def of rolesList) map[def.role] = def.permissions;
+    for (const def of rolesList) map[def.role] = def.is_active ? def.permissions : [];
     return map;
   }, [rolesList]);
 
