@@ -19,10 +19,10 @@ Original head94eab80d1f305674f990ff164a510c253d5534c2. Only CURRENT_WORK_PLAN co
 The historical October active work plan overlaps newer released logs. Replacing current main with the old plan would hide subsequent deployments.
 
 ## Change ledger
-Keep current main work plan and add this candidate-specific entry. Keep original candidate source and tests unchanged. No installed printer or deployed code change.
+Keep current main work plan and add this candidate-specific entry. Keep original runtime candidate source and tests unchanged. Move the two historical index SQL files to scripts/archive/print-read-indexes-20261014/ so they do not auto-install over the current explicit index-review fixtures. The original SQL bytes remain preserved. No installed printer or deployed code change.
 
 ## Verification ledger
-Resolved all index conflicts.9 focused print-wake/kitchen-retry checks, application/test typechecks, generated-contract freshness and worklog checks passed. The runtime proposal remains unchanged and unapproved for deployment. Production is untouched.
+Resolved all index conflicts.9 focused print-wake/kitchen-retry checks, application/test typechecks, generated-contract freshness and worklog checks passed. The runtime proposal remains unchanged and unapproved for deployment. First full CI passed frontend/browser checks but4 DB checks detected duplicate index creation: historical canonical index files collided with the newer explicit before/after index review. Preserve those reviewed comparisons and archive the historical SQL rather than weakening tests. All 32 checks in the three affected DB integration suites passed locally after archiving, with original assertions unchanged. Production is untouched.
 
 ## Production gate
 Conflict resolution alone does not approve this candidate's runtime polling/retry proposal. Do not merge or deploy automatically.
