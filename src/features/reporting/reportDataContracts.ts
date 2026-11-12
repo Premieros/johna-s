@@ -12,10 +12,10 @@ export const REPORT_DATA_CONTRACTS: Record<ReportType, ReportDataContract> = {
   inventory: { source: 'get_operational_stock_source (warehouse balances)', grainAr: 'صنف ومخزن وفرع', grainEn: 'Item, warehouse and branch' },
   sales_by_payment: { source: 'get_sales_by_payment_report / sale_payments', grainAr: 'طريقة دفع وفرع', grainEn: 'Payment method and branch' },
   sales_by_employee: { source: 'get_operational_report_dataset (sales)', grainAr: 'موظف وفرع', grainEn: 'Employee and branch' },
-  sales_by_station: { source: 'get_operational_report_dataset (settled invoices / complete items); kitchen events / inventory_ledger for costing', grainAr: 'بند فاتورة موزّع قبل الفلترة', grainEn: 'Invoice line allocated before filtering' },
-  sales_by_product: { source: 'get_operational_report_dataset (whole-invoice allocations)', grainAr: 'فرع ومعرف منتج ووحدة بيع', grainEn: 'Branch, product ID and sale unit' },
+  sales_by_station: { source: 'get_operational_report_dataset (settled invoices / complete items); kitchen ingredient snapshots for saved operational cost', grainAr: 'بند فاتورة موزّع قبل الفلترة', grainEn: 'Invoice line allocated before filtering' },
+  sales_by_product: { source: 'get_operational_report_dataset (whole-invoice allocations and saved sale-item modifier snapshots)', grainAr: 'فرع ومعرف منتج ووحدة بيع', grainEn: 'Branch, product ID and sale unit' },
   detailed_invoices: { source: 'get_operational_report_dataset (invoice headers)', grainAr: 'فاتورة مبيعات', grainEn: 'Sales invoice' },
-  component_consumption: { source: 'stock_transactions (component_flow sale)', grainAr: 'مكوّن وفرع', grainEn: 'Component and branch' },
+  component_consumption: { source: 'get_sold_recipe_consumption_report / net sales / current recipes / approved raw price projection', grainAr: 'خامة وفرع، واختياريًا منتج؛ وصفة وسعر حاليان', grainEn: 'Material and branch, optionally product; current recipe and price' },
   recipe_costs: { source: 'product costing', grainAr: 'منتج وفرع وتكلفة حالية', grainEn: 'Product and branch, current cost' },
   top_consumed_components: { source: 'stock_transactions (component_flow sale)', grainAr: 'مكوّن وفرع', grainEn: 'Component and branch' },
   top_consumed_products: { source: 'get_operational_report_dataset (allocated product lines)', grainAr: 'منتج وفرع ووحدة بيع', grainEn: 'Product, branch and sale unit' },
@@ -24,7 +24,8 @@ export const REPORT_DATA_CONTRACTS: Record<ReportType, ReportDataContract> = {
   returns: { source: 'get_operational_report_dataset (return amounts / states)', grainAr: 'فاتورة مرتجعة', grainEn: 'Returned invoice' },
   production_waste: { source: 'waste_entries', grainAr: 'حركة هالك', grainEn: 'Waste entry' },
   raw_material_consumption: { source: 'get_raw_material_consumption_report', grainAr: 'خامة وفرع وفترة', grainEn: 'Material, branch and period' },
-  raw_material_current_cost: { source: 'canonical current raw cost / FIFO layers', grainAr: 'خامة وفرع وتكلفة حالية', grainEn: 'Material and branch, current cost' },
+  raw_material_valuation: { source: 'get_raw_material_latest_valuation / latest approved price × current stock', grainAr: 'خامة وفرع وتقييم بآخر سعر', grainEn: 'Material and branch, latest-price valuation' },
+  raw_material_current_cost: { source: 'get_raw_material_current_prices / approved price projection', grainAr: 'خامة وفرع وتكلفة حالية', grainEn: 'Material and branch, current cost' },
   raw_material_financial: { source: 'get_raw_material_financial_report', grainAr: 'ملخص مالي للخامات والفرع', grainEn: 'Raw material financial branch summary' },
   sales_component_reconciliation: { source: 'get_sales_component_reconciliation_report', grainAr: 'خامة وفرع ومطابقة فترة', grainEn: 'Material and branch-period reconciliation' },
   daily_closing_range: { source: 'get_day_closing_range_report', grainAr: 'يوم عمل وفرع', grainEn: 'Business day and branch' },
@@ -37,6 +38,8 @@ export interface AnalysisColumn {
 }
 
 const aliases: [string, string][] = [
+  ['إجمالي البنود', 'Line Gross'], ['مرتجع البنود', 'Line Returned'], ['صافي قيمة البنود', 'Line Net'], ['نوع الخامة', 'Material Category'], ['الخامة', 'Material'],
+  ['تكلفة المباع بسعر وقت الإرسال', 'Sale-time Ingredient Cost'], ['مجمل الربح بالتكلفة المحفوظة', 'Gross Profit (Saved Cost)'], ['تكلفة بسعر وقت الإرسال (تقديرية)', 'Sale-time Cost (Estimated)'], ['تكلفة المكونات المسعرة (تقديرية)', 'Priced Components Cost (Estimated)'],
   ['قبل الخصم والضريبة', 'Subtotal'], ['الخصم', 'Discount'], ['الضريبة', 'Tax'],
   ['إجمالي الفاتورة', 'Invoice Total'], ['المدفوع', 'Paid'], ['صافي التحصيل', 'Net Collection'],
   ['المستخدم', 'User'], ['المخزن', 'Warehouse'], ['نوع الطلب', 'Order Type'],
@@ -45,7 +48,7 @@ const aliases: [string, string][] = [
   ['التكلفة المسجلة', 'Recorded Cost'], ['مجمل الربح المسجل', 'Recorded Gross Profit'], ['مجمل الربح بالأسعار الحالية', 'Current-price Gross Profit'],
   ['سعر الوحدة', 'Unit Price'], ['تكلفة الوحدة', 'Unit Cost'],
   ['الفرع', 'Branch'], ['الفاتورة', 'Invoice'], ['رقم الفاتورة', 'Invoice'],
-  ['المنتج', 'Product'], ['معرف المنتج', 'Product ID'], ['الوحدة', 'Unit'],
+  ['خيارات الإضافات المحفوظة', 'Saved modifier combination'], ['عدد الفواتير المحتوية', 'Containing invoices'], ['كمية مجانية مسجلة', 'Recorded bonus quantity'], ['المنتج', 'Product'], ['معرف المنتج', 'Product ID'], ['الوحدة', 'Unit'],
   ['المحطة', 'Station'], ['التصنيف', 'Category'], ['الكمية المباعة', 'Sold Quantity'],
   ['الكمية المرتجعة', 'Returned Quantity'], ['صافي الكمية', 'Net Quantity'],
   ['المبيعات قبل الخصم', 'Gross Sales'], ['الخصم الموزع', 'Allocated Discount'],
@@ -62,6 +65,8 @@ const additive = new Set([
   'Net Revenue', 'Net Sales', 'Original Total', 'Invoice Total', 'Refunded', 'Refunded Amount',
   'Subtotal', 'Discount', 'Tax', 'Paid', 'Net Paid', 'Net Collection', 'Returned', 'Net Purchases', 'Amount',
   'Recorded Cost', 'Current-price Sold Cost', 'Priced Components Only', 'Recorded Gross Profit', 'Current-price Gross Profit',
+  'Sale-time Ingredient Cost', 'Gross Profit (Saved Cost)', 'Sale-time Cost (Estimated)', 'Priced Components Cost (Estimated)',
+  'Line Gross', 'Line Returned', 'Line Net', 'Consumption Value', 'Opening Value', 'Purchase Value', 'Sales Consumption Value', 'Closing Value', 'Current Inventory Value', 'End-of-day Recorded Value', 'Theoretical Value', 'Actual Value', 'Value Difference', 'Cash', 'Card', 'Transfer', 'Legacy Bank', 'Credit — Customer outstanding', 'Cash GL', 'Bank GL', 'Cash Difference', 'Bank Difference', 'Gross Sales', 'Discounts', 'Taxes', 'Returns', 'Other Payment', 'Cash Purchases', 'Cash After Outflows', 'Net Sale',
   'COGS', 'Gross Profit', 'Expenses', 'Net Profit', 'Total Cost', 'Consumption Cost', 'Invoices',
 ]);
 
@@ -74,6 +79,6 @@ export function analysisColumns(type: ReportType, rows: Record<string, unknown>[
   return Object.keys(rows[0] || {}).map(key => {
     const id = map.get(key) || `${type}:${key}`;
     const numeric = rows.some(row => typeof row[key] === 'number');
-    return { id, key, numeric, aggregation: numeric && additive.has(id) ? 'sum' : 'none' };
+    return { id, key, numeric, aggregation: numeric && additive.has(id) && !(type==='sales_by_payment' && id==='Invoices') ? 'sum' : 'none' };
   });
 }

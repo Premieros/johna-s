@@ -185,7 +185,7 @@ export function ActiveOrdersDrawer({
                   </div>
 
                   <div className="flex items-center gap-2 mt-1.5 text-[11px] text-ui-subtle">
-                    <OrderStageBadge stage={stage} />
+                    <span className="flex items-center gap-1"><span>{isAr ? 'الإرسال:' : 'Dispatch:'}</span><OrderStageBadge stage={stage} /></span>
                     <span>
                       {isAr
                         ? `${itemCount} صنف · ${ago.n != null ? `${ago.n} ${t(ago.key)}` : t(ago.key)}`
@@ -193,6 +193,7 @@ export function ActiveOrdersDrawer({
                     </span>
                   </div>
 
+                  <p className="mt-1.5 text-xs font-bold text-ui-muted">{isAr ? 'الحساب: مفتوح' : 'Bill: open'}</p>
                   {operatorName && <div className="mt-1.5 flex items-center gap-1.5 text-[11px] font-bold text-ui-muted"><User className="h-3.5 w-3.5" /><span>{isAr ? 'المستخدم:' : 'User:'} {operatorName}</span></div>}
 
                   <div className="flex items-center gap-1.5 mt-2">
@@ -219,10 +220,11 @@ export function ActiveOrdersDrawer({
                     {perms.canCancelOrder && (
                       <button
                         onClick={() => onCancel(order)}
-                        className="ms-auto p-1.5 rounded-lg text-ui-subtle hover:text-ui-danger hover:bg-ui-danger/10 transition-colors"
+                        aria-label={t('cancelOrder')}
+                        className="ms-auto flex items-center gap-1 border-s border-ui-border ps-3 py-2 text-xs font-bold text-ui-danger hover:bg-ui-danger/10 transition-colors"
                         title={t('cancelOrder')}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" /><span>{t('cancelOrder')}</span>
                       </button>
                     )}
                   </div>

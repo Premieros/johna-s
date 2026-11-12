@@ -1312,7 +1312,7 @@ export function ImportExportCenterPage() {
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <label className="text-[11px] text-muted-foreground">{isAr ? 'من تاريخ:' : 'From:'}</label>
-                    <input
+                    <input lang="en-GB-u-ca-gregory" dir="ltr"
                       type="date"
                       value={exportFilters.startDate || ''}
                       min={history.minDate}
@@ -1323,7 +1323,7 @@ export function ImportExportCenterPage() {
 
                   <div className="space-y-1">
                     <label className="text-[11px] text-muted-foreground">{isAr ? 'إلى تاريخ:' : 'To:'}</label>
-                    <input
+                    <input lang="en-GB-u-ca-gregory" dir="ltr"
                       type="date"
                       value={exportFilters.endDate || ''}
                       onChange={(e) => {
@@ -1472,7 +1472,7 @@ export function ImportExportCenterPage() {
                       return (
                         <tr key={log.id} className="hover:bg-muted/20">
                           <td className="p-3 font-mono text-muted-foreground">
-                            {new Date(log.timestamp).toLocaleString()}
+                            {new Date(log.timestamp).toLocaleString(isAr ? 'ar-EG-u-ca-gregory' : 'en-US-u-ca-gregory')}
                           </td>
                           <td className="p-3">
                             <Badge variant={isImport ? 'primary' : 'default'} className="text-[10px]">

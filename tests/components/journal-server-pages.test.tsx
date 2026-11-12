@@ -4,14 +4,14 @@ import { MemoryRouter } from 'react-router-dom';
 import { JournalPage } from '@/features/accounting/pages/JournalPage';
 import type { JournalDto, JournalPageDto } from '@/lib/types';
 
-const mocks = vi.hoisted(() => ({ read: vi.fn(), userId: 'u', branch: 'a', accessB: true }));
+const mocks = vi.hoisted(() => ({ read: vi.fn(), grants: [] as string[], userId: 'u', branch: 'a', accessB: true }));
 vi.mock('@/api', () => ({ accounting: { postManualJournal: vi.fn() } }));
 vi.mock('@/api/domains/accounting', () => ({ accounting: { getJournalsPage: mocks.read } }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en', t: (key: string) => key }) }));
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: mocks.userId, branch_id: mocks.branch } }) }));
 vi.mock('@/components/Toast', () => ({ useToast: () => ({ show: vi.fn() }) }));
 vi.mock('@/lib/useBranchFilter', () => ({ useBranchFilter: () => mocks.branch }));
-vi.mock('@/lib/permissions', () => ({ useCan: () => () => false }));
+vi.mock('@/lib/permissions', () => ({ useCan: () => (permission: string) => mocks.grants.includes(permission) }));
 vi.mock('@/lib/useHistoryAccess', () => ({ useHistoryAccess: () => ({ minDate: undefined, clampRange: (from: string, to: string) => ({ from, to }) }) }));
 vi.mock('@/context/SettingsContext', () => ({ useSettings: () => ({ effectiveSettings: () => ({ currency: 'EGP' }) }) }));
 vi.mock('@/hooks/useBranches', () => ({ useBranches: () => ({ branches: mocks.accessB ? [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }] : [{ id: 'a', name: 'A' }] }) }));
@@ -20,9 +20,18 @@ vi.mock('@/lib/audit', () => ({ logAudit: vi.fn() }));
 
 const row: JournalDto = { id: 'j', entry_number: 'JE-FIRST', entry_date: '2026-10-05', reference_type: 'manual', reference_id: null, reference_number: null, description: 'entry', created_at: '2026-10-05', debit_total: 10, credit_total: 10, lines: [] };
 const snapshot = (more: boolean, name = 'JE-FIRST'): JournalPageDto => ({ rows: [{ ...row, entry_number: name }], summary: { total_count: 205, debit_total: 2529.7, credit_total: 2529.7, balance: 0 }, page_size: 100, has_more: more, next_cursor: more ? { entry_date: row.entry_date, entry_number: name, id: row.id } : null });
-beforeEach(() => { mocks.read.mockReset(); mocks.userId = 'u'; mocks.branch = 'a'; mocks.accessB = true; });
+beforeEach(() => { mocks.read.mockReset(); mocks.grants=[]; mocks.userId = 'u'; mocks.branch = 'a'; mocks.accessB = true; });
 
 describe('journal server paging screen', () => {
+  it('uses the manual-journal permission independently of account management and hides a revoked dialog', async () => {
+    mocks.grants=['accounting.journal.post'];mocks.read.mockResolvedValue({data:snapshot(false),error:null});
+    const view=render(<MemoryRouter><JournalPage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button',{name:'postManualJournal'}));
+    expect(screen.getByRole('dialog')).toBeVisible();
+    mocks.grants=['accounts.manage'];view.rerender(<MemoryRouter><JournalPage /></MemoryRouter>);
+    expect(screen.queryByRole('dialog')).toBeNull();expect(screen.queryByRole('button',{name:'postManualJournal'})).toBeNull();
+    await screen.findByText('205');
+  });
   it('keeps period totals when moving pages and preserves entry detail viewing', async () => {
     mocks.read.mockResolvedValueOnce({ data: snapshot(true), error: null }).mockResolvedValueOnce({ data: snapshot(false, 'JE-NEXT'), error: null });
     render(<MemoryRouter><JournalPage /></MemoryRouter>);

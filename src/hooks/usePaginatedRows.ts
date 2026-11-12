@@ -27,6 +27,8 @@ export interface PaginatedQueryOptions {
   min?: { column: string; value: string };
   /** Rows exposed per page. The hook fetches one extra row to detect hasMore. Default 50. */
   pageSize?: number;
+  /** Stable created_at + id keyset for append-only financial histories. */
+  cursorPagination?: boolean;
   /** Set to false to keep the hook idle (e.g. no branch selected yet). Default true. */
   enabled?: boolean;
 }
@@ -88,7 +90,7 @@ function safeSearchTerm(value: string): string {
 
 export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRowsResult<T> {
   const { user } = useAuth();
-  const { table, select = '*', order, branch_id, or, filters, search, min, pageSize = 50, enabled = true } = opts;
+  const { table, select = '*', order, branch_id, or, filters, search, min, pageSize = 50, cursorPagination = false, enabled = true } = opts;
   const filterKey = JSON.stringify(filters ?? []);
   const searchKey = JSON.stringify({ term: search?.term ?? '', columns: search?.columns ?? [] });
   const orderKey = order?.column ?? '';
@@ -108,9 +110,9 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
       searchKey,
       minColumn: min?.column ?? null,
       minValue: min?.value ?? null,
-      pageSize,
+      pageSize, cursorPagination,
     }),
-    [userId, table, select, orderKey, orderAsc, branch_id, or, filterKey, searchKey, min?.column, min?.value, pageSize],
+    [userId, table, select, orderKey, orderAsc, branch_id, or, filterKey, searchKey, min?.column, min?.value, pageSize, cursorPagination],
   );
 
   const initialCache = readSessionCache<T>(queryKey);
@@ -121,6 +123,7 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
   const [total, setTotal] = useState<number | null>(() => initialCache?.total ?? null);
   const [hasMore, setHasMore] = useState(() => initialCache?.hasMore ?? false);
   const gen = useRef(0);
+  const moreBusy = useRef(false);
 
   const setRows = useCallback<Dispatch<SetStateAction<T[]>>>((update) => {
     setRowsState((previous) => {
@@ -157,7 +160,7 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
   );
 
   const buildDataQuery = useCallback(
-    (from: number, to: number): FilterBuilder => {
+    (from: number, to: number, after?: T): FilterBuilder => {
       // `table` and `select` are intentionally dynamic in this generic hook.
       // Narrow the Supabase overload to the filter-builder shape once here so
       // TypeScript does not recursively instantiate schema-string error types.
@@ -166,10 +169,20 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
       };
       let q = applyFilters(source.select(select));
       if (order) q = q.order(order.column, { ascending: orderAsc });
+      if (cursorPagination && orderKey === 'created_at') {
+        q = q.order('id', { ascending: orderAsc });
+        if (after) {
+          const row = after as { id?: string; created_at?: string };
+          // Only database-issued timestamp/UUID cursor values enter PostgREST syntax.
+          if (!row.created_at || !/^\d{4}-\d{2}-\d{2}T[0-9:.+Z-]+$/.test(row.created_at) || !/^[0-9a-f-]{36}$/i.test(row.id || '')) throw new Error('INVALID_HISTORY_CURSOR');
+          const op = orderAsc ? 'gt' : 'lt';
+          q = q.or(`created_at.${op}.${row.created_at},and(created_at.eq.${row.created_at},id.${op}.${row.id})`);
+        }
+      }
       return q.range(from, to);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by stable orderKey/orderAsc; `order` identity changes each render
-    [table, select, applyFilters, orderKey, orderAsc]
+    [table, select, applyFilters, orderKey, orderAsc, cursorPagination]
   );
 
   // Synchronize display scope before paint. This prevents a branch/filter change
@@ -242,11 +255,12 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
   }, [buildDataQuery, enabled, pageSize, queryKey]);
 
   const loadMore = useCallback(async () => {
-    if (!enabled || loading || loadingMore) return;
+    if (!enabled || loading || loadingMore || moreBusy.current) return;
+    moreBusy.current = true;
     const g = gen.current;
     setLoadingMore(true);
     try {
-      const { data, error: err } = await buildDataQuery(rows.length, rows.length + pageSize);
+      const { data, error: err } = await buildDataQuery(cursorPagination ? 0 : rows.length, cursorPagination ? pageSize : rows.length + pageSize, cursorPagination ? rows[rows.length - 1] : undefined);
       if (g !== gen.current) return;
       if (err) {
         setError(userFacingErrorMessage(err));
@@ -265,9 +279,10 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
       if (!more) setTotal(rows.length + page.length);
       else setTotal(null);
     } finally {
+      moreBusy.current = false;
       if (g === gen.current) setLoadingMore(false);
     }
-  }, [buildDataQuery, enabled, pageSize, queryKey, rows.length, loading, loadingMore]);
+  }, [buildDataQuery, enabled, pageSize, queryKey, rows, loading, loadingMore, cursorPagination]);
 
   const fetchAll = useCallback(async (): Promise<T[]> => {
     if (!enabled) return [];
@@ -277,7 +292,7 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
     const all: T[] = [];
     let offset = 0;
     while (true) {
-      const { data, error: err } = await buildDataQuery(offset, offset + batchSize - 1);
+      const { data, error: err } = await buildDataQuery(cursorPagination ? 0 : offset, cursorPagination ? batchSize - 1 : offset + batchSize - 1, cursorPagination ? all[all.length - 1] : undefined);
       if (err) throw err;
       const batch = (data as T[]) || [];
       all.push(...batch);
@@ -285,7 +300,7 @@ export function usePaginatedRows<T>(opts: PaginatedQueryOptions): UsePaginatedRo
       offset += batch.length;
     }
     return all;
-  }, [buildDataQuery, enabled, pageSize]);
+  }, [buildDataQuery, enabled, pageSize, cursorPagination]);
 
   useEffect(() => {
     if (!enabled) return;

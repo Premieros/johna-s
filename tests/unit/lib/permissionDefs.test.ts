@@ -27,7 +27,7 @@ describe('isAdminRole', () => {
 describe('hasPermission', () => {
   it('denies when no role', () => {
     expect(hasPermission(null, null, 'pos.view')).toBe(false);
-    expect(hasPermission(undefined, undefined, 'pos.order.create')).toBe(false);
+    expect(hasPermission(undefined, undefined, 'pos.order.dine_in')).toBe(false);
   });
 
   it('gives only super_admin an implicit permission bypass', () => {
@@ -46,7 +46,7 @@ describe('hasPermission', () => {
 
     const map: Record<string, Permission[]> = {
       owner: ['branches.manage'],
-      cashier: ['pos.view', 'pos.order.create'],
+      cashier: ['pos.view', 'pos.order.dine_in'],
       accountant: ['reports.financial'],
       branch_manager: ['users.manage'],
     };
@@ -54,7 +54,7 @@ describe('hasPermission', () => {
     expect(hasPermission('owner', map, 'branches.manage')).toBe(true);
     expect(hasPermission('owner', map, 'settings.manage')).toBe(false);
     expect(hasPermission('cashier', map, 'pos.view')).toBe(true);
-    expect(hasPermission('cashier', map, 'pos.order.create')).toBe(true);
+    expect(hasPermission('cashier', map, 'pos.order.dine_in')).toBe(true);
     expect(hasPermission('cashier', map, 'settings.manage')).toBe(false);
     expect(hasPermission('accountant', map, 'reports.financial')).toBe(true);
     expect(hasPermission('branch_manager', map, 'users.manage')).toBe(true);
@@ -62,14 +62,14 @@ describe('hasPermission', () => {
 
   it('POS action permissions are resolved independently from the DB map', () => {
     const map: Record<string, Permission[]> = {
-      cashier: ['pos.view', 'pos.order.create', 'pos.send_kitchen', 'pos.kds_view', 'pos.payment.take'],
+      cashier: ['pos.view', 'pos.order.dine_in', 'pos.order.takeaway', 'pos.kds_view', 'pos.payment.take'],
       branch_manager: ['pos.reprint', 'pos.discount', 'pos.change_price', 'pos.order.transfer', 'pos.order.split'],
     };
 
     expect(hasPermission('cashier', map, 'pos.reprint')).toBe(false);
     expect(hasPermission('cashier', map, 'pos.discount')).toBe(false);
     expect(hasPermission('cashier', map, 'pos.change_price')).toBe(false);
-    expect(hasPermission('cashier', map, 'pos.send_kitchen')).toBe(true);
+    expect(hasPermission('cashier', map, 'pos.order.takeaway')).toBe(true);
     expect(hasPermission('cashier', map, 'pos.kds_view')).toBe(true);
     expect(hasPermission('cashier', map, 'pos.payment.take')).toBe(true);
     expect(hasPermission('cashier', map, 'pos.order.transfer')).toBe(false);
@@ -84,15 +84,15 @@ describe('hasPermission', () => {
   it('separates POS view, order mutation, payment and receipt capabilities', () => {
     const map: Record<string, Permission[]> = {
       cashier: ['pos.view', 'pos.payment.take', 'pos.receipt.print'],
-      branch_manager: ['pos.view', 'pos.order.create', 'pos.order.edit'],
+      branch_manager: ['pos.view', 'pos.order.dine_in', 'pos.order.edit'],
     };
 
     expect(hasPermission('cashier', map, 'pos.view')).toBe(true);
     expect(hasPermission('cashier', map, 'pos.payment.take')).toBe(true);
     expect(hasPermission('cashier', map, 'pos.receipt.print')).toBe(true);
-    expect(hasPermission('cashier', map, 'pos.order.create')).toBe(false);
+    expect(hasPermission('cashier', map, 'pos.order.dine_in')).toBe(false);
     expect(hasPermission('cashier', map, 'pos.order.edit')).toBe(false);
-    expect(hasPermission('branch_manager', map, 'pos.order.create')).toBe(true);
+    expect(hasPermission('branch_manager', map, 'pos.order.dine_in')).toBe(true);
     expect(hasPermission('branch_manager', map, 'pos.order.edit')).toBe(true);
     expect(hasPermission('branch_manager', map, 'pos.payment.take')).toBe(false);
   });
@@ -120,7 +120,7 @@ describe('hasPermission', () => {
     const map: Record<string, Permission[]> = { cashier: ['pos.view'] };
     expect(hasPermission('cashier', map, 'sales.view')).toBe(false);
     expect(hasPermission('cashier', map, 'pos.view')).toBe(true);
-    expect(hasPermission('cashier', map, 'pos.order.create')).toBe(false);
+    expect(hasPermission('cashier', map, 'pos.order.dine_in')).toBe(false);
   });
 });
 

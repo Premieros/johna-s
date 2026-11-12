@@ -3,7 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity, AlertTriangle, ArrowLeft, ArrowLeftRight, ArrowRight, BarChart3, BadgeDollarSign, Boxes, BookOpenText, Building2, Calculator, ChefHat,
   ChevronDown, ClipboardCheck, FileSpreadsheet, FileText, FlaskConical,
-  Globe, HandCoins, Landmark, Layers, LayoutDashboard, LogOut, Menu, Moon, NotebookPen,
+  Globe, HandCoins, Headphones, Landmark, Layers, LayoutDashboard, LogOut, Menu, Moon, NotebookPen,
   Package, Receipt, Scale, ScrollText, Settings, ShoppingCart, SlidersHorizontal, Store, Sun,
   Tags, Timer, Trash2, Truck, UserCog, Users, Wallet, Warehouse, X,
 } from 'lucide-react';
@@ -312,6 +312,21 @@ export function Layout({ children }: { children: ReactNode }) {
           </button>
         </div>
         <nav data-testid="app-navigation" className="h-[calc(100%-56px)] overflow-y-auto px-3 py-4">
+          <button
+            data-testid="sidebar-open-customer-support"
+            type="button"
+            onClick={() => {
+              const root = document.querySelector<HTMLElement>('[data-support-ai-root]');
+              const toggle = root?.shadowRoot?.querySelector<HTMLButtonElement>('.toggle');
+              setMobileOpen(false);
+              // The sidebar item opens and closes the SAME chat panel.
+              toggle?.click();
+            }}
+            className="mb-3 flex min-h-11 w-full items-center gap-3 rounded-xl border border-ui-border bg-ui-page-alt px-3 py-2 text-start text-sm font-bold text-ui-text transition hover:bg-ui-primary-soft hover:text-ui-primary"
+          >
+            <Headphones className="h-5 w-5 shrink-0 text-ui-primary" />
+            <span>{ar ? 'خدمة العملاء' : 'Customer Support'}</span>
+          </button>
           <section data-testid="mobile-sidebar-controls" className="mb-4 grid gap-3 rounded-2xl border border-ui-border bg-ui-surface/80 p-3 lg:hidden">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ui-primary-soft text-sm font-black text-ui-primary">

@@ -1,3 +1,4 @@
+import { useCan } from '@/lib/permissions';
 import { useEffect, useMemo, useState } from 'react';
 import { Search, Users } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
@@ -35,6 +36,8 @@ export function TablePickerStep({
   onResume,
   onPay,
 }: TablePickerStepProps) {
+  const can = useCan();
+  const canStartTable = can('pos.order.dine_in');
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
   const [query, setQuery] = useState('');
@@ -45,12 +48,12 @@ export function TablePickerStep({
     if (!preselectedTableId) return;
     const table = tables.find((item) => item.id === preselectedTableId);
     if (!table) return;
-    if (table.status === 'vacant') {
+    if (table.status === 'vacant' && canStartTable) {
       onStart(table, 1);
       return;
     }
     setSelected(table);
-  }, [preselectedTableId, tables, onStart]);
+  }, [preselectedTableId, tables, onStart, canStartTable]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -74,7 +77,7 @@ export function TablePickerStep({
   const chooseTable = (table: DiningTable) => {
     if (table.status === 'closed') return;
     const activeOrder = (ordersByTable[table.id] || [])[0];
-    if (!activeOrder && table.status === 'vacant') {
+    if (!activeOrder && table.status === 'vacant' && canStartTable) {
       onStart(table, 1);
       return;
     }
@@ -146,7 +149,7 @@ export function TablePickerStep({
                         {operatorName && <p className="flex items-center gap-1 truncate text-[10px] font-bold text-ui-muted"><Users className="h-3 w-3 shrink-0" /><span className="truncate">{operatorName}</span></p>}
                       </div>
                     ) : (
-                      <p className="mt-3 text-[10px] font-black text-ui-success">{isAr ? 'اضغط لفتح المنتجات' : 'Tap to open products'}</p>
+                      <p className="mt-3 text-[10px] font-black text-ui-success">{canStartTable ? (isAr ? 'اضغط لفتح المنتجات' : 'Tap to open products') : (isAr ? 'لا توجد صلاحية طلبات الطاولات' : 'Table order permission required')}</p>
                     )}
                   </button>
                 );

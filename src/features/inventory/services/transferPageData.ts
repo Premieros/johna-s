@@ -1,3 +1,4 @@
+import { loadRawCurrentPrices } from '@/features/costing/services/rawCurrentPriceData';
 import { supabase } from '@/api';
 import type { Branch, Warehouse } from '@/lib/types';
 
@@ -20,6 +21,7 @@ export async function loadTransferMeta(): Promise<{
     supabase.from('branches').select('*').eq('is_active', true).order('name'),
   ]);
 
+  if ([warehousesResult, rawMaterialsResult, branchesResult].some(result => result.error || !Array.isArray(result.data))) throw new Error('TRANSFER_META_UNAVAILABLE');
   return {
     warehouses: (warehousesResult.data as Warehouse[]) || [],
     rawMaterials: (rawMaterialsResult.data as TransferRawMaterialChoice[]) || [],
@@ -32,7 +34,7 @@ export async function loadTransferAverageCost(params: {
   branchId: string;
   warehouseId: string;
 }): Promise<number> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('raw_material_warehouse_inventory')
     .select('avg_cost')
     .eq('raw_material_id', params.rawMaterialId)
@@ -40,5 +42,25 @@ export async function loadTransferAverageCost(params: {
     .eq('warehouse_id', params.warehouseId)
     .maybeSingle();
 
-  return Number((data as { avg_cost?: number } | null)?.avg_cost || 0);
+  if (error) throw new Error('TRANSFER_COST_UNAVAILABLE');
+  const cost = Number((data as { avg_cost?: number } | null)?.avg_cost ?? 0);
+  if (!Number.isFinite(cost) || cost < 0) throw new Error('TRANSFER_COST_UNAVAILABLE');
+  return cost;
+}
+
+/** One bounded canonical batch; missing prices are zero, failed reads reject. */
+export async function loadTransferDestinationPrices(branchId: string, rawIds: string[]): Promise<Record<string, number>> {
+  const ids=[...new Set(rawIds.filter(Boolean))];
+  if (!ids.length) return {};
+  const rows=await loadRawCurrentPrices(branchId,ids);
+  const prices: Record<string,number>={};
+  const scoped=new Map(rows.filter(row=>row.branch_id===branchId).map(row=>[row.raw_material_id,row]));
+  for (const id of ids) {
+    const row=scoped.get(id);
+    if (!row) throw new Error('TRANSFER_COST_UNAVAILABLE');
+    const cost=Number(row.unit_cost??0);
+    if (!Number.isFinite(cost)||cost<0) throw new Error('TRANSFER_COST_UNAVAILABLE');
+    prices[id]=cost;
+  }
+  return prices;
 }

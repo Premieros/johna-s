@@ -1,6 +1,9 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'reader', role: 'manager' } }) }));
+vi.mock('@/lib/useBranchFilter', () => ({ useBranchFilter: () => 'branch-a' }));
+vi.mock('@/hooks/useReportPermissionVersion', () => ({ useReportPermissionVersion: () => 1 }));
 const permissions = vi.hoisted(() => new Set<string>());
 vi.mock('@/lib/permissions', () => ({ useCan: () => (permission: string) => permissions.has(permission) }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en' }) }));
@@ -50,4 +53,41 @@ describe('basic report navigation', () => {
     open('/reports?type=' + legacy);
     expect(screen.getByTestId('operational-report').textContent).toBe(current);
   });
+  it('expands in-page without remounting the report and closes with Escape', () => {
+    open();
+    const report = screen.getByTestId('operational-report');
+    fireEvent.click(screen.getByRole('button', { name: 'Full screen' }));
+    expect(screen.getByTestId('unified-reports-center')).toHaveAttribute('data-expanded', 'true');
+    expect(screen.getByTestId('operational-report')).toBe(report);
+    expect(document.body.style.overflow).toBe('hidden');
+    const modal = document.createElement('div');
+    modal.dataset.testid = 'modal-root';
+    document.body.append(modal);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.getByTestId('unified-reports-center')).toHaveAttribute('data-expanded', 'true');
+    modal.remove();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.getByTestId('unified-reports-center')).toHaveAttribute('data-expanded', 'false');
+    expect(screen.getByTestId('operational-report')).toBe(report);
+    expect(document.body.style.overflow).not.toBe('hidden');
+  });
+
+  it('opens the consolidated period close from the primary reports menu', () => {
+    permissions.add('reports.financial');
+    permissions.add('reports.costing');
+    open();
+    fireEvent.click(navigation().getByRole('button', { name: 'Month-end Review' }));
+    expect(screen.getByRole('button', { name: 'Run report' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Report view' })).toHaveValue('period_close_raw');
+  });
+
+  it('opens the same selected month in a review report without claiming completion', () => {
+    open('/reports?type=month_review');
+    expect(screen.getByTestId('month-close-review')).toBeTruthy();
+    expect(screen.getByText(/not confirmation of a completed close/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Review month'), { target: { value: '2026-09' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open report' })[0]);
+    expect(screen.getByTestId('operational-report').textContent).toBe('sales');
+  });
+
 });

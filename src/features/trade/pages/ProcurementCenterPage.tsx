@@ -16,7 +16,7 @@ export function ProcurementCenterPage() {
     { id: 'rfqs', ar: 'طلبات عروض الأسعار', en: 'RFQs', descriptionAr: 'مقارنة عروض الموردين قبل الاعتماد.', descriptionEn: 'Compare supplier quotations before approval.', route: APP_ROUTES.rfqs, permission: can('purchases.rfq'), icon: FileSearch },
     { id: 'receiving', ar: 'الاستلام', en: 'Receiving', descriptionAr: 'استلام الأصناف ومطابقة الكميات.', descriptionEn: 'Receive items and reconcile quantities.', route: APP_ROUTES.receiving, permission: can('purchases.receiving'), icon: PackageCheck },
     { id: 'suppliers', ar: 'الموردون', en: 'Suppliers', descriptionAr: 'إدارة الموردين وبياناتهم.', descriptionEn: 'Manage suppliers and their records.', route: APP_ROUTES.suppliers, permission: can('suppliers.view'), icon: Truck },
-    { id: 'payables', ar: 'المستحقات', en: 'Payables', descriptionAr: 'متابعة الالتزامات والمدفوعات للموردين.', descriptionEn: 'Monitor supplier obligations and payments.', route: APP_ROUTES.payments, permission: can('accounts.view'), icon: WalletCards },
+    { id: 'payables', ar: 'المستحقات', en: 'Payables', descriptionAr: 'متابعة الالتزامات والمدفوعات للموردين.', descriptionEn: 'Monitor supplier obligations and payments.', route: `${APP_ROUTES.payments}?tab=ap`, permission: can('accounts.view'), icon: WalletCards },
   ];
 
   return (

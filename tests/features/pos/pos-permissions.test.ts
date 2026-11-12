@@ -6,10 +6,10 @@ describe('granular POS permissions', () => {
     const permissions: Record<string, Permission[]> = {
       cashier: [
         'pos.view',
-        'pos.order.create',
+        'pos.order.dine_in',
         'pos.order.edit',
         'pos.hold',
-        'pos.send_kitchen',
+        'pos.order.takeaway',
         'pos.kds_view',
         'pos.print_kitchen',
         'pos.payment.take',
@@ -49,7 +49,7 @@ describe('granular POS permissions', () => {
 
     expect(hasPermission('cashier', dbPermissions, 'pos.view')).toBe(true);
     expect(hasPermission('cashier', dbPermissions, 'pos.payment.take')).toBe(true);
-    expect(hasPermission('cashier', dbPermissions, 'pos.order.create')).toBe(false);
-    expect(hasPermission('cashier', dbPermissions, 'pos.send_kitchen')).toBe(false);
+    expect(hasPermission('cashier', dbPermissions, 'pos.order.dine_in')).toBe(false);
+    expect(hasPermission('cashier', dbPermissions, 'pos.order.takeaway')).toBe(false);
   });
 });

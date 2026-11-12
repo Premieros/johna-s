@@ -14,23 +14,25 @@ export type NamedOption = {
 };
 
 export async function loadLedgerAccounts(branchId: string): Promise<ChartOfAccount[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('chart_of_accounts')
     .select('id, code, name, name_en, account_type')
     .eq('branch_id', branchId)
     .order('code');
 
+  if (error) throw error;
   return (data as ChartOfAccount[] | null) || [];
 }
 
 export async function loadTreasuryAccounts(branchId: string): Promise<TreasuryAccountOption[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('treasury_accounts')
     .select('id, account_name, kind, scope')
     .eq('branch_id', branchId)
     .eq('is_active', true)
     .order('account_name');
 
+  if (error) throw error;
   return (data as TreasuryAccountOption[] | null) || [];
 }
 
@@ -44,6 +46,8 @@ export async function loadInventoryStatementOptions(
     supabase.from('warehouses').select('id, name').eq('branch_id', branchId).eq('is_active', true).order('name'),
   ]);
 
+  if (items.error) throw items.error;
+  if (warehouses.error) throw warehouses.error;
   return {
     items: (items.data as NamedOption[] | null) || [],
     warehouses: (warehouses.data as NamedOption[] | null) || [],
@@ -55,18 +59,20 @@ export async function loadPartyStatementOptions(
   side: 'ar' | 'ap',
 ): Promise<Customer[] | Supplier[]> {
   if (side === 'ar') {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('customers')
       .select('id, name, phone')
       .eq('branch_id', branchId)
       .order('name');
+    if (error) throw error;
     return (data as Customer[] | null) || [];
   }
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('suppliers')
     .select('id, name, phone')
     .eq('branch_id', branchId)
     .order('name');
+  if (error) throw error;
   return (data as Supplier[] | null) || [];
 }

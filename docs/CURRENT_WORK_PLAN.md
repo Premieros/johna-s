@@ -1,18 +1,101 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
 ## Active work
-- Repository: `Premieros/johna-s`
-- Production Supabase: `azzdesuowpdcoflmyezn`
-- Production branch: `main`
-- Latest main baseline reconciled: `8fffc3d3`
-- Current active branch: `hotfix/print-wake-reconcile-20261014`
-- Mandatory active work log: `docs/EMERGENCY_PRINT_RECOVERY_2026-10-14.md`
+- Resolve PR#505 against main d7c7acc: `hotfix/print-wake-reconcile-20261014`; Mandatory active work log: `docs/PR_505_CONFLICT_RESOLUTION_20261112.md`. Preserve deployed main and the original unmerged candidate; no production printing or migration.
+- Released branch read InitPlans: PR#630; Mandatory active work log: `docs/BRANCH_READ_INITPLANS_20261112.md`. Production migration20261112111021 applied; main43207262651 and actual Pages43208126835 succeeded at9fa35c9. Same October historical-cost RPC measured3.04s Smouha (previous6.35s),4.95s Cleopatra; unchanged8s limit. Native served-source proof passed. Existing permissions, history/RLS fingerprints, prices, balances and print contracts are preserved; no business test writes.
+- Released actionable report errors and bounded reads: PR#628, completed follow-up PR#630; Mandatory active work log: `docs/ACTIONABLE_READ_ERRORS_20261112.md`. Error clarity and bounded historical reads are deployed. The earlier environment blocker is resolved; final two-branch timing and publication evidence are in docs/BRANCH_READ_INITPLANS_20261112.md. Preserve RLS/fingerprint guards, canonical prices, balances, business writers and shared print agents.
+- Released permission path repair: `fix/permission-paths-20261112`; Mandatory active work log: `docs/PERMISSION_PATH_REPAIR_20261112.md`. Owner requests implementation: inactive-role UI denial, dedicated receiving authorization, disabled human POS actions. Preserve shared print agent/RPCs and existing purchase writers; no live business test writes.
+- Resolved permission description audit: `audit/permission-description-20261112`; Mandatory active work log: `docs/PERMISSION_DESCRIPTION_AUDIT_20261112.md`. Read-only production review and isolated allow/deny tests only. Match122 descriptions to UI/backend behavior; no role/data changes or deployment.
+- Released header print alert removal: PR#625; Mandatory active work log: `docs/PRINT_ALERT_BUTTON_REMOVAL_20261112.md`. Removed the warning button and its print reads/subscription; preserved approval notifications and independent read recovery. Bounded production print inspection found0 active/overdue jobs in both branches. Historical2–6-minute recovered attempts remain documented without reprints. Main43175304767 and Pages43175894414 succeeded at1770034. No database migration or print agent/route/writer changes. This follow-up records release evidence only.
+- Released public organization signup: PR#623; Mandatory active work log: `docs/PUBLIC_ORGANIZATION_SIGNUP_20261111.md`. Production migration20261111154608 applied; public status enabled; own verified bootstrap and membership isolation checked. Main43051685342 and actual Pages43052778359 succeeded at source614c0da. Existing2 organizations/2 branches/34 users unchanged. No production test identities or emails. This follow-up records release evidence only.
+- Released period-close historical balances, per-line details and net after credit: PR#612; Mandatory active work log: `docs/PERIOD_CLOSE_BALANCES_DETAILS_20261105.md`. Production report migration20261105203729 applied; Smouha/Cleopatra totals reconcile. Main42105877801 and actual Pages42106547904 succeeded at source784994c. Full frontend2069 tests, browser and DB checks passed. No count application or stock/sales/printing writer change. This follow-up records release evidence only.
+- Released CI runtime and duplicate-work repair: PRs #606/#607; Mandatory active work log: `docs/CI_RUNTIME_DEDUP_20261104.md`. Acceleration and rename-scope guard are merged, fully verified and published. All original tests retained; current frontend2062 tests/about129s versus236.13s baseline. Both browser shards are required. Pure documentation updates use native worklog/scope checks (observed10 seconds) and do not republish the app; runtime/unknown changes retain full verification. No application, SQL or production-data change.
+- System read-pressure reduction: `perf/system-read-pressure-20261104`; Mandatory active work log: `docs/SYSTEM_READ_PRESSURE_20261104.md`. Preserve deployed last-price cutover, orders, quantities, accounting, permissions and printing. Share concurrent read-only requests, isolate cancellation and prevent timeout-triggered dashboard fallback storms. No production schema changes or operational test writes.
+- Operational last-price continuation: `feat/raw-last-price-operational-20261104`; Mandatory active work log: `docs/RAW_LAST_PRICE_OPERATIONAL_20261104.md`. Owner authorizes verified merge/application; complete caller, reversal and legacy-position parity before activation. Deployed #601 and counts00008/00009 are preserved.
+- Read consolidation released: `refactor/unified-last-price-20261104`, PR #601; Mandatory active work log: `docs/UNIFIED_RAW_LAST_PRICE_20261104.md`. Guarded production migration and Pages41810949930 succeeded; current stock/zero-default last-price reads and per-query branch authorization are deployed. Operational FIFO writer retirement remains the next coordinated stage and requires the reversal/legacy/journal gates in that log. November counts00008/00009 are already applied and reconciled; older pending notes below are historical.
+- Historical raw-only stock counts and latest published price: branch `experiment/historical-count-quantity-offset`, PR #597. Mandatory active work log: `docs/HISTORICAL_RAW_COUNTS_LATEST_PRICE_20261104.md`. User approval for merge/apply is already recorded; final CI and production reconciliation remain required.
+- Active combined verified-Pages release gate and stock-count review service repair: branch `fix/github-pages-deploy-after-verified-main-20261101`, PR #564. Pages may publish only after all four Verify main jobs pass for the same latest main SHA. Stock-count review pricing now stays behind `loadStockCountReviewPrices` in the inventory feature service, with a focused PromiseLike/zero/NULL test. No production SQL, stock, journal, debt or FIFO mutations. Mandatory active work log: `docs/GITHUB_PAGES_VERIFIED_DEPLOY_20261101.md`.
+- Active quantity-only stock count UI: `fix/stock-count-quantity-only-ui-20261101`, PR #574; Mandatory active work log: `docs/STOCK_COUNT_QUANTITY_ONLY_UI_20261101.md`. No financial RPC changes, do not apply customer counts until approved pricing cutover.
+- Active stock-count atomicity recovery `fix/stock-count-atomicity-rebase-20261101`, PR #570; Mandatory active work log: `docs/STOCK_COUNT_ATOMICITY_REBASE_20261101.md`. Only fixes rollback of partial count posting; latest-price policy remains blocked in PR #569.
+- Owner requested evidence-based optimization of redundant CI tests without losing coverage. Baseline Verify main #4576: unit suite ~235 seconds, browser ~260 seconds, DB ~134 seconds, builds three times in parallel check jobs. Experimental Node environment for source-contract tests only; no test deletion, database migration or production deployment. CI gates remain mandatory.
+- Active branch: `feat/raw-cost-v2-coordinate-gate-20261031`; PR #561 (candidate-only).
+- Mandatory active work log: `docs/RAW_COST_V2_COORDINATE_GATE_20261031.md`.
+- Owner directs completion of low-storage approved-price costing and safeguards. This PR stages an **OFF-by-default private per-coordinate gate**, guarded core _raw_add/_raw_remove_fifo routing and a tiny 2-material fixture. No production migration or activation, no 717-debt test. Never change customer stock or retroactive accounting before reversals, full writer parity and converted 20,263 open debts are reconciled; transfer #00008 still unapproved.
+- Active root-design branch: `architecture/raw-cost-engine-approved-price-no-replay-20261031`. Owner authorized a correct low-storage cost-engine implementation, but no unverified rollout.
+- Mandatory active work log: `docs/RAW_COST_ENGINE_V2_APPROVED_PRICE_20261031.md`.
+- Stage: guarded schema-only candidate plus TWO internal/private, **unwired** approved-cost prototypes, with a five-movement rollback-only disposable CI fixture. Replace per-issue FIFO debts with one aggregated shortage per material/warehouse, freeze approved price in `inventory_ledger`, and use one receipt-period balanced price-variance journal. Legacy debt audit/cutover, full writer adaptation and reversals are BLOCKERS for production.
+- Owner cost requirement: no additional 717-debt synthetic fixtures. CI postgres:16 is temporary; never run sample data on Supabase production. Historical source records preserved.
+- Active integration branch: `integrate/transfer-negative-preview-20261031`; PR #556 (draft).
+- Mandatory active work log: `docs/TRANSFER_COMBINED_20261031.md`.
+- Scope: one review/release for PRs #554 and #555: negative raw FIFO outbound, live source warehouse balance matching Inventory, preapproval line review/edit/delete and same-transaction snapshot check. Preserve product stock policy, permissions, FIFO/accounting, and business history. No production stock tests. Release only after full integration and approval.
+- Repository: `Premieros/johna-s`; production Supabase: `azzdesuowpdcoflmyezn`.
+- Baseline: `4b6da2cae7e6d5c379fd80d9cedd8f0bb8be8cde` (#550 released).
+- Branch: `fix/report-read-budget-20261030`.
+- Prior released work log: `docs/REPORT_READ_BUDGET_20261030.md`.
+- Owner authorizes a software-only reduction in report load, with no paid upgrade. Serialize allowlisted report network reads per browser, skip abandoned queued reads and preserve shared consumers. Keep sales, payment, kitchen and printing outside the queue. No production business writes, SQL, RLS or accounting changes. Preserve the #550 emergency safeguards. Monthly historical-cost SQL timeout remains a separate unresolved root cause; do not claim this containment fixes it.
 
-## Emergency print reliability — 2026-10-14
-- Owner requests urgent print fixes, no Windows-agent changes and no unnecessary long tests.
-- Production read indexes already applied and verified: `20261014184308_emergency_receipt_open_check_pattern_index_20261014` and `20261014184418_emergency_print_alert_read_index_20261014`. Both are narrow, additive indexes; no order/stock/FIFO/accounting updates.
-- This branch bounds web print-agent reconciliation to 5s for missed Realtime signals and retries only confirmed transaction-aborted `57014` kitchen RPCs once; unknown commit outcomes are never retried. Existing wake/claim/ack, stock, accounting and send RPC authority are unchanged. Exact-head CI remains required; underlying `send_to_kitchen` inventory timeout is an independent issue and no blanket success is claimed.
-- Never automatically reprint old tickets or assume submitted means paper. Review ~12 rather than ~1 idle claim checks/min per connected agent after deploy; rollback the web tweak if its database load is harmful.
+## Active usability polish — 2026-10-25
+Owner approved implementing the browser-review findings: compact reports with useful filters and in-page expansion, visible POS branch/dispatch/bill context, readable mobile table cards, safer cancellation presentation and compact dashboard welcome. Presentation only; retain business logic, permissions, queries and installed printers. No production log scans. Prepare one reviewed candidate; publication requires separate final approval.
+
+## Released quick-order access — 2026-10-24
+Owner approved merging and publishing #535 after review. Add direct access to open quick orders using existing live data and explain missing kitchen-send permission. Preserve independent action permissions, all kitchen/print writers and production data. No database changes. Required checks must pass before merge.
+
+## Released quantity transfer repair — 2026-10-24
+Owner authorized moving a chosen quantity (e.g. 1 of 3 waters) with a rollback path. Review #407/#421 first; preserve exact row identities, print idempotency, sent/served baselines, frozen costs and legacy reversal provenance. Prepare one verified candidate without production mutation or merge. #533 is released; the checkout discount calculation remains unchanged.
+
+## Released existing checkout approval repair — 2026-10-24
+Owner canceled changing gross/net discount semantics and adding another product path. Repair only the current approval flow. Preserve the discount/tax formula, all existing invoices and sales/printing/stock operations. Prepare and verify; no Merge ولا Production migration before final approval. #532 is released.
+
+## Historical owner accounting clarity — 2026-10-22
+Owner approved repairing the accounting review findings. Prepare a tested candidate, preserving sales, printing, stock writers and database permissions; no Merge ولا Production migration before separate release approval. No new report polling or queries. Month review remains a review, not a newly introduced financial lock. Recipe valuation remains latest approved price with missing prices numerically zero.
+
+## Historical raw transfer safety repair — 2026-10-21
+Owner authorizes fixing server unit mismatch, repeated form sends, stale cost reads and hidden metadata errors. Prepare and verify on the isolated branch; no Merge ولا Production migration before final release approval. #530 is released. Preserve stock movement algorithms, all source/destination quantities and cost writers, RLS, installed printers and the Windows pilot.
+
+## Historical production audit repairs — 2026-10-21
+Owner authorized repairing the five findings from the read-only production audit. Prepare and test on this isolated branch; preserve installed print agents, all operational security and data. No merge or production migration during preparation. Local Windows pilot remains isolated and forbidden to merge.
+
+## Historical sold-recipe cost report — 2026-10-20
+Owner approves preparing sold products × current canonical recipes × latest approved prices, with minimal reads and no sale/printing overhead. Use one batch read on explicit request; no materialized cache table or trigger. Preserve actual inventory/accounting and historical snapshots. #526 is complete; see its PR release ledger. Separate production release approval is required.
+
+## Owner-approved reporting rebuild — 2026-10-20
+- Single active writer on main baseline `6d9cf06bbd2572a525e2b4419bdf971437265c1b`.
+- Implement essential monthly reports, explicit purchase-only consumption pricing and independent quick-takeaway creation permission. Use focused behavioral checks; retain required release gates. Prepare changes and PR before separate production approval.
+- Preserve installed Windows agents, kitchen/bar/receipt pipelines and stock/accounting writers. No production mutations or replay during development. Older scopes below are historical.
+
+## Operator-approved corrective scope — mistakenly added JSON identity export — 2026-10-16
+- The owner identified `Premieros/johna-s` as the **wrong repository** for the Sage / Open Mercato integration, and authorized preparing removal of **only PR #509's new export functionality**, on a review branch with **no merge or production deployment** without new explicit release approval.
+- Previous active Gregorian UI branch #515 merged as `184933269a10315ace4f97188edef1c676f23735`, with post-merge Verify + Pages SUCCESS. Its scope is closed; this corrective task is the sole active writer, not a parallel task.
+- Remove only `products-export-identity` button and accompanying new authorization/download code, its two helper modules and two dedicated unit test files. Preserve existing Excel import/export, product edit, category, recipes, warehouse, costs and permissions. Preserve all operational PRs #510–#515 and all production Supabase data.
+- Historical records of PR #509 remain audit evidence; do not rewrite its commit or Git history. Add a review/rollback entry in `docs/REMOVE_MISTAKEN_SAGE_IDENTITY_EXPORT_20261016.md`.
+- No DB calls (except existing unrelated app code), no schema/RLS changes, migrations, local/Windows print-agent changes, business transactions, third-party sync, production merge or deployment. Before eventual release: exact-head Full Verify, review diff against #509, and separate user approval.
+
+## Explicit approved database rollout — 2026-10-15 21:29 Cairo
+Owner explicitly approved re-requesting the previously declined #510 migration. Same tool and exact tested SQL applied successfully as production migration `20261015183017_operations_stability_all_branches`. Only three function replacements: same-status KDS guard, per-call order matching IDs and lazy identical FIFO read. Both branches covered. Three exact candidate hashes and full unchanged security/catalog fingerprints verified; source reconciliation and fresh CI underway. Preserve deployed #511, all monetary/stock/print contracts and disabled #507 handoff. Installed-agent pickup latency remains a separate unresolved investigation.
+
+## Historical independent frontend release after initial decline
+The owner requests fixing all verified failures for Smouha and Cleopatra. Candidate #510 passed exact-head Full Verify (1795 frontend,1071 DB,132 Chromium) but Supabase declined the production migration without a reason. Original production function hashes remain unchanged. Do not bypass that decline. #510 is staged, not executable. Release only its independent frontend thermal report/shift audit changes in #511, with fresh exact-head verification and no SQL/agent changes. Prior export-only scope below is historical. Maintain one sequential writer and preserve #508/#509 and print idempotency.
+
+## Owner-approved scope switch — Sage identity export — 2026-10-15
+- Owner explicitly approved making **Sage ↔ Open Mercato integration** the next active development track in this conversation. This updates the single-writer gate first, before feature changes; other hotfix/benchmark PRs remain non-executable unless separately activated.
+- Prior costing PR #508 is merged on main at `322348f3d772341cce7484f793dfec94cf0b533b` after verification; kitchen PR #507 is merged at `693cd639a28fc2655941d6bc26fcd8a8d78f9be3`. Preserve both results, and keep the experimental kitchen print handoff **OFF**.
+- Stage only **authorized, branch-scoped, read-only identity-preserving product JSON export** in Sage with same-browser download (product ID, branch ID, name, SKU, product type and active state). No Supabase mutation, schema/RLS, prices, stock, recipes, printing, Windows agent or business transactions.
+- Target format is compatible with Open Mercato's existing local JSON catalog parity reader. Export must reject missing branch selection, changed branch scope and incomplete pages. No SKU synthesis or automatic imports.
+- This approval is for the development track and a draft PR, **not** a production merge, Sage DB migration, cross-database credential connection or live rollout. Gate release on exact-head Verify and separate owner production approval.
+- Mandatory sequential HEAD fence and all prior recovery protocols still apply. New active log: `docs/SAGE_OPENMERCATO_IDENTITY_EXPORT_20261015.md`.
+
+## Released costing read repair — both branches — 2026-10-15
+- Applied production migration `20261015071859_costing_detail_two_branch_batch_read`: detail price fields and internal recipe estimates batch the same existing raw-price resolver, preserving values, precision, nulls, permissions and response JSON.
+- Smouha and Cleopatra are covered. Current detail MD5 `732777a33b67f9a6c1da8de4fa0a0431`; recipe helper MD5 `8b0bc11afaab1a9a967589aa90159e55`.
+- Immediate authenticated same-user reads: Smouha Avocado 1280→290ms, Cleopatra Avocado 2467→231ms, Smouha Chicken Fajita 3222→253ms, with identical full JSON for all three. Cleopatra Chicken Fajita improved from >6500ms safety timeout to 304ms, retaining all compared raw contexts and original aggregate cost (complete old JSON unavailable).
+- Functional/recovery source `a068a58f`, full run `38697228401` green 4/4, 1068 DB tests including 16 targeted costing tests and exact rollback rehearsal. Final merge and post-merge status: see PR #508 and Actions. No claim of peak-load/global timeout cure.
+- Guarded recovery: `scripts/rollback/costing_batch_restore_smouha_pilot_20261015.sql`, restoring the prior Smouha-only pilot and original recipe helper. No kitchen/print/Windows/FIFO/stock/accounting/settlement changes; print handoff server gate remains OFF. Existing print read indexes already cover both branches.
+
+## Current emergency staging: atomic kitchen print handoff — 2026-10-14
+- This isolated candidate attempts to eliminate the gap between successful kitchen send and durable cloud print job creation. It is outside canonical migrations, **not applied** to production and must not change the V8 Windows agent or replay old orders.
+- Active branch `hotfix/kitchen-atomic-remote-stop-20261015` (draft #507, remote stop); targeted proof in `tests/integration/kitchen_atomic_print_handoff.test.ts`. A queued job uses the established sorted per-station send-id/quantity identity; frontend enqueue must remain idempotent and never print twice.
+- Rollout explicitly BLOCKED until exact isolated send/void/FIFO/authorization/template/performance proof and separately reviewed migration. The latest live 4h sample had 0 missing cloud jobs across 54 kitchen-sent orders; last-hour Smoha claim p95 ~11.8s remains a separate symptom.
+- No production SQL/indexes, orders, printers, financial transactions or Windows code changed by this track. Browser polling proposal #504 remains closed. Documentation: `docs/KITCHEN_ATOMIC_PRINT_HANDOFF_2026-10-14.md`.
 
 ## Database read recovery — 2026-10-14
 - Single active track #501. #500 is merged/deployed/verified at7ee48378;1741 frontend/1044 DB/132 browser tests Green.

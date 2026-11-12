@@ -1,8 +1,9 @@
 import React from 'react';
+import { formatReportDate } from './reportDate';
 import { useLanguage } from '@/context/LanguageContext';
 import { Card } from '@/components/PageHeader';
 import { Input } from '@/components/Input';
-import { formatCurrency } from '@/lib/format';
+import { formatFinancialCurrency } from '@/lib/format';
 import type { Language } from '@/lib/types';
 import type { ReportFilterKey, ReportFilters } from './reportFilters';
 import { useHistoryAccess } from '@/lib/useHistoryAccess';
@@ -33,6 +34,9 @@ export interface ReportFilterBarProps {
   allLabel: (dim: ReportFilterKey) => string;
   filterDimensions: ReportFilterKey[];
   total: number;
+  showTotal?: boolean;
+  totalLabel?: string;
+  countLabel?: string;
   count: number;
   currency: string;
   lang: Language;
@@ -45,6 +49,9 @@ export interface ReportFilterBarProps {
   loading?: boolean;
   unavailable?: boolean;
   pendingChanges?: boolean;
+  viewControl?: React.ReactNode;
+  optionsLoading?: boolean;
+  onClearFilters?: () => void;
 }
 
 export function ReportFilterBar({
@@ -68,6 +75,9 @@ export function ReportFilterBar({
   allLabel,
   filterDimensions,
   total,
+  showTotal = true,
+  totalLabel,
+  countLabel,
   count,
   currency,
   lang,
@@ -80,6 +90,7 @@ export function ReportFilterBar({
   loading = false,
   unavailable = false,
   pendingChanges = false,
+  viewControl, optionsLoading = false, onClearFilters,
 }: ReportFilterBarProps) {
   const { t } = useLanguage();
   const history = useHistoryAccess();
@@ -115,9 +126,10 @@ export function ReportFilterBar({
       </div>
 
       <div className="flex flex-col gap-3">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+        <div className="report-filters"><p className="text-xs font-semibold">{lang === 'ar' ? 'الفترة والفلاتر' : 'Period & filters'}{showDate ? (asOfDate ? ` · ${formatReportDate(to, lang)}` : ` · ${formatReportDate(from, lang)} — ${formatReportDate(to, lang)}`) : (lang === 'ar' ? ' · بيانات حالية' : ' · Current data')}{pendingChanges ? (lang === 'ar' ? ' · تعديلات غير مطبقة' : ' · Unapplied changes') : ''}</p><div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+          {viewControl}
           {showDate && !asOfDate && (
-            <div>
+            <div className="col-span-2 sm:col-span-1">
               <label className="mb-1 block text-xs font-medium text-ui-muted">{t('filterByPeriod')}</label>
               <select
                 data-testid="report-context-filter"
@@ -149,6 +161,7 @@ export function ReportFilterBar({
 
           {showDate && (
             <Input
+              aria-label={asOfDate ? (lang === 'ar' ? 'حتى نهاية يوم' : 'Through end of day') : t('to')}
               label={asOfDate ? (lang === 'ar' ? 'حتى نهاية يوم' : 'Through end of day') : t('to')}
               type="date"
               value={to}
@@ -181,13 +194,18 @@ export function ReportFilterBar({
 
         </div>
 
-        {filterDimensions.length > 0 && <details className="rounded-lg border border-ui-border bg-ui-page-alt px-3 py-2">
-          <summary className="cursor-pointer text-sm font-semibold">{lang === 'ar' ? 'فلاتر متقدمة' : 'Advanced filters'}{Object.values(filters).some(Boolean) ? ` (${Object.values(filters).filter(Boolean).length})` : ''}</summary>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {filterDimensions.length > 0 && <details className="mt-2 border-t border-ui-border pt-2">
+          <summary className="cursor-pointer py-1 text-xs font-bold text-ui-primary">
+            {lang === 'ar' ? 'فلاتر إضافية' : 'More filters'} · {filterDimensions.filter(dim => !!filters[dim]).length}
+          </summary>
+          <div className="flex items-center justify-between text-xs font-semibold"><span>{lang === 'ar' ? 'تصفية النتائج' : 'Filter results'}{optionsLoading ? (lang === 'ar' ? ' · جارٍ تحميل الخيارات…' : ' · Loading options…') : ''}</span>{onClearFilters && <button type="button" onClick={onClearFilters} className="text-ui-primary">{lang === 'ar' ? 'مسح الفلاتر' : 'Clear filters'}</button>}</div>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
           {filterDimensions.map((dim) => (
             <div key={dim} data-testid="report-contextual-filters">
               <label className="mb-1 block text-xs font-medium text-ui-muted">{filterLabel(dim)}</label>
               <select
+                aria-label={filterLabel(dim)}
+                disabled={optionsLoading}
                 data-filter-dim={dim}
                 value={filters[dim] || ''}
                 onChange={(e) => onFilterChange(dim, e.target.value)}
@@ -202,14 +220,15 @@ export function ReportFilterBar({
           ))}
           </div>
         </details>}
+        </div>
         <div className="flex flex-col gap-2 border-t border-ui-border pt-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2 text-xs">
+            {showTotal && <div className="rounded-lg border border-ui-border bg-ui-page-alt px-3 py-1.5">
+              <span className="text-ui-muted">{totalLabel || t('total')}: </span>
+              <span className="font-extrabold tabular-nums text-ui-accent">{loading || unavailable ? '—' : formatFinancialCurrency(total, currency, lang)}</span>
+            </div>}
             <div className="rounded-lg border border-ui-border bg-ui-page-alt px-3 py-1.5">
-              <span className="text-ui-muted">{t('total')}: </span>
-              <span className="font-extrabold tabular-nums text-ui-accent">{loading || unavailable ? '—' : formatCurrency(total, currency, lang)}</span>
-            </div>
-            <div className="rounded-lg border border-ui-border bg-ui-page-alt px-3 py-1.5">
-              <span className="text-ui-muted">{t('count')}: </span>
+              <span className="text-ui-muted">{countLabel || t('count')}: </span>
               <span className="font-extrabold tabular-nums text-ui-text">{loading || unavailable ? '—' : count}</span>
             </div>
             {pendingChanges && (

@@ -48,6 +48,7 @@ export type RawMaterialPriceSource =
   | 'unpriced';
 
 export interface RawMaterialCostOverviewRow {
+  price_missing?: boolean;
   raw_material_id: string;
   raw_material_name: string;
   raw_material_code: string | null;

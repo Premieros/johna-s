@@ -6,6 +6,9 @@ import { fileURLToPath } from 'node:url';
 export default defineConfig({
   base: process.env.VITE_BASE_PATH || './',
   plugins: [react()],
+  define: {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(process.env.GITHUB_SHA || process.env.VITE_APP_VERSION || 'development'),
+  },
   server: {
     host: '0.0.0.0',
     port: 3000,

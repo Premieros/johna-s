@@ -78,6 +78,36 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
     pidB=(await b.query('SELECT pg_backend_pid() pid')).rows[0].pid;
     await observer.query("SET app.kitchen_rollout_ack='johnas-kitchen-20261013-review-required'");
     if((await observer.query("SELECT to_regprocedure('public._kitchen_dispatch_component_plans(uuid,jsonb)') IS NOT NULL present")).rows[0].present)await observer.query(rollback());
+    // This suite rehearses the immutable October-13 rollout and its strict
+    // source guards, rather than activating it against later transfer code.
+    // Restore the historical capture/core fixture functions ONLY in this newly created
+    // qa_kitchen_* database. Shared CI and production definitions stay intact.
+    const historicalCapture=JSON.parse(readFileSync('scripts/db/candidates/partial_transfer_baseline.json','utf8'))
+      .find((row:{proname:string})=>row.proname==='_capture_kitchen_ingredient_prices');
+    if(!historicalCapture?.definition)throw new Error('HISTORICAL_CAPTURE_FIXTURE_MISSING');
+    await observer.query(historicalCapture.definition);
+    const historicalCore=JSON.parse(readFileSync('scripts/db/candidates/pos_order_type_original_order_defs.json','utf8'))
+      .find((row:{proname:string})=>row.proname==='_send_to_kitchen_core_20260914');
+    if(!historicalCore?.definition)throw new Error('HISTORICAL_CORE_FIXTURE_MISSING');
+    await observer.query(historicalCore.definition);
+    // The October-13 rollout review is intentionally pinned to the historical
+    // canonical apply_stock_count body. Later atomicity fixes must not weaken
+    // its fail-closed drift guard. Restore that historical body ONLY in this
+    // newly created qa_kitchen_* disposable database before replaying forward().
+    const historicalRollback = readFileSync('scripts/rollout/kitchen_dedup_rollback_review_20261013.sql','utf8');
+    const applyStart = historicalRollback.lastIndexOf('CREATE OR REPLACE FUNCTION public.apply_stock_count(');
+    const applyEnd = historicalRollback.indexOf('$function$;', applyStart);
+    if (applyStart < 0 || applyEnd < 0) throw new Error('HISTORICAL_COUNT_APPLY_FIXTURE_MISSING');
+    await observer.query(historicalRollback.slice(applyStart, applyEnd + '$function$;'.length));
+    // This October-13 rehearsal also pins the receipt writer. The approved-price
+    // count release intentionally freezes new count values on later receipts.
+    // Restore the historical writer only inside this owned qa_kitchen_* database;
+    // retain every canonical drift assertion in forward() and rollback().
+    const receiptStart = historicalRollback.lastIndexOf('CREATE OR REPLACE FUNCTION public._raw_fifo_settle_receipt(');
+    const receiptEnd = historicalRollback.indexOf('$function$;', receiptStart);
+    if (receiptStart < 0 || receiptEnd < 0) throw new Error('HISTORICAL_RECEIPT_FIXTURE_MISSING');
+    await observer.query(historicalRollback.slice(receiptStart, receiptEnd + '$function$;'.length));
+    await observer.query(`UPDATE public.roles SET permissions=permissions || '["pos.send_kitchen"]'::jsonb WHERE role='cashier'`);
     originalDefinitions=(await observer.query(catalogSQL)).rows;
     await observer.query("SET app.kitchen_rollout_ack='johnas-kitchen-20261013-review-required'");
     await observer.query(forward());
@@ -266,6 +296,21 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
     // Each sample owns a fresh material/product/order, so neither variant inherits
     // the previous variant's stock/debts. Same branch, indexes, prices and permissions.
     let isBound=true;
+    // The committed history fixture can trigger background maintenance in this
+    // owned database. Keep the actual NOWAIT rollout barrier unchanged; retry
+    // only its failed admission, before any timed actor transaction starts.
+    async function benchmarkBinding(sql:string){
+      const deadline=Date.now()+5000;
+      for(;;){
+        try {await observer.query(sql);return;}
+        catch(error){
+          if((error as {code?:string}).code!=='55P03')throw error;
+          await observer.query('ROLLBACK');
+          if(Date.now()>=deadline)throw error;
+          await new Promise(resolve=>setTimeout(resolve,25));
+        }
+      }
+    }
     const results:Record<string,Record<string,{ms:number;wal:number}[]>>={};
     const median=(xs:number[])=>[...xs].sort((x,y)=>x-y)[Math.floor(xs.length/2)];
     for(const profile of [{lines:1,history:0},{lines:5,history:0},{lines:20,history:0},{lines:50,history:0},{lines:50,history:10000}]){
@@ -273,7 +318,7 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
       results[key]={baseline:[],candidate:[]};
       for(let sample=-1;sample<7;sample++){
         for(const candidate of (sample%2===0?[true,false]:[false,true])){
-          if(candidate!==isBound){await observer.query(candidate?forward():rollback());isBound=candidate;}
+          if(candidate!==isBound){await benchmarkBinding(candidate?forward():rollback());isBound=candidate;}
           const mat=randomUUID(),prod=randomUUID(),recipe=randomUUID(),table=randomUUID();
           await observer.query('BEGIN');
           await observer.query("INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active,unit_id) VALUES($1,$2,'RPC raw',$3,7,true,$4)",[mat,'RPC-'+mat,branch,unit]);
@@ -303,7 +348,7 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
           if(sample>=0)results[key][candidate?'candidate':'baseline'].push({ms,wal});
           // Restore a known bound state after each baseline; all code changes
           // and fixture setup stay OUTSIDE timing/WAL samples.
-          if(!candidate){await observer.query(forward());isBound=true;}
+          if(!candidate){await benchmarkBinding(forward());isBound=true;}
         }
       }
     }

@@ -92,7 +92,7 @@ export function SystemHealthPage() {
         status: 'error',
         detail: remote.error?.message || (ar ? 'تعذر تنفيذ فحص التشغيل' : 'Operational health check failed'),
       }]);
-      setFinishedAt(new Date().toLocaleString());
+      setFinishedAt(new Date().toLocaleString(ar ? 'ar-EG-u-ca-gregory' : 'en-US-u-ca-gregory'));
       setRunning(false);
       return;
     }
@@ -106,7 +106,7 @@ export function SystemHealthPage() {
         status: 'error',
         detail: snapshot.error || 'PERMISSION_DENIED',
       }]);
-      setFinishedAt(new Date().toLocaleString());
+      setFinishedAt(new Date().toLocaleString(ar ? 'ar-EG-u-ca-gregory' : 'en-US-u-ca-gregory'));
       setRunning(false);
       return;
     }
@@ -197,13 +197,13 @@ export function SystemHealthPage() {
         en: 'Latest day close',
         status: presenceStatus(snapshot.latest_daily_close_at),
         detail: snapshot.latest_daily_close_at
-          ? new Date(snapshot.latest_daily_close_at).toLocaleString()
+          ? new Date(snapshot.latest_daily_close_at).toLocaleString(ar ? 'ar-EG-u-ca-gregory' : 'en-US-u-ca-gregory')
           : (ar ? 'لا يوجد إغلاق يوم ضمن النطاق' : 'No day close found in scope'),
       },
     ];
 
     setChecks(next);
-    setFinishedAt(new Date(snapshot.generated_at || Date.now()).toLocaleString());
+    setFinishedAt(new Date(snapshot.generated_at || Date.now()).toLocaleString(ar ? 'ar-EG-u-ca-gregory' : 'en-US-u-ca-gregory'));
     setRunning(false);
   }, [ar, branchFilter]);
 

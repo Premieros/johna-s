@@ -49,6 +49,68 @@ internal sealed class EscPosPrinter
         }).ConfigureAwait(false);
     }
 
+    // Reports use the installed Windows driver, never raw ESC/POS bytes. Some
+    // thermal firmwares interpret oversized GS v 0 images as printable symbols.
+    // No automatic transport fallback: a failed spool can already have printed.
+    internal async Task PrintReportAsync(string printerName, string text, int paperWidthMm)
+    {
+        await WithPrinterLaneAsync(printerName, () =>
+        {
+            using var image = RenderLegacyText(text, paperWidthMm <= 58 ? 384 : 576, true);
+            using var document = CreateReportDocument(printerName, image, paperWidthMm);
+            try { document.Print(); }
+            catch
+            {
+                // Exact terminal queue code; do not automatically reprint pages.
+                throw new InvalidOperationException("PRINT_OUTCOME_UNKNOWN");
+            }
+        }).ConfigureAwait(false);
+    }
+
+    internal static PrintDocument CreateReportDocument(string printerName, Bitmap image, int paperWidthMm)
+    {
+        var document = new PrintDocument
+        {
+            DocumentName = "JOHNA'S Z Report",
+            PrintController = new StandardPrintController()
+        };
+        document.PrinterSettings.PrinterName = printerName;
+        document.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
+        // Short thermal pages avoid driver/firmware height limits. Source rows are
+        // consumed exactly once; the last page contains only remaining rows.
+        var width = (int)Math.Round((paperWidthMm <= 58 ? 58 : 80) * 100 / 25.4);
+        document.DefaultPageSettings.PaperSize = new PaperSize("JOHNA thermal report", width, 590);
+        var sourceY = 0;
+        document.PrintPage += (_, e) =>
+        {
+            if (e.Graphics is null) throw new InvalidOperationException("REPORT_GRAPHICS_MISSING");
+            var bounds = e.PageSettings.PrintableArea;
+            var printableWidth = Math.Min(width, bounds.Width);
+            if (printableWidth <= 0 || bounds.Height <= 0)
+                throw new InvalidOperationException("INVALID_PRINTER_SETTINGS");
+            var scale = printableWidth / image.Width;
+            var rows = ReportRowsToPrint(image.Height, sourceY,
+                Math.Max(1, (int)(bounds.Height / scale)), paperWidthMm <= 58 ? 24 : 29);
+            e.Graphics.DrawImage(image,
+                new RectangleF(bounds.X - e.PageSettings.HardMarginX, bounds.Y - e.PageSettings.HardMarginY, printableWidth, rows * scale),
+                new RectangleF(0, sourceY, image.Width, rows), GraphicsUnit.Pixel);
+            sourceY += rows;
+            e.HasMorePages = sourceY < image.Height;
+        };
+        return document;
+    }
+
+    internal static int ReportRowsToPrint(int height, int sourceY, int maxRows, int lineHeight)
+    {
+        var remaining = height - sourceY;
+        if (remaining <= maxRows) return remaining;
+        // First line starts at y=14. End complete lines between pages whenever
+        // the driver has sufficient space; narrow printable areas still progress.
+        var top = sourceY == 0 ? 14 : 0;
+        var aligned = top + Math.Max(0, (maxRows - top) / lineHeight) * lineHeight;
+        return Math.Min(remaining, Math.Max(1, Math.Min(maxRows, aligned)));
+    }
+
     private async Task WithPrinterLaneAsync(string printerName, Action print)
     {
         printerName ??= "";
@@ -73,7 +135,7 @@ internal sealed class EscPosPrinter
         }
     }
 
-    private static Bitmap RenderLegacyText(string text, int widthDots)
+    private static Bitmap RenderLegacyText(string text, int widthDots, bool compactReport = false)
     {
         var normalized = (text ?? "")
             .Replace("\r\n", "\n")
@@ -86,7 +148,7 @@ internal sealed class EscPosPrinter
         using (var g = Graphics.FromImage(probe))
         using (var font = new Font(
                    "Tahoma",
-                   28f * scale,
+                   (compactReport ? 21f : 28f) * scale,
                    FontStyle.Regular,
                    GraphicsUnit.Pixel))
         {
@@ -95,7 +157,7 @@ internal sealed class EscPosPrinter
                 lines.AddRange(WrapLine(g, raw ?? "", font, widthDots - 32));
         }
 
-        var lineHeight = (int)Math.Ceiling(39 * scale);
+        var lineHeight = (int)Math.Ceiling((compactReport ? 29 : 39) * scale);
         var height = Math.Max(
             120,
             16 + Math.Max(1, lines.Count) * lineHeight + 54);
@@ -108,7 +170,7 @@ internal sealed class EscPosPrinter
         using var graphics = Graphics.FromImage(bitmap);
         using var drawFont = new Font(
             "Tahoma",
-            28f * scale,
+            (compactReport ? 21f : 28f) * scale,
             FontStyle.Regular,
             GraphicsUnit.Pixel);
         graphics.Clear(Color.White);

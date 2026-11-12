@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { getDbUrl, openDb } from './db';
 import type pg from 'pg';
 
@@ -63,11 +64,13 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     await client.query(`INSERT INTO public.branches (id, name, organization_id) VALUES ($1, $2, $3), ($4, $5, $6)`, [branchA, 'Cost A', orgId, branchB, 'Cost B', orgId]);
     await client.query(`INSERT INTO public.warehouses (id, name, branch_id, is_active) VALUES ($1, $2, $3, true)`, [whId, 'Cost WH', branchA]);
     await client.query(`INSERT INTO public.products (id, name, branch_id, sale_price, cost_price, is_active) VALUES ($1, $2, $3, 100, 30, true), ($4, $5, $6, 80, 20, true)`, [prodId, 'Cost Product', branchA, prodNoRecipe, 'Cost NoRecipe', branchA]);
-    await client.query(`INSERT INTO public.raw_materials (id, code, name, branch_id, default_cost, is_active) VALUES ($1, $2, $3, $4, 15, true)`, [rmId, `RM-${rmId.slice(0, 8)}`, 'Cost Raw', branchA]);
+    await client.query(`INSERT INTO public.raw_materials (id, code, name, branch_id, default_cost, is_active) VALUES ($1, $2, $3, $4, 0, true)`, [rmId, `RM-${rmId.slice(0, 8)}`, 'Cost Raw', branchA]);
     await client.query(`INSERT INTO public.suppliers (id, name, branch_id, balance) VALUES ($1, $2, $3, 0)`, [supplierA, 'Cost Supplier', branchA]);
     await client.query(`INSERT INTO public.recipes (id, product_id, branch_id, name, yield_quantity, is_active) VALUES ($1, $2, $3, 'Recipe', 2, true)`, [recipeId, prodId, branchA]);
     await client.query(`INSERT INTO public.recipe_items (recipe_id, raw_material_id, quantity, wastage_percent) VALUES ($1, $2, 1, 10)`, [recipeId, rmId]);
     await client.query(`INSERT INTO public.raw_material_batches (raw_material_id, branch_id, quantity, unit_cost, source_type) VALUES ($1, $2, 10, 20, 'purchase')`, [rmId, branchA]);
+    // Current recipe estimates use an explicit approved price, independent of stock layers.
+    await client.query("INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,reference_number,priced_at) VALUES($1,$2,20,'COST-RECIPE-PRICE',clock_timestamp()-interval '1 day')",[rmId,branchA]);
     // Real receipt flows maintain the inventory valuation row alongside FIFO layers.
     await client.query(`INSERT INTO public.raw_material_inventory (raw_material_id, branch_id, quantity, avg_cost) VALUES ($1,$2,10,20)`, [rmId, branchA]);
     await client.query(`INSERT INTO public.inventory_units (id, code, name, unit_type, branch_id, is_active) VALUES ($1, $2, 'Cost Component Group', 'manufactured', $3, true)`, [componentUnitId, `CG-${componentUnitId.slice(0, 8)}`, branchA]);
@@ -108,7 +111,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     }
   });
 
-  it('get_costing_overview: recipe cost math (avg batch cost x (1 + wastage) x qty)', async () => {
+  it('get_costing_overview: recipe cost math (latest approved price x (1 + wastage) x qty)', async () => {
     const overview = await asUser(adminId, async () =>
       rows<{ product_id: string; actual_cost: string; theoretical_cost: string; sale_price: string; recipe_item_count: string }>(
         `SELECT product_id, actual_cost, theoretical_cost, sale_price, recipe_item_count FROM public.get_costing_overview(NULL) WHERE product_id = $1`, [prodId],
@@ -168,7 +171,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     expect(adminB.length).toBe(0);
   });
 
-  it('get_product_costing_detail: recipe lines, batch-cost fallback and error on missing product', async () => {
+  it('get_product_costing_detail: recipe lines, latest approved price and error on missing product', async () => {
     const detail = await asUser(managerId, async () =>
       rows<{ r: { success: boolean; product_name: string; theoretical_cost: number; actual_cost: number; recipe_items: Array<{ line_cost: number; unit_cost: number; component_group_id?: string | null; component_group_name?: string | null; component_group_quantity?: number | null }>; history: unknown[] } }>(
         `SELECT public.get_product_costing_detail($1, NULL) AS r`, [prodId],
@@ -199,7 +202,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     expect(missing[0].r.error).toBe('PRODUCT_NOT_FOUND');
   });
 
-  it('costing uses actual FIFO inventory valuation while purchase/count reference history stays separately auditable', async () => {
+  it('costing uses latest approved prices while actual FIFO inventory valuation stays unchanged', async () => {
     const purchaseId = randomUUID();
     const countId = randomUUID();
 
@@ -272,7 +275,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     expect(Number(overview[0].previous_cost)).toBe(24);
     expect(overview[0].price_source).toBe('stock_count');
     expect(overview[0].reference_number).toBe('RAW-COST-SC');
-    expect(Number(overview[0].event_count)).toBe(2);
+    expect(Number(overview[0].event_count)).toBe(3);
 
     const history = await asUser(managerId, async () =>
       rows<{ unit_cost: string; previous_cost: string | null; price_source: string; reference_number: string }>(
@@ -281,7 +284,7 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
         [rmId, branchA],
       ),
     );
-    expect(history).toHaveLength(2);
+    expect(history).toHaveLength(3);
     expect(Number(history[0].unit_cost)).toBe(28);
     expect(Number(history[0].previous_cost)).toBe(24);
     expect(history[0].price_source).toBe('stock_count');
@@ -439,8 +442,8 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     const detail=await asUser(managerId,async()=>await client.query(`SELECT public.get_product_costing_detail($1,$2) AS r`,[prodId,branchA]));
     expect(Number(detail.rows[0].r.actual_cost)).toBe(Number(before.rows[0].actual_cost));
     const price=await client.query(`SELECT unit_cost,price_source FROM public.get_raw_material_current_prices($1,ARRAY[$2::uuid])`,[branchA,missingRaw]);
-    expect(price.rows[0].unit_cost).toBeNull();
-    expect(price.rows[0].price_source).toBe('unpriced');
+    expect(Number(price.rows[0].unit_cost)).toBe(0);
+    expect(price.rows[0].price_source).toBe('catalog_zero');
   });
 
   it('uses an entered raw price even when inventory average and manual product/group costs are zero',async()=>{
@@ -460,4 +463,140 @@ describe.skipIf(skip)('product costing RPCs (074)', () => {
     } finally { await client.query('ROLLBACK TO SAVEPOINT known_raw_zero_valuation'); }
   });
 
+  it('batched product detail has identical full JSON for authorized and denied scopes (rollback only)', async () => {
+    const cases = [
+      { user: managerId, product: prodId, branch: branchA },
+      { user: managerId, product: prodNoRecipe, branch: branchA },
+      { user: adminId, product: prodId, branch: branchA },
+      { user: managerBId, product: prodId, branch: branchA },
+      { user: managerId, product: randomUUID(), branch: branchA },
+      { user: managerBId, product: randomUUID(), branch: branchB },
+    ];
+    const read = async (u: string, p: string, b: string) =>
+      asUser(u, async () => (await client.query<{ result: unknown }>(
+        'SELECT public.get_product_costing_detail($1,$2) result', [p,b],
+      )).rows[0].result);
+    const before = [];
+    for (const c of cases) before.push(await read(c.user,c.product,c.branch));
+    await client.query('SAVEPOINT batched_detail_candidate');
+    try {
+      const sql = readFileSync('scripts/experiments/get_product_costing_detail_batch_prices_PROPOSAL_20261015.sql', 'utf8');
+      // Replace both real branch IDs with owned local fixtures, never live data.
+      expect(sql).toContain("IF v_scope IN ('19c3fd23-d784-455b-8840-f4f2ac619651'::uuid,");
+      const fixtureSql = sql.replace(
+        "'19c3fd23-d784-455b-8840-f4f2ac619651'::uuid",
+        "'" + branchA + "'::uuid",
+      ).replace(
+        "'279e6662-e901-40b2-9170-7dda0b471ba7'::uuid",
+        "'" + branchB + "'::uuid",
+      );
+      await client.query(fixtureSql);
+      const after = [];
+      for (const c of cases) after.push(await read(c.user,c.product,c.branch));
+      expect(after).toEqual(before);
+      const def = (await client.query(
+        "SELECT pg_get_functiondef('public.get_product_costing_detail(uuid,uuid)'::regprocedure) source",
+      )).rows[0].source as string;
+      expect(def).toContain('raw_prices AS MATERIALIZED');
+      expect(def).toContain("'{}'::uuid[]");
+      expect(def).toContain('public._raw_cost_context_for_costing(rl.raw_material_id');
+      expect(def).toContain('IF v_scope IN');
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT batched_detail_candidate');
+    }
+  });
+
+  it('preserves full detail JSON in the second branch, null scope, and cross-branch denials', async () => {
+    await client.query('SAVEPOINT second_branch_detail');
+    try {
+      const productB = randomUUID();
+      const rawB = randomUUID();
+      const recipeB = randomUUID();
+      await client.query(`INSERT INTO public.products(id,name,branch_id,sale_price,cost_price,is_active)
+        VALUES($1,'Second branch recipe',$2,100,0,true)`, [productB,branchB]);
+      await client.query(`INSERT INTO public.raw_materials(id,code,name,branch_id,default_cost,is_active)
+        VALUES($1,$2,'Second branch raw',$3,37.25,true)`, [rawB,`B-${rawB.slice(0,8)}`,branchB]);
+      await client.query(`INSERT INTO public.recipes(id,product_id,branch_id,name,yield_quantity,is_active)
+        VALUES($1,$2,$3,'Second recipe',1,true)`, [recipeB,productB,branchB]);
+      await client.query(`INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent)
+        VALUES($1,$2,1.25,7.5)`, [recipeB,rawB]);
+      const cases = [
+        {user:managerBId,product:productB,branch:branchB},
+        {user:managerBId,product:productB,branch:null},
+        {user:adminId,product:productB,branch:null},
+        {user:managerId,product:productB,branch:branchB},
+        {user:managerId,product:productB,branch:null},
+        {user:managerBId,product:prodId,branch:branchA},
+      ];
+      const read = async () => {
+        const results: unknown[] = [];
+        for (const c of cases) results.push(await asUser(c.user,async()=>
+          (await client.query('SELECT public.get_product_costing_detail($1,$2) result',[c.product,c.branch])).rows[0].result));
+        return results;
+      };
+      await client.query(readFileSync('scripts/rollback/product_recipe_cost_original_20261015.sql','utf8'));
+      const before = await read();
+      expect(before[0]).toMatchObject({success:true,product_id:productB});
+      expect((before[0] as {recipe_items:unknown[]}).recipe_items).toHaveLength(1);
+      const sql = readFileSync('scripts/experiments/get_product_costing_detail_batch_prices_PROPOSAL_20261015.sql','utf8')
+        .replace("'19c3fd23-d784-455b-8840-f4f2ac619651'::uuid",`'${branchA}'::uuid`)
+        .replace("'279e6662-e901-40b2-9170-7dda0b471ba7'::uuid",`'${branchB}'::uuid`);
+      await client.query(readFileSync('scripts/experiments/product_recipe_cost_batch_PROPOSAL_20261015.sql','utf8'));
+      await client.query(sql);
+      expect(await read()).toEqual(before);
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT second_branch_detail');
+    }
+  });
+
+  it('batch recipe helper preserves full JSON, nested lines, missing prices, null scope and empty groups', async () => {
+    await client.query('SAVEPOINT batch_recipe_helper');
+    try {
+      await client.query(readFileSync('scripts/rollback/product_recipe_cost_original_20261015.sql','utf8'));
+      const read = async () => {
+        const result: unknown[] = [];
+        for (const branch of [branchA,null]) {
+          for (const product of [prodId,prodNoRecipe]) {
+            result.push(await asUser(managerId,async()=>
+              (await client.query('SELECT public.get_product_costing_detail($1,$2) result',[product,branch])).rows[0].result));
+          }
+        }
+        return result;
+      };
+      const candidate=readFileSync('scripts/experiments/product_recipe_cost_batch_PROPOSAL_20261015.sql','utf8');
+      const before=await read();
+      await client.query(candidate);
+      expect(await read()).toEqual(before);
+
+      // A raw-less manufactured link must still make actual cost unknown.
+      const emptyGroup=randomUUID();
+      await client.query(`INSERT INTO public.inventory_units(id,code,name,unit_type,branch_id,is_active)
+        VALUES($1,$2,'Empty batch parity group','manufactured',$3,true)`,[emptyGroup,`EB-${emptyGroup.slice(0,8)}`,branchA]);
+      await client.query(`INSERT INTO public.product_unit_links(product_id,unit_id,quantity) VALUES($1,$2,1)`,[prodId,emptyGroup]);
+      await client.query(readFileSync('scripts/rollback/product_recipe_cost_original_20261015.sql','utf8'));
+      const emptyBefore=await read();
+      expect((emptyBefore[0] as {actual_cost:unknown}).actual_cost).toBeNull();
+      await client.query(candidate);
+      expect(await read()).toEqual(emptyBefore);
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT batch_recipe_helper');
+    }
+  });
+
+  it('rehearses the exact guarded production rollback without committing fixture changes', async () => {
+    await client.query('SAVEPOINT costing_release_rollback');
+    try {
+      await client.query(readFileSync('scripts/experiments/product_recipe_cost_batch_PROPOSAL_20261015.sql','utf8'));
+      await client.query(readFileSync('scripts/experiments/get_product_costing_detail_batch_prices_PROPOSAL_20261015.sql','utf8'));
+      const rollback=readFileSync('scripts/rollback/costing_batch_restore_smouha_pilot_20261015.sql','utf8')
+        .replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,'');
+      await client.query(rollback);
+      const hashes=(await client.query(`SELECT
+        md5(pg_get_functiondef('public.get_product_costing_detail(uuid,uuid)'::regprocedure)) detail,
+        md5(pg_get_functiondef('public._product_recipe_cost(uuid,uuid)'::regprocedure)) recipe`)).rows[0];
+      expect(hashes).toEqual({detail:'59cff14b68b5eaf49f648bdc49ba1568',recipe:'756e10880d1cbcc18d56daf482062206'});
+    } finally {
+      await client.query('ROLLBACK TO SAVEPOINT costing_release_rollback');
+    }
+  });
 });

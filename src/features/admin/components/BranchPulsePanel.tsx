@@ -198,7 +198,7 @@ export function BranchPulsePanel({ allBranches = false }: BranchPulsePanelProps 
         ? []
         : issueSummary.issues,
     );
-    setLastRunAt(new Date(pulse.generated_at || Date.now()).toLocaleString());
+    setLastRunAt(new Date(pulse.generated_at || Date.now()).toLocaleString(ar ? 'ar-EG-u-ca-gregory' : 'en-US-u-ca-gregory'));
     setRunning(false);
   }, [ar, branchFilter, customFrom, customTo, preset]);
 
@@ -270,7 +270,7 @@ export function BranchPulsePanel({ allBranches = false }: BranchPulsePanelProps 
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <label className="text-xs font-bold text-ui-muted">
                 {ar ? 'من' : 'From'}
-                <input
+                <input lang="en-GB-u-ca-gregory" dir="ltr"
                   type="datetime-local"
                   value={customFrom}
                   onChange={(event) => setCustomFrom(event.target.value)}
@@ -279,7 +279,7 @@ export function BranchPulsePanel({ allBranches = false }: BranchPulsePanelProps 
               </label>
               <label className="text-xs font-bold text-ui-muted">
                 {ar ? 'إلى' : 'To'}
-                <input
+                <input lang="en-GB-u-ca-gregory" dir="ltr"
                   type="datetime-local"
                   value={customTo}
                   onChange={(event) => setCustomTo(event.target.value)}
@@ -388,7 +388,7 @@ export function BranchPulsePanel({ allBranches = false }: BranchPulsePanelProps 
                   {issue.latest_at ? (
                     <div className="mt-1 flex items-center justify-end gap-1 text-[10px] font-bold text-ui-muted">
                       <Clock3 className="h-3 w-3" />
-                      {new Date(issue.latest_at).toLocaleString()}
+                      {new Date(issue.latest_at).toLocaleString(ar ? 'ar-EG-u-ca-gregory' : 'en-US-u-ca-gregory')}
                     </div>
                   ) : null}
                 </div>

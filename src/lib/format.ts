@@ -141,9 +141,18 @@ export function formatPercent(value: number | null | undefined, decimals = 1): s
   return formatted === '-' ? '-' : `${formatted}%`;
 }
 
+/** Financial percentages distinguish a valid zero from unavailable data. */
+export function formatPercentValue(value: number | null | undefined, decimals = 1): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  if (Math.abs(value) < ZERO_EPSILON) return '0%';
+  return `${formatDisplayNumber(value, decimals)}%`;
+}
+
 export function formatDate(date: string | Date, lang: Language = 'ar'): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleDateString(lang === 'ar' ? 'ar-SA' : 'en-US', {
+  return d.toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', {
+    calendar: 'gregory',
+    numberingSystem: 'latn',
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -152,7 +161,9 @@ export function formatDate(date: string | Date, lang: Language = 'ar'): string {
 
 export function formatDateTime(date: string | Date, lang: Language = 'ar'): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleString(lang === 'ar' ? 'ar-SA' : 'en-US', {
+  return d.toLocaleString(lang === 'ar' ? 'ar-EG' : 'en-US', {
+    calendar: 'gregory',
+    numberingSystem: 'latn',
     year: 'numeric',
     month: 'short',
     day: 'numeric',

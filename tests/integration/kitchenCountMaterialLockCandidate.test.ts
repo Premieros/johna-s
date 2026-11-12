@@ -61,7 +61,7 @@ describe.skipIf(skip)('unwired material-locked stock count after kitchen oversel
     );
     await client.query(
       `INSERT INTO public.roles(role,name_ar,name_en,permissions,scope,is_active)
-       VALUES ($1,'جرد اختبار','Stock count QA','["inventory.count.create","inventory.count.approve","inventory.count.reject","inventory.count.apply","pos.send_kitchen"]'::jsonb,'global',true)`,
+       VALUES ($1,'جرد اختبار','Stock count QA','["inventory.count.create","inventory.count.approve","inventory.count.reject","inventory.count.apply","pos.order.dine_in"]'::jsonb,'global',true)`,
       [role],
     );
     await client.query(`ALTER TABLE public.users DISABLE TRIGGER trg_users_role_guard`);

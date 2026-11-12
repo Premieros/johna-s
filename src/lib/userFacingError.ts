@@ -1,6 +1,7 @@
 import { isDynamicImportError } from './chunkRecovery';
 
 export type ErrorLanguage = 'ar' | 'en';
+export type ErrorContext = { operation?: 'read' | 'write' };
 
 const ARABIC_RE = /[\u0600-\u06FF]/;
 const TECHNICAL_MARKERS = [
@@ -29,6 +30,14 @@ const TECHNICAL_MARKERS = [
   '23505',
   '23503',
   '23514',
+  'syntax error',
+  'constraint',
+  'stack trace',
+  'cannot read properties',
+  'is not defined',
+  'typeerror',
+  'referenceerror',
+  'syntaxerror',
 ];
 
 const permissionLabels: Record<string, { ar: string; en: string }> = {
@@ -38,6 +47,11 @@ const permissionLabels: Record<string, { ar: string; en: string }> = {
   'pos.payment.take': { ar: 'تحصيل المدفوعات', en: 'Take payments' },
   'pos.view': { ar: 'عرض نقطة البيع', en: 'View POS' },
   'pos.order.create': { ar: 'إنشاء الطلبات', en: 'Create orders' },
+  'pos.order.type': { ar: 'إنشاء وإرسال نوع الطلب المحدد', en: 'Create and send this order type' },
+  'pos.order.dine_in': { ar: 'طلبات الطاولات', en: 'Table orders' },
+  'pos.order.takeaway': { ar: 'الطلبات السريعة', en: 'Quick orders' },
+  'pos.order.drive_thru': { ar: 'طلبات السيارة', en: 'Car orders' },
+  'pos.order.delivery': { ar: 'طلبات التوصيل', en: 'Delivery orders' },
   'pos.order.edit': { ar: 'تعديل الطلبات', en: 'Edit orders' },
   'pos.order.transfer': { ar: 'نقل الطلبات والأصناف بين الطاولات', en: 'Transfer orders and items between tables' },
   'pos.cancel_order': { ar: 'إلغاء الطلبات', en: 'Cancel orders' },
@@ -57,6 +71,54 @@ const permissionLabels: Record<string, { ar: string; en: string }> = {
 };
 
 const messages: Record<string, { ar: string; en: string }> = {
+  MAIN_TREASURY_PAYMENT_PERMISSION_REQUIRED: {
+    ar: 'لا تملك صلاحية «السداد من الخزنة الرئيسية». اختر مصدرًا مسموحًا أو راجع المسؤول.',
+    en: 'You do not have Pay from Main Treasury permission. Choose an authorized source or contact an administrator.',
+  },
+  INSUFFICIENT_TREASURY_BALANCE: {
+    ar: 'رصيد مصدر السداد لا يكفي للمبلغ المطلوب. لم تُعتمد العملية. راجع الرصيد المحدّث أو اختر مصدرًا آخر مسموحًا.',
+    en: 'The funding account balance is insufficient. The operation was rejected. Review the updated balance or choose another authorized source.',
+  },
+  PAYMENT_EXCEEDS_INVOICE: {
+    ar: 'المبلغ أكبر من المتبقي على الفاتورة المختارة. عدّل المبلغ أو اختر السداد على جميع الفواتير.',
+    en: 'The amount exceeds the selected invoice balance. Adjust it or choose all invoices.',
+  },
+  PAYMENT_EXCEEDS_AR: {
+    ar: 'المبلغ أكبر من إجمالي المستحق على العميل. راجع المبلغ وكشف الحساب المحدّث.',
+    en: 'The amount exceeds the customer balance. Review the amount and updated statement.',
+  },
+  SALE_NOT_FOUND: {
+    ar: 'الفاتورة المختارة غير متاحة لهذا العميل والفرع. أعد تحميل الفواتير قبل السداد.',
+    en: 'The selected invoice is unavailable for this customer and branch. Reload invoices before paying.',
+  },
+  INVALID_AMOUNT: {
+    ar: 'أدخل مبلغًا صحيحًا أكبر من صفر.',
+    en: 'Enter a valid amount greater than zero.',
+  },
+  PAYMENT_EXCEEDS_AP: {
+    ar: 'المبلغ أكبر من إجمالي المستحق للمورد. راجع المبلغ والمديونية المحدّثة.',
+    en: 'The amount exceeds the supplier balance. Review the amount and updated outstanding balance.',
+  },
+  FINANCE_INVOICES_UNAVAILABLE: {
+    ar: 'تعذر تحميل الفواتير المستحقة. أعد فتح نافذة السداد لتحميلها؛ لم تُعرض قائمة ناقصة.',
+    en: 'Outstanding invoices could not be loaded. Reopen the payment dialog to reload; no incomplete list was shown.',
+  },
+  FINANCE_INVOICE_LIMIT: {
+    ar: 'تاريخ هذا الحساب يتجاوز حد القراءة الآمنة. لم تُعرض قائمة فواتير جزئية؛ راجع كشف الحساب مع المسؤول.',
+    en: 'This account history exceeds the safe read limit. No partial invoice list was shown; review the statement with an administrator.',
+  },
+  FINANCE_RESULT_UNCONFIRMED: {
+    ar: 'تعذر تأكيد نتيجة العملية بسبب مشكلة اتصال. راجع سجل المدفوعات أو التحويلات قبل إعادة المحاولة لتجنب تكرارها.',
+    en: 'The operation outcome could not be confirmed. Review payment or transfer history before retrying to avoid duplication.',
+  },
+  FINANCE_BALANCE_UNAVAILABLE: {
+    ar: 'تعذر تحميل رصيد الخزينة. أعد تحميل البيانات قبل السداد؛ الرصيد غير معروف وليس صفرًا.',
+    en: 'The treasury balance could not be loaded. Reload before paying; the balance is unknown, not zero.',
+  },
+  KITCHEN_WAREHOUSE_MISMATCH: {
+    ar: 'تغيّر مخزن الطلب. لم يتم التحصيل؛ راجع المعاينة المحدّثة ثم أكّد مرة أخرى. لا تغيّر المخزن يدويًا.',
+    en: 'The order warehouse changed. Payment was not taken; review the refreshed preview and confirm again. Do not switch warehouses manually.',
+  },
   REPORT_SOURCE_LIMIT: {
     ar: 'حجم التقرير يتجاوز حد القراءة الآمنة. قلّل الفترة أو حدّد الفرع والفلاتر؛ لم تُعرض نتائج جزئية.',
     en: 'The report exceeds the safe read limit. Narrow the period, branch or filters; partial results are not displayed.',
@@ -237,6 +299,34 @@ const messages: Record<string, { ar: string; en: string }> = {
     ar: 'تعذر إكمال العملية بالكامل، ولم يتم اعتماد تغيير جزئي. حدّث الطلب ثم حاول مرة أخرى.',
     en: 'The transaction could not be completed and no partial change was committed. Refresh the order and retry.',
   },
+  TRANSFER_PAID_ORDER_REQUIRES_SETTLEMENT: {
+    ar: 'لا يمكن نقل الكميات من أو إلى طلب تم تحصيل جزء منه. استخدم طاولة بطلب غير محصّل للحفاظ على حساب الفاتورة.',
+    en: 'Quantity transfer requires unpaid source and destination orders. Partly paid orders retain their existing invoice allocation.',
+  },
+  TRANSFER_SOURCE_CHANGED: {
+    ar: 'تغيّر الصنف بعد فتح النقل. أغلق النافذة وراجع الكمية ثم أعد الاختيار.',
+    en: 'This line changed. Close this dialog, review its quantity and select it again.',
+  },
+  TRANSFER_QUANTITY_UNAVAILABLE: {
+    ar: 'الكمية المطلوبة غير متاحة للنقل أو تم تحصيل جزء منها. راجع الطلب.',
+    en: 'The quantity is unavailable or partly paid. Review the order.',
+  },
+  INVALID_TRANSFER_QUANTITY: {
+    ar: 'حدد كمية أكبر من صفر ولا تتجاوز الكمية المتاحة، بحد أقصى أربع خانات عشرية.',
+    en: 'Enter a positive available quantity with at most four decimal places.',
+  },
+  TRANSFER_BUSY: {
+    ar: 'تجري عملية نقل أخرى الآن. انتظر لحظة ثم أعد المحاولة.',
+    en: 'Another transfer is running. Wait a moment and retry.',
+  },
+  TRANSFER_OPERATION_CONFLICT: {
+    ar: 'رقم العملية مرتبط بنقل سابق مختلف. حدّث الطلب وراجع النتيجة قبل إعادة النقل.',
+    en: 'This operation number belongs to a different transfer. Refresh and review the result.',
+  },
+  PARTIAL_TRANSFER_DISABLED: {
+    ar: 'نقل الكميات الجزئية متوقف مؤقتًا. لم يتم نقل أي كمية.',
+    en: 'Quantity transfer is temporarily disabled. Nothing was moved.',
+  },
   SAME_TABLE: {
     ar: 'لا يمكن النقل إلى نفس الطاولة الحالية.',
     en: 'The item is already on the selected table.',
@@ -261,9 +351,17 @@ const messages: Record<string, { ar: string; en: string }> = {
     ar: 'هذا دور أساسي في النظام ولا يمكن حذفه.',
     en: 'This is a system role and cannot be deleted.',
   },
+  KITCHEN_STATION_NOT_CONFIGURED: {
+    ar: 'تعذر إرسال الطلب: يوجد صنف بلا فئة مرتبطة بمحطة تجهيز فعّالة. اطلب من المسؤول مراجعة فئات أصناف الطلب وربطها بالمطبخ أو البار، ثم أعد الإرسال.',
+    en: 'The order could not be sent: an item has no category linked to an active preparation station. Ask an administrator to check item categories and kitchen/bar routing before sending again.',
+  },
+  ORDER_CANCELLED: {
+    ar: 'هذا الطلب ملغى بالفعل. ارجع إلى الطلبات الحالية؛ لا يمكن استئنافه أو تعديله.',
+    en: 'This order has already been cancelled. Return to active orders; it cannot be resumed or edited.',
+  },
   ORDER_NOT_FOUND: {
-    ar: 'تعذر العثور على الطلب. حدّث الشاشة ثم حاول مرة أخرى.',
-    en: 'The order could not be found. Refresh and retry.',
+    ar: 'الطلب غير متاح في الشاشة الحالية. قد يكون منتهيًا أو خارج نطاق الوصول؛ ارجع إلى الطلبات الحالية.',
+    en: 'The order is unavailable in this workspace. It may have ended or be outside your access; return to active orders.',
   },
   ORDER_NOT_EDITABLE: {
     ar: 'لا يمكن تعديل هذا الطلب في حالته الحالية.',
@@ -292,6 +390,10 @@ const messages: Record<string, { ar: string; en: string }> = {
   TABLE_BRANCH_MISMATCH: {
     ar: 'الطاولة المحددة لا تتبع الفرع الحالي.',
     en: 'The selected table does not belong to the current branch.',
+  },
+  ORDER_NOT_FULLY_SENT: {
+    ar: 'لا يمكن التحصيل أو طباعة الحساب قبل إرسال جميع الأصناف للمطبخ أو حذف غير المرسل.',
+    en: 'Send all items to the kitchen or remove unsent items before payment or printing.',
   },
   NO_SENT_ITEMS_TO_SETTLE: {
     ar: 'لا توجد أصناف مرسلة للمطبخ جاهزة للتحصيل في هذا الطلب.',
@@ -380,6 +482,8 @@ function extractMessage(input: unknown): string {
     if (permission && /PERMISSION_DENIED/i.test(error || code)) {
       return `PERMISSION_DENIED:${permission}`;
     }
+    if (error && error !== 'TRANSACTION_FAILED' && mappedCode(error)) return error;
+    if (/^(57014|55P03|40P01|40001|23505|23503|23514|42501|42P01|42703)$/.test(code)) return `${code} ${typeof obj.message === 'string' ? obj.message : ''}`.trim();
     for (const key of ['detail', 'message', 'error', 'code']) {
       if (typeof obj[key] === 'string' && obj[key]) return String(obj[key]).trim();
     }
@@ -388,7 +492,7 @@ function extractMessage(input: unknown): string {
 }
 
 function permissionLabel(code: string, lang: ErrorLanguage): string {
-  return permissionLabels[code]?.[lang] || code;
+  return permissionLabels[code]?.[lang] || (lang === 'ar' ? 'الصلاحية اللازمة لهذا الإجراء' : 'the permission for this action');
 }
 
 function mappedCode(text: string): string | null {
@@ -397,7 +501,7 @@ function mappedCode(text: string): string | null {
   // swallowing SENT_ITEM_APPROVAL_REQUIRED / MANAGER_APPROVAL_REQUIRED.
   const codes = Object.keys(messages).sort((a, b) => b.length - a.length);
   for (const code of codes) {
-    if (upper.includes(code)) return code;
+    if (new RegExp(`(^|[^A-Z0-9_])${code}($|[^A-Z0-9_])`).test(upper)) return code;
   }
   return null;
 }
@@ -407,10 +511,11 @@ function looksTechnical(text: string): boolean {
   return TECHNICAL_MARKERS.some((marker) => lower.includes(marker))
     || /\b(?:SQLSTATE|PGRST|PostgREST|PostgreSQL)\b/i.test(text)
     || /\b(?:23505|23503|23514|42501|42P01|42703)\b/i.test(text)
+    || /\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b/.test(text)
     || /^[A-Z][A-Z0-9_]{2,}$/.test(text.trim());
 }
 
-export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = currentLanguage()): string {
+export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = currentLanguage(), context: ErrorContext = {}): string {
   const text = extractMessage(input);
   if (!text) {
     return lang === 'ar'
@@ -428,8 +533,8 @@ export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = cur
   if (assignPermission) {
     const permission = assignPermission[1];
     return lang === 'ar'
-      ? `لا يمكنك تعيين هذا الدور لأنه يحتوي على صلاحية لا تملكها: ${permissionLabel(permission, lang)} (${permission}). اطلب إضافة الصلاحية لك أو اختر دورًا بصلاحيات ضمن نطاقك.`
-      : `You cannot assign this role because it contains a permission you do not have: ${permissionLabel(permission, lang)} (${permission}). Ask for that permission or choose a role within your permissions.`;
+      ? `لا يمكنك تعيين هذا الدور لأنه يحتوي على صلاحية لا تملكها: ${permissionLabel(permission, lang)}. اطلب إضافة الصلاحية لك أو اختر دورًا بصلاحيات ضمن نطاقك.`
+      : `You cannot assign this role because it contains a permission you do not have: ${permissionLabel(permission, lang)}. Ask for that permission or choose a role within your permissions.`;
   }
 
   const requiredPermission = text.match(/PERMISSION_DENIED:\s*([a-z0-9_.-]+)/i)
@@ -437,8 +542,8 @@ export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = cur
   if (requiredPermission && requiredPermission[1].includes('.')) {
     const permission = requiredPermission[1];
     return lang === 'ar'
-      ? `لا تملك الصلاحية المطلوبة لتنفيذ العملية: ${permissionLabel(permission, lang)} (${permission}).`
-      : `You do not have the required permission: ${permissionLabel(permission, lang)} (${permission}).`;
+      ? `لا تملك الصلاحية المطلوبة لتنفيذ العملية: ${permissionLabel(permission, lang)}.`
+      : `You do not have the required permission: ${permissionLabel(permission, lang)}.`;
   }
 
   const code = mappedCode(text);
@@ -464,20 +569,30 @@ export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = cur
       ? 'إحدى القيم المدخلة غير مسموح بها. راجع البيانات المطلوبة ثم حاول مرة أخرى.'
       : 'One of the entered values is not allowed. Review the required data and retry.';
   }
+  if (context.operation === 'read' && /failed to fetch|fetch failed|networkerror|network request failed|connection/i.test(text)) {
+    return lang === 'ar'
+      ? 'تعذر تحميل البيانات لعدم الاتصال بالخادم. تحقق من اتصال الإنترنت ثم اضغط إعادة المحاولة.'
+      : 'Data could not be loaded because the server could not be reached. Check your internet connection, then retry.';
+  }
   if (/failed to fetch|fetch failed|networkerror|network request failed|connection/i.test(text)) {
     return lang === 'ar'
-      ? 'تعذر الاتصال بالخادم. تحقق من الإنترنت ثم حاول مرة أخرى.'
-      : 'Could not reach the server. Check your internet connection and retry.';
+      ? 'تعذر الاتصال بالخادم. تحقق من الإنترنت وراجع حالة العملية قبل إعادة المحاولة لتجنب تكرارها.'
+      : 'Could not reach the server. Check your connection and the operation state before retrying to avoid duplication.';
   }
   if (/jwt.*expired|token.*expired|session.*expired/i.test(text)) {
     return lang === 'ar'
       ? 'انتهت جلسة الدخول. سجّل الدخول مرة أخرى ثم أعد المحاولة.'
       : 'Your session has expired. Sign in again and retry.';
   }
-  if (/timeout|timed out/i.test(text)) {
+  if (/55P03|40P01|40001|deadlock|lock timeout/i.test(text)) {
     return lang === 'ar'
-      ? 'استغرقت العملية وقتًا أطول من المتوقع. حاول مرة أخرى.'
-      : 'The operation took longer than expected. Please retry.';
+      ? (context.operation === 'read' ? 'البيانات مشغولة بعملية أخرى. انتظر قليلًا ثم أعد تحميل التقرير.' : 'توجد عملية أخرى تعدّل البيانات الآن. راجع حالة العملية ثم حاول مجددًا.')
+      : (context.operation === 'read' ? 'Another operation is using this data. Wait briefly, then reload the report.' : 'Another operation is changing this data. Check the operation state, then retry.');
+  }
+  if (/timeout|timed out|57014/i.test(text)) {
+    return lang === 'ar'
+      ? (context.operation === 'read' ? 'استغرق تحميل البيانات وقتًا أطول من المسموح. أعد المحاولة، وإذا تكرر التأخير أبلغ المسؤول باسم التقرير والفترة المختارة.' : 'تأخر رد الخادم ولم نتمكن من تأكيد نتيجة العملية. راجع حالة العملية قبل تكرارها، وإذا استمر التأخير أبلغ المسؤول بالرقم المرجعي.')
+      : (context.operation === 'read' ? 'Loading data took longer than allowed. Retry; if the delay continues, give the report name and selected dates to an administrator.' : 'The server response was delayed and the outcome could not be confirmed. Check the operation state before repeating it; report persistent delays with the reference number.');
   }
   if (/invalid input syntax|invalid uuid|malformed/i.test(text)) {
     return lang === 'ar'
@@ -493,7 +608,27 @@ export function userFacingErrorMessage(input: unknown, lang: ErrorLanguage = cur
   if (ARABIC_RE.test(text) && !looksTechnical(text)) return text;
   if (lang === 'en' && !looksTechnical(text) && text.length <= 220) return text;
 
+  if (context.operation === 'read') return lang === 'ar'
+    ? 'تعذر تحميل البيانات بسبب مشكلة في النظام. أعد المحاولة، وإذا استمرت المشكلة أبلغ المسؤول باسم الشاشة والفترة المختارة.'
+    : 'Data could not be loaded because of a system error. Retry; if it persists, report the screen name and selected dates to an administrator.';
+
   return lang === 'ar'
-    ? 'تعذر إكمال العملية بسبب خطأ في النظام. لم يتم تنفيذ التغيير؛ حاول مرة أخرى وإذا استمرت المشكلة تواصل مع مسؤول النظام.'
-    : 'The action could not be completed because of a system error. No change was made; retry and contact the system administrator if it continues.';
+    ? 'حدث خطأ في النظام ولم نتمكن من تأكيد النتيجة. راجع حالة العملية قبل تكرارها، وأرسل الرقم المرجعي إلى المسؤول.'
+    : 'A system error occurred and the result could not be confirmed. Check the operation before repeating it and give the reference number to an administrator.';
+}
+
+/** User-visible classification only: no SQL, raw server detail or stack is rendered. */
+export function userFacingErrorCategory(input: unknown, lang: ErrorLanguage = currentLanguage()): string {
+  const text = extractMessage(input);
+  let category: [string, string];
+  if (/KITCHEN_STATION_NOT_CONFIGURED|WAREHOUSE.*MISMATCH|إعدادات|محطة تجهيز/i.test(text)) category = ['إعدادات التشغيل', 'Operation setup'];
+  else if (/PERMISSION|AUTH_REQUIRED|DENIED|صلاحية|صلاحيات/i.test(text)) category = ['الصلاحيات', 'Permissions'];
+  else if (/55P03|40P01|40001|deadlock|lock timeout/i.test(text)) category = ['البيانات مشغولة', 'Data busy'];
+  else if (/timeout|timed out|57014|مهلة|تأخر رد|استغرق تحميل/i.test(text)) category = ['تأخر استجابة الخادم', 'Server response delayed'];
+  else if (/network|fetch|connection|الاتصال/i.test(text)) category = ['تعذر الاتصال', 'Connection unavailable'];
+  else if (/ORDER_(CLOSED|CANCELLED|NOT_FOUND|NOT_EDITABLE)|TABLE_BUSY|STALE_|TRANSFER_SOURCE_CHANGED|طلب.*(مغلق|ملغى|منتهي)/i.test(text)) category = ['حالة الطلب', 'Order status'];
+  else if (/REQUIRED|INVALID|EMPTY|EXCEEDS|2350[35]|23514|أدخل|اختر|اكتب|يجب|لا يمكن إغلاق|تعذر إغلاق/i.test(text)) category = ['مراجعة البيانات', 'Check input'];
+  else if (/TRANSACTION_FAILED|SQLSTATE|PGRST|postgres|constraint|syntax|relation|column|TypeError|ReferenceError|SyntaxError|RangeError/i.test(text) || !ARABIC_RE.test(text)) category = ['خطأ بالنظام', 'System error'];
+  else category = ['تعذر تنفيذ الإجراء', 'Action unavailable'];
+  return category[lang === 'ar' ? 0 : 1];
 }

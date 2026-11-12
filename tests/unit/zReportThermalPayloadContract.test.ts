@@ -16,4 +16,11 @@ describe('thermal Z-report cloud payload', () => {
     expect(report).toContain('export function buildThermalZReportHtml');
     expect(page).toContain('buildA4ZReportHtml(summary, currency, lang)');
   });
+
+  it('queues the idempotent automatic report before optional audit network I/O', () => {
+    const close = page.slice(page.indexOf('const finishClose ='), page.indexOf('const closeShift ='));
+    expect(close.indexOf('await enqueueAutomaticShiftZReport')).toBeGreaterThan(0);
+    expect(close.indexOf('await enqueueAutomaticShiftZReport')).toBeLessThan(close.indexOf('await logAudit'));
+    expect(close).toContain('}, closeTarget.branch_id)');
+  });
 });

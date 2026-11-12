@@ -66,7 +66,7 @@ export function getReportExcelProfile(reportType: ReportType, lang: 'ar' | 'en')
       integerColumns: [pick(lang, 'عدد الحركات', 'Movements')],
     },
     recipe_costs: {
-      columns: [branch, pick(lang, 'المنتج', 'Product'), pick(lang, 'تكلفة الوصفة', 'Recipe Cost'), pick(lang, 'سعر البيع', 'Sale Price'), pick(lang, 'الهامش', 'Margin')],
+      columns: [branch, pick(lang, 'المنتج', 'Product'), pick(lang, 'تكلفة الوصفة', 'Recipe Cost'), pick(lang, 'سعر البيع', 'Sale Price'), pick(lang, 'نسبة التكلفة %', 'Cost ratio %'), pick(lang, 'الهامش', 'Margin')],
       columnWidths: { [branch]: 24, [pick(lang, 'المنتج', 'Product')]: 30 },
       integerColumns: [],
     },
@@ -131,28 +131,19 @@ export function getReportExcelProfile(reportType: ReportType, lang: 'ar' | 'en')
       integerColumns: [],
     },
     raw_material_current_cost: {
+      columns: [branch, pick(lang, 'الخامة', 'Raw Material'), pick(lang, 'الكود', 'Code'), pick(lang, 'الوحدة', 'Unit'), pick(lang, 'آخر سعر معتمد / وحدة', 'Latest Approved Unit Price'), pick(lang, 'مصدر السعر', 'Price Source'), pick(lang, 'تاريخ السعر', 'Price Date'), pick(lang, 'رقم المستند', 'Document')],
+      columnWidths: { [branch]: 24, [pick(lang, 'الخامة', 'Raw Material')]: 30 },
+      integerColumns: [],
+    },
+    raw_material_valuation: {
       columns: [
-        branch, pick(lang, 'الخامة', 'Raw Material'), pick(lang, 'الكود', 'Code'), pick(lang, 'الوحدة', 'Unit'),
+        branch, pick(lang, 'الخامة', 'Raw Material'), pick(lang, 'الكود', 'Code'),
         pick(lang, 'الكمية الحالية', 'Current Qty'), pick(lang, 'سعر الخامة المعتمد (مركز التكلفة)', 'Canonical Raw Cost (Costing Center)'),
-        pick(lang, 'متوسط تكلفة المخزون المتبقي FIFO', 'Remaining Inventory FIFO Average Cost'), pick(lang, 'قيمة المخزون الحالية', 'Current Inventory Value'),
-        pick(lang, 'مصدر السعر', 'Price Source'), pick(lang, 'طبقات FIFO المفتوحة', 'Open FIFO Batches'),
-        pick(lang, 'دين FIFO غير مسوّى', 'Outstanding FIFO Debt'), pick(lang, 'عدد ديون FIFO', 'FIFO Debt Rows'),
-        pick(lang, 'قيمة الدين التقديرية', 'Estimated Debt Value'), pick(lang, 'دين بلا سعر', 'Unpriced Debt Qty'),
-        pick(lang, 'تغطية تسعير الدين %', 'Debt Pricing Coverage %'), pick(lang, 'أقدم دين', 'Oldest Debt'),
-        pick(lang, 'آخر توريد شراء', 'Last Purchase Receipt'), pick(lang, 'حالة الدين', 'Debt Status'),
+        pick(lang, 'قيمة المخزون الحالية', 'Current Inventory Value'), pick(lang, 'مصدر السعر', 'Price Source'),
+        pick(lang, 'حالة السعر', 'Price Status'),
       ],
-      columnWidths: {
-        [branch]: 24,
-        [pick(lang, 'الخامة', 'Raw Material')]: 30,
-        [pick(lang, 'مصدر السعر', 'Price Source')]: 20,
-        [pick(lang, 'أقدم دين', 'Oldest Debt')]: 18,
-        [pick(lang, 'آخر توريد شراء', 'Last Purchase Receipt')]: 18,
-        [pick(lang, 'حالة الدين', 'Debt Status')]: 28,
-      },
-      integerColumns: [
-        pick(lang, 'طبقات FIFO المفتوحة', 'Open FIFO Batches'),
-        pick(lang, 'عدد ديون FIFO', 'FIFO Debt Rows'),
-      ],
+      columnWidths: { [branch]: 24, [pick(lang, 'الخامة', 'Raw Material')]: 30 },
+      integerColumns: [],
     },
     raw_material_financial: {
       columns: [

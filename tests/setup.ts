@@ -3,7 +3,8 @@ import { cleanup } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
 
 afterEach(() => {
-  cleanup();
+  // Pure source-contract tests use Node; React cleanup needs a browser DOM.
+  if (typeof window !== 'undefined') cleanup();
   vi.restoreAllMocks();
 });
 
@@ -16,7 +17,7 @@ class ResizeObserverStub {
 }
 globalThis.ResizeObserver = ResizeObserverStub;
 
-Object.defineProperty(window, 'matchMedia', {
+if (typeof window !== 'undefined') Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({
     matches: false,

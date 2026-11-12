@@ -1,8 +1,10 @@
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
-import { supabase } from '@/api';
+import { supabase, type SplitTenderInput } from '@/api';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
+import { usePosPermissions } from './usePosPermissions';
 import { useToast } from '@/components/Toast';
 import { computePosTotals, computeLineDiscount, type PosPaymentMethod } from '@/lib/posMath';
 import { logAudit } from '@/lib/audit';
@@ -12,10 +14,11 @@ import { resolveOrderBindingForSave } from '../utils/orderBinding';
 import { cartLineKey, cartToItems, orderItemLineKey, orderItemsToCart, sameCartConfiguration } from '../utils/cart';
 import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, enqueueAutomaticReceiptPrint, buildKitchenTicketHtml, openPrintWindow, ReceiptPrintApprovalError, type ReceiptData } from '../utils/printing';
 import { fetchOrderForWorkspace } from '../services/posOrders';
-import { sendOrderToKitchen } from '../services/kitchen';
+import { sendOrderToKitchen } from '../services/kitchenHandoff';
 import { enqueueCloudOpenOrderPrint, getCloudOpenOrderPrintState } from '../services/cloudPrint';
-import { createSaleOperationKey, processSaleForOrder, nextInvoiceNumber, fetchBranchWarehouseId } from '../services/payment';
-import type { KitchenSendItem, KitchenStationDispatchSummary } from '../types';
+import { createSaleOperationKey, processSaleForOrder, nextInvoiceNumber, fetchBranchWarehouseId, type ProcessSalePayload } from '../services/payment';
+import { applyItemTransferToCart } from '../utils/itemTransfer';
+import type { PosItemTransferResult, KitchenSendItem, KitchenStationDispatchSummary } from '../types';
 
 export interface ActiveShiftInfo {
   id: string;
@@ -52,6 +55,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
   const { user } = useAuth();
+  const perms = usePosPermissions();
   const { show } = useToast();
 
   const [cart, setCartState] = useState<CartItem[]>(EMPTY_CART);
@@ -81,11 +85,15 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [tableId, setTableId] = useState<string | null>(null);
   const [guestCount, setGuestCount] = useState<number | null>(null);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(orderId);
+  const transferScopeRef = useRef({ orderId: activeOrderId, branchId });
+  transferScopeRef.current = { orderId: activeOrderId, branchId };
   const [activeOrderNumber, setActiveOrderNumber] = useState<string | null>(null);
   const [activeTable, setActiveTable] = useState<DiningTable | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
   const saleMutationLockRef = useRef(false);
+  const workspaceEpochRef = useRef(0);
+  const pendingSaleRef = useRef<{payload: ProcessSalePayload; payments?: SplitTenderInput[]; receipt: ReceiptData; cartRevision:number} | null>(null);
   const saleAttemptRef = useRef<{ fingerprint: string; operationKey: string } | null>(null);
   const [orderLoading, setOrderLoading] = useState(false);
   const [kitchenSending, setKitchenSending] = useState(false);
@@ -121,7 +129,19 @@ export function usePosOrder(input: UsePosOrderInput) {
   }, [effSettings?.pos_default_payment_method]);
 
   useEffect(() => {
+    workspaceEpochRef.current += 1;
+    pendingSaleRef.current = null;
+    setCartState(EMPTY_CART);
+    setCustomerId('');
+    setDiscountAmount(0);
+    setPaidAmount(0);
+    setOrderNotes('');
+    setKitchenSentItems([]);
+    setKitchenDispatch(null);
     setActiveOrderId(orderId);
+    setTableId(null);
+    setActiveOrderNumber(null);
+    setActiveTable(null);
     setOpenCheckPrintLocked(false);
     setOpenCheckPrintStateReady(!orderId);
     if (!orderId) {
@@ -150,7 +170,7 @@ export function usePosOrder(input: UsePosOrderInput) {
           setOrderLoading(false);
           return;
         }
-        if (!order) { setOrderLoading(false); return; }
+        if (!order) throw new Error('ORDER_NOT_FOUND');
         if (order.status !== 'open' && order.status !== 'held') {
           const feedback = workspaceFeedbackRef.current;
           feedback.show(feedback.isAr ? 'لا يمكن استئناف طلب منتهي' : 'Cannot resume a completed order', 'error');
@@ -161,9 +181,13 @@ export function usePosOrder(input: UsePosOrderInput) {
         }
         setOrderType(order.order_type as OrderType);
         setTableId(order.table_id);
+        setActiveTable(order.table?.id === order.table_id && order.table?.branch_id === branchId ? order.table : null);
         setActiveOrderId(order.id);
         setActiveOrderNumber(order.order_number);
         setGuestCount(order.guest_count);
+        setCustomerId(order.customer_id || '');
+        setDiscountType('amount');
+        setDiscountAmount(Number(order.discount_amount || 0));
         setOrderNotes(order.notes || '');
         const hasEffectiveItems = items.some((item) => Number(item.quantity || 0) > 0);
         if (order.table_id && hasEffectiveItems) {
@@ -179,18 +203,24 @@ export function usePosOrder(input: UsePosOrderInput) {
         feedback.show(feedback.t('orderResumed'), 'success');
         setOrderLoading(false);
       })
-      .catch(() => { if (!cancelled) setOrderLoading(false); });
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setCartState(EMPTY_CART);
+        setOrderLoading(false);
+        workspaceFeedbackRef.current.show(error instanceof Error ? error.message : 'ORDER_LOAD_FAILED', 'error');
+      });
     return () => { cancelled = true; };
   }, [orderId, branchId, setCart]);
 
   useEffect(() => {
     if (!tableId) { setActiveTable(null); return; }
+    if (activeTable?.id === tableId && activeTable.branch_id === branchId) return;
     let cancelled = false;
-    supabase.from('dining_tables').select('*').eq('id', tableId).maybeSingle().then(({ data }) => {
+    supabase.from('dining_tables').select('*').eq('id', tableId).eq('branch_id', branchId).maybeSingle().then(({ data }) => {
       if (!cancelled) setActiveTable((data as DiningTable | null) || null);
     });
     return () => { cancelled = true; };
-  }, [tableId]);
+  }, [tableId, branchId, activeTable?.id, activeTable?.branch_id]);
 
   const addToCart = useCallback((
     product: Product,
@@ -287,6 +317,10 @@ export function usePosOrder(input: UsePosOrderInput) {
 
   const switchOrderType = useCallback(async (ot: OrderType) => {
     if (ot === orderType) return;
+    if (!perms.canOperateType(ot, ot === 'dine_in' ? tableId : null)) {
+      show(isAr ? 'لا تملك صلاحية هذا النوع من الطلبات.' : 'You do not have permission for this order type.', 'error');
+      return;
+    }
     if (activeOrderNumber) {
       show(isAr ? `لا يمكن تغيير نوع طلب نشط (${activeOrderNumber})` : `Cannot change order type of active order (${activeOrderNumber})`, 'error');
       return;
@@ -310,7 +344,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       setActiveTable(null);
     }
     setOrderType(ot);
-  }, [orderType, activeOrderNumber, tableId, activeTable, show, t, isAr]);
+  }, [perms, orderType, activeOrderNumber, tableId, activeTable, show, t, isAr]);
 
   const performDetach = useCallback(async () => {
     if (activeOrderId) {
@@ -361,6 +395,28 @@ export function usePosOrder(input: UsePosOrderInput) {
     setCustomerId(order.customer_id || '');
     const cartItems = orderItemsToCart(items, orderProducts);
     setCart(cartItems);
+  }, [setCart]);
+
+  const applyItemsTransfer = useCallback((result: PosItemTransferResult): boolean => {
+    const scope = transferScopeRef.current;
+    const snapshot = result.snapshot;
+    const source = snapshot?.orders.find((order) => order.id === result.source_order_id);
+    if (!result.success || !snapshot || !source || scope.orderId !== source.id || scope.branchId !== source.branch_id) return false;
+    setCart((current) => applyItemTransferToCart(current, result));
+    const sourceTable = snapshot.tables.find((table) => table.id === source.table_id);
+    if (sourceTable) setActiveTable(sourceTable);
+    setDiscountAmount(Number(source.discount_amount || 0));
+    setDiscountType('amount');
+    setPaidAmount(0);
+    setCheckoutOpen(false);
+    // Old session deltas must not override the reassigned authoritative sends.
+    setKitchenSentItems([]);
+    setKitchenDispatch(null);
+    if (source.status !== 'open' && source.status !== 'held') {
+      setActiveOrderId(null);
+      setActiveOrderNumber(null);
+    }
+    return true;
   }, [setCart]);
 
   const startTableOrder = useCallback((table: DiningTable, guests = 2) => {
@@ -418,6 +474,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   }, [activeOrderId, isAr, show]);
 
   const transferOrderItemToTable = useCallback(async (lineKey: string, targetTableId: string): Promise<boolean> => {
+    if (saleMutationLockRef.current) return false;
     if (!activeOrderId || !activeTable) return false;
     const item = cart.find((entry) => cartLineKey(entry) === lineKey);
     if (!item) return false;
@@ -485,6 +542,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   }, [setCart, activeOrderId, activeTable, cart, isAr, show, t]);
 
   const voidSentItem = useCallback(async (lineKey: string, voidQuantity: number, reason: string): Promise<boolean> => {
+    if (saleMutationLockRef.current) return false;
     if (!activeOrderId) return false;
     try {
       const item = cart.find((i) => cartLineKey(i) === lineKey);
@@ -585,6 +643,11 @@ export function usePosOrder(input: UsePosOrderInput) {
 
   const persistCart = useCallback(async (status: 'open' | 'held'): Promise<PersistResult> => {
     if (!branchId) { show(t('selectBranchFirst'), 'error'); return { ok: false, orderId: null, orderNumber: null }; }
+    if (!activeOrderId && !perms.canOperateType(orderType, tableId)) {
+      show(isAr ? 'لا تملك صلاحية هذا النوع من الطلبات.' : 'You do not have permission for this order type.', 'error');
+      return { ok: false, orderId: null, orderNumber: null };
+    }
+    const epoch = workspaceEpochRef.current;
     const itemRows = cartToItems(cart);
     const binding = resolveOrderBindingForSave({
       activeOrderId,
@@ -611,7 +674,8 @@ export function usePosOrder(input: UsePosOrderInput) {
       });
       if (error) { show(error.message, 'error', { source: error, action: 'pos_update_order', branchId, entityType: 'order', entityId: activeOrderId }); return { ok: false, orderId: null, orderNumber: null }; }
       const r = data as RpcResult | null;
-      if (!r?.success) { show(r?.detail || r?.error || t('error'), 'error', { source: r?.error || r?.detail || 'POS_EMPTY_RESPONSE', action: 'pos_update_order', branchId, entityType: 'order', entityId: activeOrderId }); return { ok: false, orderId: null, orderNumber: null }; }
+      if (!r?.success) { show(userFacingErrorMessage(r ?? 'POS_EMPTY_RESPONSE', isAr ? 'ar' : 'en'), 'error', { source: r ?? 'POS_EMPTY_RESPONSE', action: 'pos_update_order', branchId, entityType: 'order', entityId: activeOrderId }); return { ok: false, orderId: null, orderNumber: null }; }
+      if (epoch !== workspaceEpochRef.current) return { ok: false, orderId: null, orderNumber: null };
       return { ok: true, orderId: activeOrderId, orderNumber: activeOrderNumber };
     }
 
@@ -632,16 +696,17 @@ export function usePosOrder(input: UsePosOrderInput) {
     });
     if (error) { show(error.message, 'error', { source: error, action: 'pos_create_order', branchId }); return { ok: false, orderId: null, orderNumber: null }; }
     const r = data as RpcResult | null;
-    if (!r?.success) { show(r?.detail || r?.error || t('error'), 'error', { source: r?.error || r?.detail || 'POS_EMPTY_RESPONSE', action: 'pos_create_order', branchId }); return { ok: false, orderId: null, orderNumber: null }; }
+    if (!r?.success) { show(userFacingErrorMessage(r ?? 'POS_EMPTY_RESPONSE', isAr ? 'ar' : 'en'), 'error', { source: r ?? 'POS_EMPTY_RESPONSE', action: 'pos_create_order', branchId }); return { ok: false, orderId: null, orderNumber: null }; }
+    if (epoch !== workspaceEpochRef.current) return { ok: false, orderId: null, orderNumber: null };
     if (r.order_id) {
       setActiveOrderId(r.order_id);
       setActiveOrderNumber((r as RpcResult & { order_number?: string }).order_number || null);
     }
     return { ok: true, orderId: r.order_id || null, orderNumber: (r as RpcResult & { order_number?: string }).order_number || null };
-  }, [branchId, activeOrderId, activeOrderNumber, activeTable?.id, orderType, tableId, customerId, guestCount, orderNotes, cart, subtotal, discountValue, discountType, taxAmount, total, user?.id, show, t]);
+  }, [perms, isAr, branchId, activeOrderId, activeOrderNumber, activeTable?.id, orderType, tableId, customerId, guestCount, orderNotes, cart, subtotal, discountValue, discountType, taxAmount, total, user?.id, show, t]);
 
   const holdOrder = useCallback(async (): Promise<boolean> => {
-    if (cart.length === 0 || completing || orderLoading) return false;
+    if (saleMutationLockRef.current || cart.length === 0 || completing || orderLoading) return false;
     if (!branchId) { show(t('selectBranchFirst'), 'error'); return false; }
     if (orderType === 'dine_in' && !tableId) {
       show(isAr ? 'اختر طاولة لطلب داخل الصالة' : 'Select a table for dine-in orders', 'error');
@@ -672,23 +737,33 @@ export function usePosOrder(input: UsePosOrderInput) {
       show(t('orderHeld'), 'success');
       return true;
     } finally {
+      saleMutationLockRef.current = false;
       setCompleting(false);
     }
   }, [cart.length, completing, orderLoading, branchId, orderType, tableId, activeOrderId, persistCart, show, t, isAr]);
 
   const sendToKitchen = useCallback(async (): Promise<boolean> => {
-    if (cart.length === 0 || completing || orderLoading || kitchenSending) return false;
+    if (!perms.canOperateType(orderType, tableId)) {
+      show(isAr ? 'لا تملك صلاحية إنشاء وإرسال هذا النوع من الطلبات.' : 'You do not have create and send permission for this order type.', 'error');
+      return false;
+    }
+    if (saleMutationLockRef.current || cart.length === 0 || completing || orderLoading || kitchenSending) return false;
     if (!branchId) { show(t('selectBranchFirst'), 'error'); return false; }
     if (orderType === 'dine_in' && !tableId) {
       show(isAr ? 'اختر طاولة لطلب داخل الصالة' : 'Select a table for dine-in orders', 'error');
       return false;
     }
+    saleMutationLockRef.current = true;
+    const epoch = workspaceEpochRef.current;
     setKitchenSending(true);
     try {
-      const { ok, orderId: targetOrderId, orderNumber: targetOrderNumber } = await persistCart('open');
+      // A sender without edit capability sends the saved server order as-is.
+      const { ok, orderId: targetOrderId, orderNumber: targetOrderNumber } = activeOrderId && !perms.canEditOrder
+        ? { ok: true, orderId: activeOrderId, orderNumber: activeOrderNumber }
+        : await persistCart('open');
       if (!ok || !targetOrderId) return false;
 
-      const res = await sendOrderToKitchen({ p_order_id: targetOrderId, p_sent_by: null, p_branch_id: branchId });
+      const res = await sendOrderToKitchen({ p_order_id: targetOrderId, p_sent_by: null, p_branch_id: branchId, p_is_ar: isAr });
       if (!res.success) {
         if (res.error === 'ORDER_OPERATOR_REQUIRED') {
           show(
@@ -697,13 +772,14 @@ export function usePosOrder(input: UsePosOrderInput) {
               : 'This order belongs to another operator. Transfer the order to the correct user, then send it to the kitchen again.',
             'error',
           );
-        } else if (res.error === 'PERMISSION_DENIED' && res.detail?.includes('pos.send_kitchen')) {
-          show(isAr ? 'لا توجد صلاحية إرسال للمطبخ لهذا المستخدم.' : 'This user does not have Send to Kitchen permission.', 'error');
+        } else if (res.error === 'PERMISSION_DENIED' && res.detail?.includes('pos.order.')) {
+          show(isAr ? 'لا تملك صلاحية إنشاء وإرسال هذا النوع من الطلبات.' : 'You do not have create and send permission for this order type.', 'error');
         } else {
           show(res.detail || res.error || t('error'), 'error');
         }
         return false;
       }
+      if (epoch !== workspaceEpochRef.current) return true;
       setActiveOrderId(targetOrderId);
       if (targetOrderNumber) setActiveOrderNumber(targetOrderNumber);
       setKitchenSentItems(res.sent || []);
@@ -727,7 +803,8 @@ export function usePosOrder(input: UsePosOrderInput) {
         } else {
           show(`${t('sendToKitchen')} (${sentCount})`, 'success');
         }
-        if (effSettings) {
+        // A server-queued or ambiguous print outcome must never open another ticket.
+        if (effSettings && !res.suppress_kitchen_browser_popup) {
           const html = buildKitchenTicketHtml({
             orderNumber: targetOrderNumber || activeOrderNumber,
             tableName: activeTable?.name || null,
@@ -745,9 +822,10 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
       return true;
     } finally {
+      saleMutationLockRef.current = false;
       setKitchenSending(false);
     }
-  }, [cart.length, completing, orderLoading, kitchenSending, branchId, orderType, tableId, activeOrderNumber, persistCart, effSettings, activeTable, guestCount, orderNotes, t, isAr, onInventoryChanged, show]);
+  }, [perms, activeOrderId, cart.length, completing, orderLoading, kitchenSending, branchId, orderType, tableId, activeOrderNumber, persistCart, effSettings, activeTable, guestCount, orderNotes, t, isAr, onInventoryChanged, show]);
 
   const printKitchenTicket = useCallback(() => {
     if (cart.length === 0 || !effSettings) return;
@@ -764,7 +842,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM);
   }, [cart, effSettings, activeOrderNumber, activeTable, orderType, guestCount, orderNotes, t, isAr]);
 
-  const completeSale = useCallback(async (): Promise<boolean> => {
+  const completeSale = useCallback(async (payments?: SplitTenderInput[]): Promise<boolean> => {
     if (saleMutationLockRef.current || cart.length === 0 || completing) return false;
     if (!branchId) { show(t('selectBranchFirst'), 'error'); return false; }
     if (!activeShift) { show(t('shiftRequired'), 'error'); return false; }
@@ -788,11 +866,14 @@ export function usePosOrder(input: UsePosOrderInput) {
       show(isAr ? 'اختر طاولة لطلب داخل الصالة' : 'Select a table for dine-in orders', 'error');
       return false;
     }
+    saleMutationLockRef.current = true;
+    const epoch = workspaceEpochRef.current;
     setCompleting(true);
     try {
       // Stock authorization and deductions belong to the server RPC, including direct sales.
-      const warehouseId = await fetchBranchWarehouseId(branchId, activeOrderId);
-      const invoiceNumber = (await nextInvoiceNumber()) || `INV-${Date.now()}`;
+      const warehouseId = pendingSaleRef.current?.payload.p_warehouse_id ?? await fetchBranchWarehouseId(branchId, activeOrderId);
+      const invoiceNumber = pendingSaleRef.current?.payload.p_invoice_number ?? await nextInvoiceNumber();
+      if (epoch !== workspaceEpochRef.current) return false;
       const itemsPayload = cartToItems(cart);
       const paidAmountToUse = paymentMethod === 'credit' ? 0 : paidAmount || total;
       const binding = resolveOrderBindingForSave({
@@ -817,7 +898,7 @@ export function usePosOrder(input: UsePosOrderInput) {
         orderType: binding.orderType,
         tableId: binding.tableId,
         orderId: activeOrderId,
-        guestCount,
+        guestCount, payments,
       });
       if (!saleAttemptRef.current || saleAttemptRef.current.fingerprint !== attemptFingerprint) {
         saleAttemptRef.current = {
@@ -827,7 +908,16 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
       const clientOperationKey = saleAttemptRef.current.operationKey;
 
-      const { result, error: saleError } = await processSaleForOrder({
+      const receiptSnapshot: ReceiptData = {
+        invoice: invoiceNumber, branchName,
+        items: cart.map(i => ({name:[i.product.name,i.modifiers?.map(m=>m.name).join(' · ')].filter(Boolean).join(' — '),qty:i.quantity,price:i.unit_price,total:i.quantity*i.unit_price-i.discount_amount})),
+        subtotal, discount:discountValue, tax:taxAmount, total, paid:paidAmountToUse, change,
+        date:new Date().toISOString(), customerName:customers.find(c=>c.id===customerId)?.name || '',
+        orderNumber:activeOrderNumber || undefined,tableName:activeTable?.name || undefined,
+        orderTypeLabel:t(ORDER_TYPE_KEY[orderType]),guestCount:guestCount || undefined,
+        operatorName:user?.full_name || user?.username || user?.email || null,
+      };
+      const attempt = pendingSaleRef.current || {payload: {
         p_client_operation_key: clientOperationKey,
         p_invoice_number: invoiceNumber,
         p_branch_id: branchId,
@@ -849,30 +939,28 @@ export function usePosOrder(input: UsePosOrderInput) {
         p_table_id: binding.tableId,
         p_order_id: activeOrderId,
         p_guest_count: guestCount,
-      });
-      if (saleError) { show(saleError, 'error'); return false; }
-      if (!result?.success) { show(result?.detail || result?.error || t('error'), 'error'); return false; }
+      }, payments: payments?.map(entry=>({...entry})),receipt:receiptSnapshot, cartRevision:cartRevisionRef.current};
+      pendingSaleRef.current = attempt;
+      const { result, error: saleError } = await processSaleForOrder(attempt.payload, attempt.payments);
+      if (saleError || !result?.success) {
+        if (result?.success === false) pendingSaleRef.current = null;
+        show(saleError || result?.detail || result?.error || t('error'), 'error');
+        return false;
+      }
+      pendingSaleRef.current = null;
+      if (epoch !== workspaceEpochRef.current || cartRevisionRef.current !== attempt.cartRevision) {
+        show(t('saleCompleted'), 'success');
+        return true;
+      }
       const saleId = result.sale_id || '';
       const confirmedInvoiceNumber = result.invoice_number || invoiceNumber;
 
-      await logAudit('create', 'sales', saleId, { invoice: confirmedInvoiceNumber, total });
+      // Audit logging must not strand a server-confirmed sale in the cart.
+      void Promise.resolve(logAudit('create', 'sales', saleId, { invoice: confirmedInvoiceNumber, total: attempt.receipt.total })).catch(() => {});
 
       const receiptPayload: ReceiptData = {
-        invoice: confirmedInvoiceNumber,
-        branchName,
-        items: cart.map((i) => ({ name: [i.product.name, i.modifiers?.map((m) => m.name).join(' · ')].filter(Boolean).join(' — '), qty: i.quantity, price: i.unit_price, total: i.quantity * i.unit_price - i.discount_amount })),
-        subtotal, discount: discountValue, tax: taxAmount, total,
-        paid: paidAmountToUse, change, date: new Date().toISOString(),
-        customerName: customers.find((c) => c.id === customerId)?.name || '',
-        orderNumber: activeOrderNumber || undefined,
-        tableName: activeTable?.name || undefined,
-        orderTypeLabel: t(ORDER_TYPE_KEY[orderType]),
-        guestCount: guestCount || undefined,
-        operatorName: user?.full_name || user?.username || user?.email || null,
-        payments: (result.payments || []).map((payment) => ({
-          method: payment.payment_method,
-          amount: Number(payment.amount || 0),
-        })),
+        ...attempt.receipt, invoice:confirmedInvoiceNumber,
+        payments: (result.payments || []).map(payment=>({method:payment.payment_method,amount:Number(payment.amount || 0)})),
       };
       setLastReceipt(receiptPayload);
       setReceiptSaleId(saleId);
@@ -991,6 +1079,8 @@ export function usePosOrder(input: UsePosOrderInput) {
   const closeReceipt = useCallback(() => setReceiptSaleId(null), []);
 
   const resetWorkspace = useCallback(() => {
+    workspaceEpochRef.current += 1;
+    pendingSaleRef.current = null;
     saleAttemptRef.current = null;
     setCart(EMPTY_CART);
     setCustomerId('');
@@ -1011,6 +1101,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   }, [setCart]);
 
   return {
+    mutationLockRef: saleMutationLockRef,
     cart,
     customerId, setCustomerId,
     orderNotes, setOrderNotes,
@@ -1030,7 +1121,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     addToCart, updateQty, setQty, removeFromCart, clearCart, setItemDiscount, replaceCartLine,
     switchOrderType, holdOrder, sendToKitchen, printKitchenTicket, completeSale, printReceipt,
     detachTable, detachOrder, resetWorkspace,
-    resumeTableOrder, startTableOrder, transferOrderToTable, transferOrderItemToTable, voidSentItem,
+    applyItemsTransfer, resumeTableOrder, startTableOrder, transferOrderToTable, transferOrderItemToTable, voidSentItem,
   };
 }
 

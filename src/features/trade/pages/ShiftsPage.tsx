@@ -165,7 +165,7 @@ export function ShiftsPage() {
       if (res?.error === 'SHIFT_ALREADY_OPEN') { setOpenModal(false); reloadShifts(); }
       return;
     }
-    await logAudit('create', 'shifts', res.shift_id || '', { opening_amount: 0 });
+    await logAudit('create', 'shifts', res.shift_id || '', { opening_amount: 0 }, targetBranchId);
     show(t('shiftOpened'), 'success');
     setOpenModal(false);
     setOpenForm({ opening_amount: 0, notes: '' });
@@ -189,6 +189,13 @@ export function ShiftsPage() {
 
   const finishClose = async (res: ShiftCloseResult, preservedOpenOrders: boolean) => {
     if (!closeTarget) return;
+    // Queue the durable, idempotent report before optional client audit I/O.
+    const zQueued = await enqueueAutomaticShiftZReport({
+      shiftId: closeTarget.id,
+      branchId: closeTarget.branch_id,
+      currency,
+      lang,
+    });
     await logAudit('update', 'shifts', closeTarget.id, {
       expected: res.expected,
       actual: res.actual,
@@ -198,14 +205,8 @@ export function ShiftsPage() {
       open_table_count: res.open_table_count ?? 0,
       next_shift_id: res.next_shift_id ?? null,
       next_shift_opening_amount: res.next_shift_opening_amount ?? null,
-    });
+    }, closeTarget.branch_id);
 
-    const zQueued = await enqueueAutomaticShiftZReport({
-      shiftId: closeTarget.id,
-      branchId: closeTarget.branch_id,
-      currency,
-      lang,
-    });
     if (!zQueued.accepted) {
       show(
         isAr

@@ -151,7 +151,7 @@ export function WasteCenterPage() {
   const statusColor = (s: string) => s === 'approved' ? 'text-ui-success' : s === 'rejected' ? 'text-ui-danger' : 'text-ui-warning';
 
   const baseColumns: Column<WasteEntry>[] = [
-    { key: 'created_at', header: ar ? 'التاريخ' : 'Date', render: r => new Date(r.created_at).toLocaleDateString() },
+    { key: 'created_at', header: ar ? 'التاريخ' : 'Date', render: r => new Date(r.created_at).toLocaleDateString(ar ? 'ar-EG-u-ca-gregory' : 'en-US-u-ca-gregory') },
     { key: 'waste_type', header: ar ? 'النوع' : 'Type', render: r => typeLabel(r.waste_type) },
     { key: 'product', header: ar ? 'عنصر المخزون' : 'Inventory Item', render: r => {
       const joined = r as unknown as { product?: { name?: string; name_en?: string }; inventory_unit?: { name?: string; name_en?: string } };

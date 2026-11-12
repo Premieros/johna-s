@@ -49,32 +49,6 @@ type OwnedOfflineSaleQueueItem = Omit<OfflineSaleQueueItem, 'status' | 'retry_co
   created_by_user_id: string;
 };
 
-let armedSplitTender: SplitTenderInput[] | null = null;
-let armedSplitTenderAt = 0;
-const SPLIT_TENDER_ARM_TTL_MS = 15_000;
-
-export function armSplitTender(payments: SplitTenderInput[]): void {
-  armedSplitTender = payments
-    .filter((payment) => Number(payment.amount) > 0)
-    .map((payment) => ({ payment_method: payment.payment_method, amount: Number(payment.amount) }));
-  armedSplitTenderAt = Date.now();
-}
-
-export function clearArmedSplitTender(): void {
-  armedSplitTender = null;
-  armedSplitTenderAt = 0;
-}
-
-function consumeArmedSplitTender(): SplitTenderInput[] | null {
-  if (!armedSplitTender || Date.now() - armedSplitTenderAt > SPLIT_TENDER_ARM_TTL_MS) {
-    clearArmedSplitTender();
-    return null;
-  }
-  const payments = armedSplitTender;
-  clearArmedSplitTender();
-  return payments;
-}
-
 function createOfflineToken(): string {
   const randomUuid = globalThis.crypto?.randomUUID?.();
   if (randomUuid) return randomUuid;
@@ -130,8 +104,9 @@ async function resolveSharedBranchShift(p: ProcessSalePayload): Promise<{ payloa
   }
 }
 
-export async function processSaleForOrder(p: ProcessSalePayload): Promise<{ result: ProcessSaleResult | null; error: string | null; diagnostic?: unknown }> {
-  const splitPayments = consumeArmedSplitTender();
+export async function processSaleForOrder(p: ProcessSalePayload, splitPayments?: SplitTenderInput[]): Promise<{ result: ProcessSaleResult | null; error: string | null; diagnostic?: unknown }> {
+
+  if (splitPayments && splitPayments.length < 2) return { result: null, error: 'SPLIT_REQUIRES_MULTIPLE_PAYMENTS' };
 
   // Split tender is intentionally online-only. It must never degrade into an
   // offline queue because that could produce partial financial truth.

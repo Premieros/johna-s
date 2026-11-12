@@ -86,6 +86,10 @@ export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeDa
       .in('status', ['open', 'held'])
       .order('created_at', { ascending: false }),
   ]);
+  // Preserve the last good live snapshot on a failed refresh. A timeout is not
+  // an empty floor plan, and must not trigger additional operator-label reads.
+  if (tRes.error) throw tRes.error;
+  if (oRes.error) throw oRes.error;
   const tables = (tRes.data as DiningTable[]) || [];
   const snapshotRows = (oRes.data as ActiveOrderSnapshotRow[] | null) || [];
   // Do not broaden public.users RLS just to show occupied-table ownership.
@@ -137,18 +141,29 @@ export async function fetchOrderForWorkspace(orderId: string): Promise<{ order: 
   if (accessError) throw accessError;
   const access = (accessData as PosOrderAccessResult | null) || null;
   if (!access?.success) {
+    // One bounded, RLS-filtered status read only for an unavailable-order
+    // response. Never hydrate a closed order or override an authorization denial.
+    if (access?.error === 'ORDER_NOT_FOUND') {
+      const { data: ended, error: statusError } = await supabase.from('orders')
+        .select('status').eq('id', orderId).maybeSingle();
+      if (!statusError && ended?.status === 'completed') throw new Error('ORDER_CLOSED');
+      if (!statusError && ended?.status === 'cancelled') throw new Error('ORDER_CANCELLED');
+    }
     throw new Error(access?.error || 'ORDER_OPERATOR_REQUIRED');
   }
 
   const { data: o, error: orderError } = await supabase
     .from('orders')
-    .select('*, order_items!order_items_order_id_fkey(*, product:products!order_items_product_id_fkey(*))')
+    .select('*, table:dining_tables(*), order_items!order_items_order_id_fkey(*, product:products!order_items_product_id_fkey(*))')
     .eq('id', orderId)
     .maybeSingle();
   if (orderError) throw orderError;
 
   const row = (o as WorkspaceOrderRow | null) || null;
   if (!row) return { order: null, items: [], products: [] };
+  // The order may close between authorization and the payload read.
+  if (row.status === 'completed') throw new Error('ORDER_CLOSED');
+  if (row.status === 'cancelled') throw new Error('ORDER_CANCELLED');
 
   const embeddedItems = row.order_items || [];
   const productsById = new Map<string, Product>();

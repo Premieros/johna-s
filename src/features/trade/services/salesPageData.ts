@@ -94,3 +94,15 @@ export async function updateSaleMetadata(params: {
     .eq('id', params.saleId);
   if (error) throw error;
 }
+
+/** Receipt identity uses the persisted sale binding, never the currently selected POS table. */
+export function saleReceiptOrderMetadata(sale: {
+  branch_id: string; table_id: string | null;
+  table?: { id: string; branch_id: string; name: string } | null;
+  source_order?: { order_number: string } | null;
+}): { orderNumber?: string; tableName?: string } {
+  return {
+    orderNumber: sale.source_order?.order_number,
+    tableName: sale.table?.id === sale.table_id && sale.table?.branch_id === sale.branch_id ? sale.table.name : undefined,
+  };
+}

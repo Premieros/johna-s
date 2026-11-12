@@ -1,6 +1,5 @@
 import { rawCurrentPriceMap } from '@/features/costing/services/rawCurrentPriceData';
-import { rawFifoCost } from '@/features/costing/services/rawFifoCostData';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, Edit2, Boxes, Layers, Trash2 } from 'lucide-react';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -48,11 +47,18 @@ export function RawMaterialsPage() {
   const branchFilter = useBranchFilter();
 
   const [tab, setTab] = useState<Tab>('materials');
+  const [search, setSearch] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchTerm(search), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
   const { rows: materials, loading: materialsLoading, error, total, hasMore, loadMore, loadingMore, refresh: reloadMaterials } = usePaginatedRows<RawMaterial>({
     table: 'raw_materials',
     select: '*',
     order: { column: 'name', ascending: true },
     branch_id: branchFilter,
+    search: { term: searchTerm, columns: ['name', 'code', 'category'] },
     pageSize: 100,
   });
   const [currentPrices, setCurrentPrices] = useState<Record<string, number | null>>({});
@@ -61,7 +67,7 @@ export function RawMaterialsPage() {
   const [units, setUnits] = useState<Unit[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [metaError, setMetaError] = useState<string | null>(null);
   const [stockBranch, setStockBranch] = useState(branchFilter || '');
 
   const [form, setForm] = useState<MaterialForm>(EMPTY_FORM);
@@ -71,22 +77,32 @@ export function RawMaterialsPage() {
   const [adjustReason, setAdjustReason] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  async function loadMeta() {
-    setLoading(true);
+  const metaRequest = useRef(0);
+  const loadMeta = useCallback(async () => {
+    const generation = ++metaRequest.current;
+    setLoading(true); setMetaError(null);
     try {
-      const meta = await loadRawMaterialMeta();
+      const meta = await loadRawMaterialMeta(branchFilter, tab);
+      if (generation !== metaRequest.current) return;
       setInventory(meta.inventory);
       setCurrentPrices(rawCurrentPriceMap(meta.currentPrices));
       setBatches(meta.batches);
       setUnits(meta.units);
       setBranches(meta.branches);
     } catch (error) {
-      show(error instanceof Error ? error.message : String(error), 'error');
+      if (generation !== metaRequest.current) return;
+      const message = error instanceof Error ? error.message : String(error);
+      setMetaError(message); show(message, 'error');
     } finally {
-      setLoading(false);
+      if (generation === metaRequest.current) setLoading(false);
     }
-  }
-  useEffect(() => { loadMeta(); }, []);
+  }, [branchFilter, tab, show]);
+  useEffect(() => {
+    setCurrentPrices({}); setInventory([]); setBatches([]);
+    setStockBranch(branchFilter || '');
+    void loadMeta();
+    return () => { metaRequest.current += 1; };
+  }, [loadMeta, branchFilter]);
 
   const branchLabel = (id: string | null | undefined) => branches.find((br) => br.id === id)?.name || '-';
   const unitForId = (id: string | null | undefined) => units.find((u) => u.id === id);
@@ -96,11 +112,7 @@ export function RawMaterialsPage() {
     return unit ? (measurementUnitLabel(unit) || unit.name) : '-';
   };
 
-  const filteredMaterials = materials.filter((m) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return m.name.toLowerCase().includes(q) || (m.code || '').toLowerCase().includes(q) || (m.category || '').toLowerCase().includes(q);
-  });
+  const filteredMaterials = materials;
 
   const filteredStock = inventory.filter((i) => !stockBranch || i.branch_id === stockBranch);
   const filteredBatches = batches.filter((b) => !stockBranch || b.branch_id === stockBranch);
@@ -207,7 +219,7 @@ export function RawMaterialsPage() {
     { key: 'category', header: t('category'), render: (m) => m.category || '-' },
     { key: 'branch', header: t('branch'), render: (m) => <BranchBadge name={branchLabel(m.branch_id)} /> },
     { key: 'min_stock', header: t('minStock'), render: (m) => formatRawMaterialQuantity(Number(m.min_stock), unitForMaterial(m), { lang }) },
-    { key: 'latest_cost', header: isAr ? 'تكلفة FIFO أو آخر سعر محفوظ / وحدة' : 'FIFO or last saved price / unit', render: (m) => { const cost = currentPrices[m.id] ?? null; return cost === null ? '-' : formatNumber(cost, 6); } },
+    { key: 'latest_cost', header: isAr ? 'آخر سعر معتمد / وحدة' : 'Latest approved price / unit', render: (m) => { const cost = currentPrices[m.id] ?? null; return cost === null ? '-' : formatNumber(cost, 6); } },
     { key: 'is_active', header: t('status'), render: (m) => <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${m.is_active ? 'bg-ui-success-soft text-ui-success' : 'bg-ui-page-alt text-ui-subtle dark:text-ui-subtle'}`}>{m.is_active ? t('active') : t('inactive')}</span> },
     { key: 'actions', header: t('actions'), render: (m) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
       {can('raw_materials.manage') && <button onClick={() => openEdit(m)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('edit')}><Edit2 className="w-4 h-4" /></button>}
@@ -219,8 +231,8 @@ export function RawMaterialsPage() {
     { key: 'material', header: t('rawMaterial'), render: (i) => <div><p>{i.raw_material?.name || '-'}</p><p className="text-xs text-ui-subtle">{unitLabel(i.raw_material?.unit_id)}</p></div> },
     { key: 'branch', header: t('branch'), render: (i) => branchLabel(i.branch_id) },
     { key: 'quantity', header: t('quantity'), render: (i) => <span className={`font-semibold ${Number(i.quantity) < Number(i.min_stock) ? 'text-ui-danger' : 'text-ui-text'}`}>{formatRawMaterialQuantity(Number(i.quantity), unitForMaterial(i.raw_material), { lang })}</span> },
-    { key: 'latest_price', header: isAr ? 'تكلفة FIFO أو آخر سعر محفوظ / وحدة' : 'FIFO or last saved price / unit', render: (i) => currentPrices[i.raw_material_id] == null ? '-' : formatNumber(currentPrices[i.raw_material_id]!, 6) },
-    { key: 'avg_cost', header: isAr ? 'تكلفة المخزون الحالية (FIFO)' : 'Current inventory cost (FIFO)', render: (i) => rawFifoCost(i) === null ? '-' : formatNumber(Number(i.avg_cost), 2) },
+    { key: 'latest_price', header: isAr ? 'آخر سعر معتمد / وحدة' : 'Latest approved price / unit', render: (i) => currentPrices[i.raw_material_id] == null ? '-' : formatNumber(currentPrices[i.raw_material_id]!, 6) },
+    { key: 'stock_value', header: isAr ? 'قيمة الرصيد بآخر سعر' : 'Stock value at latest price', render: (i) => currentPrices[i.raw_material_id] == null ? '-' : formatNumber(Number(i.quantity) * currentPrices[i.raw_material_id]!, 2) },
     { key: 'actions', header: t('actions'), render: (i) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>{can('raw_materials.manage') && <button onClick={() => openAdjust(i)} className="p-1.5 rounded-md hover:bg-ui-info-soft text-ui-info" title={t('adjustRawStock')}><Edit2 className="w-4 h-4" /></button>}</div> },
   ];
 
@@ -250,9 +262,9 @@ export function RawMaterialsPage() {
       {tab === 'materials' && <DesignPanel testId="raw-materials-search-panel"><DesignSearch value={search} onChange={setSearch} label={t('search')} placeholder={t('search')} testId="raw-materials-search" /></DesignPanel>}
 
       <DesignPanel testId="raw-materials-table-panel">
-        {tab === 'materials' && <><DataTable columns={materialColumns} data={filteredMaterials} loading={materialsLoading} error={error} emptyMessage={t('noData')} /><DesignPagination loaded={materials.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} /></>}
-        {tab === 'stock' && <DataTable columns={stockColumns} data={filteredStock} loading={loading} error={error} emptyMessage={t('noData')} />}
-        {tab === 'batches' && <DataTable columns={batchColumns} data={filteredBatches} loading={loading} error={error} emptyMessage={t('noData')} />}
+        {tab === 'materials' && <><DataTable columns={materialColumns} data={filteredMaterials} loading={materialsLoading || loading} error={error || metaError} emptyMessage={t('noData')} /><DesignPagination loaded={materials.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} /></>}
+        {tab === 'stock' && <DataTable columns={stockColumns} data={filteredStock} loading={loading} error={error || metaError} emptyMessage={t('noData')} />}
+        {tab === 'batches' && <DataTable columns={batchColumns} data={filteredBatches} loading={loading} error={error || metaError} emptyMessage={t('noData')} />}
       </DesignPanel>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={form.id ? t('editRawMaterial') : t('addRawMaterial')} size="lg">

@@ -23,6 +23,7 @@ import { useActiveOrders } from '../hooks/useActiveOrders';
 import { usePosPermissions } from '../hooks/usePosPermissions';
 import { usePosKeyboard } from '../hooks/usePosKeyboard';
 import { cartConfigurationKey, cartLineKey, orderItemLineKey } from '../utils/cart';
+import { confirmedSessionSendQuantity } from '../utils/orderSendState';
 import { OrderStartWizard, type StartStep, type StartOrderOptions } from '../components/start/OrderStartWizard';
 import { ProductBrowser } from '../components/catalog/ProductBrowser';
 import { ProductConfigModal } from '../components/catalog/ProductConfigModal';
@@ -151,7 +152,7 @@ export function PosWorkspacePage() {
     products,
     stockMap: EMPTY_POS_STOCK_MAP,
   });
-  const canModifyCurrentOrder = pos.activeOrderId ? perms.canEditOrder : perms.canCreateOrder;
+  const canModifyCurrentOrder = pos.activeOrderId ? perms.canEditOrder : perms.canOperateType(pos.orderType, pos.tableId);
 
   useEffect(() => {
     if (pos.receiptSaleId) setMobileOrderOpen(false);
@@ -202,14 +203,31 @@ export function PosWorkspacePage() {
       const orderItem = cItem.order_item_id
         ? orderItemsForActive.find((oi) => oi.id === cItem.order_item_id)
         : orderItemsForActive.find((oi) => orderItemLineKey(oi) === lineKey);
-      if (!orderItem) return true;
+      if (!orderItem) {
+        // The send RPC can finish before Realtime publishes the new item row.
+        // Trust only one exact, server-confirmed line; a later local addition
+        // still exceeds that confirmed delta and must remain blocked.
+        return confirmedSessionSendQuantity(cItem, pos.kitchenSentItems) < cItem.quantity;
+      }
       const send = kitchenSendsForActive.find((row) => row.order_item_id === orderItem.id);
       return Number(send?.sent_quantity || 0) < cItem.quantity;
     });
-  }, [pos.cart, kitchenSendsByOrder, orderItemsForActive]);
+  }, [pos.cart, pos.kitchenSentItems, kitchenSendsForActive, orderItemsForActive]);
+
+  const printCustomerReceipt = useCallback(() => {
+    if (pos.activeOrderId && hasUnsentItems) {
+      show(isAr ? 'أرسل جميع الأصناف للمطبخ أو احذف غير المرسل قبل طباعة الحساب.' : 'Send all items or remove unsent items before printing the check.', 'error');
+      return;
+    }
+    void pos.printReceipt();
+  }, [pos, hasUnsentItems, isAr, show]);
 
   const handlePay = useCallback(() => {
     if (!perms.canPay || !shiftChecked || pos.cart.length === 0) return;
+    if (pos.activeOrderId && hasUnsentItems) {
+      show(isAr ? 'أرسل جميع الأصناف للمطبخ أو احذف غير المرسل قبل الدفع.' : 'Send all items or remove unsent items before payment.', 'error');
+      return;
+    }
     const allowed = guardPos({
       productsCount: products.length,
       activeShiftId: activeShift?.id || null,
@@ -220,7 +238,7 @@ export function PosWorkspacePage() {
     pos.setPaidAmount(pos.total);
     pos.setCheckoutOpen(true);
     setMobileOrderOpen(true);
-  }, [perms.canPay, shiftChecked, pos, guardPos, products.length, activeShift?.id]);
+  }, [perms.canPay, shiftChecked, pos, guardPos, products.length, activeShift?.id, hasUnsentItems, isAr, show]);
 
   // Keyboard Shortcuts Hook
   usePosKeyboard({
@@ -473,6 +491,7 @@ export function PosWorkspacePage() {
 
 
   const openOrderWorkspace = (orderId: string, opts: { pay?: boolean } = {}) => {
+    if (pos.completing || pos.kitchenSending) return;
     if (pos.activeOrderId === orderId) {
       if (opts.pay && perms.canPay) handlePay();
       setPanel(null);
@@ -483,6 +502,7 @@ export function PosWorkspacePage() {
   };
 
   const startOrderAtTable = (tableId: string) => {
+    if (pos.completing || pos.kitchenSending) return;
     if (!perms.canCreateOrder) return;
     if (pos.activeOrderId || pos.cart.length > 0) {
       const ok = window.confirm(isAr ? 'سيتم إغلاق الطلب الحالي محلياً وبدء طلب جديد على الطاولة. متابعة؟' : 'The current workspace order will be cleared. Continue?');
@@ -496,7 +516,8 @@ export function PosWorkspacePage() {
   };
 
   const handleStartOrder = (opts: StartOrderOptions) => {
-    if (!perms.canCreateOrder) return;
+    if (pos.completing || pos.kitchenSending) return;
+    if (!perms.canOperateType(opts.orderType, opts.tableId)) return;
     pos.resetWorkspace();
     pos.setOrderType(opts.orderType);
     if (opts.tableId) pos.setTableId(opts.tableId);
@@ -548,6 +569,7 @@ export function PosWorkspacePage() {
   };
 
   const handleBranchChange = (v: string) => {
+    if (pos.completing || pos.kitchenSending) return;
     if (v !== effectiveBranch && (pos.cart.length > 0 || pos.activeOrderId)) {
       const ok = window.confirm(isAr ? 'تبديل الفرع سيمسح السلة الحالية. متابعة؟' : 'Switching branch will clear the current cart. Continue?');
       if (!ok) return;
@@ -647,7 +669,7 @@ export function PosWorkspacePage() {
       canDirectDiscount={perms.canDiscount}
       activeOrderId={pos.activeOrderId}
       onApprovedDiscount={pos.applyApprovedDiscount}
-      onComplete={() => { if (perms.canPay) void pos.completeSale(); }}
+      onComplete={(payments) => { if (perms.canPay) void pos.completeSale(payments); }}
       onBack={() => { pos.setCheckoutOpen(false); setMobileOrderOpen(true); }}
       currency={pos.effCurrency}
       cart={pos.cart}
@@ -688,12 +710,16 @@ export function PosWorkspacePage() {
       onDiscountAmountChange={pos.setDiscountAmount}
       onUpdateQty={pos.updateQty}
       onSetQty={pos.setQty}
+      onItemsTransferred={(result) => {
+        pos.applyItemsTransfer(result);
+        if (result.snapshot) live.applyTransferSnapshot(result.snapshot);
+      }}
       onRemove={pos.removeFromCart}
       onClear={pos.clearCart}
       onSetItemDiscount={pos.setItemDiscount}
       onHold={() => void pos.holdOrder()}
       onSendKitchen={() => void pos.sendToKitchen()}
-      onPrint={() => void pos.printReceipt()}
+      onPrint={printCustomerReceipt}
       onPay={handlePay}
       onAddItem={() => barcodeRef.current?.focus()}
       onConfigureItem={(item) => setConfigItem(item)}
@@ -712,6 +738,13 @@ export function PosWorkspacePage() {
     <div data-testid="pos-workspace" className="flex h-[100dvh] flex-col overflow-hidden bg-ui-page text-ui-text">
       <PosTopBar
         panel={panel}
+        onOpenQuickOrders={() => {
+          setStartStep(null);
+          setPreselectedTableId(null);
+          setOrdersCategory('quick');
+          setPanel('orders');
+          setMobileOrderOpen(false);
+        }}
         onPanel={(p) => {
           setStartStep(null);
           if (p === 'orders') setOrdersCategory('all');
@@ -797,19 +830,19 @@ export function PosWorkspacePage() {
               setTransferSourceTable(tb);
               setTransferModalOpen(true);
             }}
-            onStartQuick={() => handleStartOrder({ orderType: 'takeaway' })}
-            onStartDelivery={() => {
+            onStartQuick={perms.canCreateQuickOrder ? () => handleStartOrder({ orderType: 'takeaway' }) : undefined}
+            onStartDelivery={perms.canCreateDelivery ? () => {
               setStartStep('delivery');
               setPreselectedTableId(null);
               setPanel(null);
               setMobileOrderOpen(false);
-            }}
-            onStartDriveThru={() => {
+            } : undefined}
+            onStartDriveThru={perms.canCreateDriveThru ? () => {
               setStartStep('car');
               setPreselectedTableId(null);
               setPanel(null);
               setMobileOrderOpen(false);
-            }}
+            } : undefined}
             onOpenActiveOrders={() => {
               setStartStep(null);
               setPreselectedTableId(null);
@@ -862,7 +895,7 @@ export function PosWorkspacePage() {
             onOpenCustomer={() => setCustomerModalOpen(true)}
             onHoldOrder={() => void pos.holdOrder()}
             onSendKitchen={() => void pos.sendToKitchen()}
-            onPrint={() => void pos.printReceipt()}
+            onPrint={printCustomerReceipt}
             onPay={handlePay}
           />
 
@@ -1215,7 +1248,7 @@ export function PosWorkspacePage() {
             {perms.canPrint && (
               <button
                 data-testid="pos-receipt-print"
-                onClick={() => void pos.printReceipt()}
+                onClick={printCustomerReceipt}
                 className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-ui-primary hover:bg-ui-primary-hover text-ui-primary-fg font-bold transition-colors"
               >
                 <Printer className="w-5 h-5" /> {t('printReceipt')}

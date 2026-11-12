@@ -46,7 +46,7 @@ describe.skipIf(skip)('TABLE_BUSY owner or explicit-manager resume resolver', ()
 
     await client.query(`
       UPDATE public.roles
-      SET permissions = permissions || '["pos.view","pos.order.create"]'::jsonb
+      SET permissions = permissions || '["pos.view","pos.order.dine_in"]'::jsonb
       WHERE role IN ('cashier', 'branch_manager')
     `);
 

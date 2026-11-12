@@ -1,22 +1,24 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Order, OrderItem, Product } from '@/lib/types';
+import type { Order, OrderItem, Product, DiningTable } from '@/lib/types';
 import { usePosOrder, type UsePosOrderInput } from '@/features/pos/hooks/usePosOrderBase';
-const mocks = vi.hoisted(() => ({ fetch: vi.fn(), create: vi.fn(), update: vi.fn(), send: vi.fn(), show: vi.fn() }));
-vi.mock('@/api', () => ({ supabase: { from: vi.fn() }, floorPlan: { createOrder: mocks.create, updateOrder: mocks.update } }));
+const mocks = vi.hoisted(() => ({ fetch: vi.fn(), create: vi.fn(), update: vi.fn(), send: vi.fn(), show: vi.fn(), grants: new Set<string>() }));
+vi.mock('@/api', () => ({ supabase: { from: vi.fn(()=>{const query={select:()=>query,eq:()=>query,maybeSingle:()=>Promise.resolve({data:{status:'occupied'},error:null})};return query;}) }, floorPlan: { createOrder: mocks.create, updateOrder: mocks.update } }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en', t: (key: string) => key }) }));
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'cashier' } }) }));
+vi.mock('@/lib/permissions', () => ({ useCan: () => (key: string) => mocks.grants.has(key) }));
 vi.mock('@/components/Toast', () => ({ useToast: () => ({ show: mocks.show }) }));
 vi.mock('@/features/pos/services/posOrders', () => ({ fetchOrderForWorkspace: mocks.fetch }));
 vi.mock('@/features/pos/services/kitchen', () => ({ sendOrderToKitchen: mocks.send }));
 vi.mock('@/features/pos/services/cloudPrint', () => ({ getCloudOpenOrderPrintState: () => Promise.resolve({ known: true, locked: false }), enqueueCloudOpenOrderPrint: vi.fn() }));
 vi.mock('@/features/pos/services/payment', () => ({ createSaleOperationKey: vi.fn(), processSaleForOrder: vi.fn(), nextInvoiceNumber: vi.fn(), fetchBranchWarehouseId: vi.fn() }));
-vi.mock('@/lib/audit', () => ({ logAudit: vi.fn() }));
+vi.mock('@/lib/audit', () => ({ logAudit: vi.fn().mockResolvedValue(undefined) }));
+import { fetchBranchWarehouseId, nextInvoiceNumber, processSaleForOrder } from '@/features/pos/services/payment';
 const product = { id: 'product', name: 'Coffee', sale_price: 10, is_active: true } as Product;
 const snapshot = () => ({ order: { id: 'order', status: 'open', order_type: 'takeaway', table_id: null, order_number: 'O1' } as Order, items: [{ id: 'line', product_id: product.id, quantity: 1, unit_name: 'piece', unit_price: 10, discount_amount: 0, bonus_quantity: 0 }] as OrderItem[], products: [product] });
 const input = (orderId: string | null): UsePosOrderInput => ({ branchId: 'branch', branchName: 'Branch', orderId, customers: [], effSettings: null, activeShift: null, products: [product], stockMap: {} });
 describe('POS saved-order and cart recovery', () => {
-  beforeEach(() => { vi.clearAllMocks(); mocks.fetch.mockResolvedValue(snapshot()); mocks.create.mockResolvedValue({ data: { success: true, order_id: 'saved', order_number: 'O2' }, error: null }); mocks.update.mockResolvedValue({ data: { success: true }, error: null }); });
+  beforeEach(() => { vi.clearAllMocks(); mocks.grants.clear(); mocks.grants.add('pos.order.takeaway'); mocks.grants.add('pos.order.edit'); mocks.fetch.mockResolvedValue(snapshot()); mocks.create.mockResolvedValue({ data: { success: true, order_id: 'saved', order_number: 'O2' }, error: null }); mocks.update.mockResolvedValue({ data: { success: true }, error: null }); });
   it('keeps a deleted line deleted when feedback callbacks change on rerender', async () => {
     const { result, rerender } = renderHook(() => usePosOrder(input('order')));
     await waitFor(() => expect(result.current.cart).toHaveLength(1));
@@ -46,5 +48,85 @@ describe('POS saved-order and cart recovery', () => {
     expect(mocks.create).toHaveBeenCalledTimes(1);
     expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ p_order_id: 'saved' }));
     expect(result.current.cart[0].quantity).toBe(2);
+  });
+  it('sends the saved order without rewriting it when the sender has no edit permission', async () => {
+    mocks.grants.delete('pos.order.edit');
+    mocks.send.mockResolvedValue({ success: true, items_sent_count: 0 });
+    const { result } = renderHook(() => usePosOrder(input('order')));
+    await waitFor(() => expect(result.current.cart).toHaveLength(1));
+    await act(async () => { expect(await result.current.sendToKitchen()).toBe(true); });
+    expect(mocks.send).toHaveBeenCalledOnce();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+  it('stops before saving or sending when the current type capability is absent', async () => {
+    mocks.grants.delete('pos.order.takeaway');
+    const { result } = renderHook(() => usePosOrder(input('order')));
+    await waitFor(() => expect(result.current.cart).toHaveLength(1));
+    await act(async () => { expect(await result.current.sendToKitchen()).toBe(false); });
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it('hydrates a resumed table with its items before a separate table read can complete', async () => {
+    const table={id:'table-27',branch_id:'branch',name:'27'} as DiningTable;
+    mocks.fetch.mockResolvedValue({...snapshot(),order:{...snapshot().order,table_id:table.id,table,order_type:'dine_in'}});
+    const {result}=renderHook(()=>usePosOrder(input('order')));
+    await waitFor(()=>expect(result.current.orderLoading).toBe(false));
+    expect(result.current.activeTable).toEqual(table);
+    expect(result.current.activeOrderNumber).toBe('O1');
+    expect(result.current.tableId).toBe('table-27');
+  });
+  it('clears previous table identity while another order is loading', async () => {
+    const table={id:'table-28',branch_id:'branch',name:'28'} as DiningTable;
+    mocks.fetch.mockResolvedValueOnce({...snapshot(),order:{...snapshot().order,table_id:table.id,table,order_type:'dine_in'}});
+    const {result,rerender}=renderHook(({id})=>usePosOrder(input(id)),{initialProps:{id:'order'}});
+    await waitFor(()=>expect(result.current.activeTable?.name).toBe('28'));
+    let finish!: (value:ReturnType<typeof snapshot>)=>void;
+    mocks.fetch.mockImplementationOnce(()=>new Promise(done=>{finish=done;}));
+    rerender({id:'second-order'});
+    expect(result.current.orderLoading).toBe(true);
+    expect(result.current.activeTable).toBeNull();
+    expect(result.current.activeOrderNumber).toBeNull();
+    await act(async()=>{finish({...snapshot(),order:{...snapshot().order,id:'second-order'}});});
+    expect(result.current.activeTable).toBeNull();
+    expect(result.current.orderType).toBe('takeaway');
+  });
+
+  it('releases the hold mutex on failure and permits a new direct checkout', async () => {
+    mocks.update.mockResolvedValue({data:{success:false,error:'REJECTED'},error:null});
+    const {result}=renderHook(()=>usePosOrder({...input('order'),activeShift:{id:'shift'}} as UsePosOrderInput));
+    await waitFor(()=>expect(result.current.cart).toHaveLength(1));
+    await act(async()=>{expect(await result.current.holdOrder()).toBe(false);});
+    act(()=>result.current.resetWorkspace());
+    act(()=>result.current.addToCart(product));
+    expect(result.current.completing).toBe(false);
+    vi.mocked(nextInvoiceNumber).mockResolvedValue('INV');
+    vi.mocked(processSaleForOrder).mockResolvedValue({result:{success:false,error:'TEST_STOP'},error:'TEST_STOP'});
+    await act(async()=>{expect(await result.current.completeSale()).toBe(false);});
+    expect(fetchBranchWarehouseId).toHaveBeenCalledOnce();
+  });
+  it('serializes same-tick first sends before creating the order', async () => {
+    mocks.create.mockResolvedValueOnce({data:{success:true,order_id:'saved-1'},error:null}).mockResolvedValueOnce({data:{success:true,order_id:'saved-2'},error:null});
+    mocks.send.mockResolvedValue({success:true,items_sent_count:0});
+    const {result}=renderHook(()=>usePosOrder(input(null)));
+    act(()=>result.current.addToCart(product));
+    await act(async()=>{await Promise.all([result.current.sendToKitchen(),result.current.sendToKitchen()]);});
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+    expect(mocks.send.mock.calls.map(c=>c[0].p_order_id)).toEqual(['saved-1']);
+  });
+  it('clears the old cart when a different order fails to load', async () => {
+    const {result,rerender}=renderHook(({id})=>usePosOrder(input(id)),{initialProps:{id:'order'}});
+    await waitFor(()=>expect(result.current.cart).toHaveLength(1));
+    mocks.fetch.mockRejectedValueOnce(new Error('network unavailable'));
+    rerender({id:'second-order'});
+    await waitFor(()=>expect(result.current.orderLoading).toBe(false));
+    expect(result.current.activeOrderId).toBe('second-order');
+    expect(result.current.cart).toHaveLength(0);
+    mocks.send.mockResolvedValue({success:true,items_sent_count:0});
+    await act(async()=>{await result.current.sendToKitchen();});
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.send).not.toHaveBeenCalled();
   });
 });

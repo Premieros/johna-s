@@ -42,9 +42,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { applySystemTheme } = useTheme();
   const { applySystemLang } = useLanguage();
-  const { session } = useAuth();
+  const { session, needsOrganizationSetup } = useAuth();
 
-  const sessionUserId = session?.user?.id ?? null;
+  const sessionUserId = needsOrganizationSetup ? null : session?.user?.id ?? null;
 
   const refresh = useCallback(async () => {
     if (!sessionUserId) {

@@ -25,7 +25,7 @@ export const OPERATIONAL_REPORT_FAMILIES: Record<ReportType, ReportFamily> = {
   sales_by_employee: 'employees', cashier_performance: 'employees',
   purchases: 'purchases', expenses: 'expenses',
   inventory: 'inventory', low_stock: 'inventory', raw_material_consumption: 'inventory',
-  raw_material_current_cost: 'costing', component_consumption: 'costing', recipe_costs: 'costing',
+  raw_material_valuation: 'inventory', raw_material_current_cost: 'costing', component_consumption: 'costing', recipe_costs: 'costing',
   top_consumed_components: 'costing', production_waste: 'costing', sales_component_reconciliation: 'costing',
   profit: 'financial', raw_material_financial: 'financial',
 };

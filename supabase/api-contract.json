@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-08T16:07:13.250Z",
+  "generated_at": "2026-11-11T14:43:11.370Z",
   "source": "scripts/db/gen-contract.js (extracted from src/api/domains + src)",
   "rpcs": [
     {
@@ -73,6 +73,13 @@
       ]
     },
     {
+      "name": "approve_previewed_warehouse_transfer",
+      "params": [
+        "expected_items",
+        "transfer_id"
+      ]
+    },
+    {
       "name": "approve_stock_count",
       "params": [
         "stock_count_id"
@@ -126,6 +133,14 @@
       "name": "complete_bank_reconciliation",
       "params": [
         "reconciliation_id"
+      ]
+    },
+    {
+      "name": "complete_own_organization_signup",
+      "params": [
+        "organization_name",
+        "owner_name",
+        "phone"
       ]
     },
     {
@@ -363,6 +378,14 @@
       ]
     },
     {
+      "name": "floor_plan_create_area_with_tables",
+      "params": [
+        "branch_id",
+        "name",
+        "table_count"
+      ]
+    },
+    {
       "name": "floor_plan_set_main_area_table_count",
       "params": [
         "branch_id",
@@ -458,6 +481,25 @@
       ]
     },
     {
+      "name": "get_cashier_area_settings",
+      "params": [
+        "branch_id"
+      ]
+    },
+    {
+      "name": "get_consumption_latest_report",
+      "params": [
+        "branch_id",
+        "from_date",
+        "group_by",
+        "include_waste",
+        "page",
+        "page_size",
+        "search",
+        "to_date"
+      ]
+    },
+    {
       "name": "get_cost_history",
       "params": [
         "limit",
@@ -521,6 +563,14 @@
       "name": "get_employee_credit_balances",
       "params": [
         "branch_id"
+      ]
+    },
+    {
+      "name": "get_employee_receivables_period_summary",
+      "params": [
+        "branch_id",
+        "from_date",
+        "to_date"
       ]
     },
     {
@@ -713,6 +763,26 @@
       ]
     },
     {
+      "name": "get_period_close_raw_movements",
+      "params": [
+        "branch_id",
+        "from",
+        "kind",
+        "material_id",
+        "page",
+        "page_size",
+        "to"
+      ]
+    },
+    {
+      "name": "get_period_close_raw_report",
+      "params": [
+        "branch_id",
+        "from",
+        "to"
+      ]
+    },
+    {
       "name": "get_product_costing_detail",
       "params": [
         "branch_id",
@@ -732,7 +802,7 @@
       ]
     },
     {
-      "name": "get_raw_consumption_cost_breakdown",
+      "name": "get_raw_consumption_latest_cost",
       "params": [
         "branch_id",
         "from",
@@ -756,17 +826,25 @@
       ]
     },
     {
-      "name": "get_raw_material_cost_valuation_overview",
-      "params": [
-        "branch_id"
-      ]
-    },
-    {
       "name": "get_raw_material_financial_report",
       "params": [
         "branch_id",
         "from_date",
         "to_date"
+      ]
+    },
+    {
+      "name": "get_raw_material_latest_valuation",
+      "params": [
+        "branch_id"
+      ]
+    },
+    {
+      "name": "get_raw_material_stock_summary",
+      "params": [
+        "branch_id",
+        "limit",
+        "offset"
       ]
     },
     {
@@ -806,6 +884,18 @@
       "name": "get_shift_sale_tenders",
       "params": [
         "shift_id"
+      ]
+    },
+    {
+      "name": "get_sold_recipe_consumption_report",
+      "params": [
+        "branch_id",
+        "from_date",
+        "group_by",
+        "page",
+        "page_size",
+        "search",
+        "to_date"
       ]
     },
     {
@@ -1271,6 +1361,23 @@
       ]
     },
     {
+      "name": "revise_pending_warehouse_transfer",
+      "params": [
+        "items",
+        "original_items",
+        "transfer_id"
+      ]
+    },
+    {
+      "name": "save_cashier_area_settings",
+      "params": [
+        "area_ids",
+        "branch_id",
+        "enabled",
+        "name"
+      ]
+    },
+    {
       "name": "seed_demo_data",
       "params": [
         "branch_id"
@@ -1309,6 +1416,12 @@
         "notes",
         "order_id",
         "status"
+      ]
+    },
+    {
+      "name": "set_public_tenant_registration_enabled",
+      "params": [
+        "enabled"
       ]
     },
     {
@@ -1356,7 +1469,8 @@
       "params": [
         "order_id",
         "order_item_ids",
-        "target_table_id"
+        "target_table_id",
+        "transfer"
       ]
     },
     {
@@ -1527,6 +1641,7 @@
     "treasury_accounts",
     "units",
     "users",
+    "warehouse_transfer_items",
     "warehouses",
     "waste_categories",
     "waste_entries"

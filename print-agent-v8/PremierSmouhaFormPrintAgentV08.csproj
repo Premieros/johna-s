@@ -16,7 +16,7 @@
     <PublishReadyToRun>false</PublishReadyToRun>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <DebugType>embedded</DebugType>
-    <Version>8.1.0</Version>
+    <Version>8.2.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />

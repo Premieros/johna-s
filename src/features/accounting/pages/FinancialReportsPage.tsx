@@ -69,6 +69,8 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
   const [inventoryItemId, setInventoryItemId] = useState('');
   const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
   const [warehouseId, setWarehouseId] = useState('');
+  const [selectorError, setSelectorError] = useState<unknown>(null);
+  const [selectorRetry, setSelectorRetry] = useState(0);
   const [loadedSelectorContextKey, setLoadedSelectorContextKey] = useState('');
   const { user } = useAuth();
   const readController = useRef<AbortController | null>(null);
@@ -97,6 +99,8 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
   useEffect(() => {
     let cancelled = false;
     setLoadedSelectorContextKey('');
+    setSelectorError(null);
+    const handleSelectorError = (error: unknown) => { if (!cancelled) setSelectorError(error); };
 
     if (!effectiveBranchFilter) {
       setAccounts([]);
@@ -119,14 +123,14 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         setAccounts(rows);
         setAccountId((prev) => rows.some((x) => x.id === prev) ? prev : (rows[0]?.id || ''));
         setLoadedSelectorContextKey(selectorContextKey);
-      });
+      }).catch(handleSelectorError);
     } else if (view === 'treasury_statement') {
       void loadTreasuryAccounts(effectiveBranchFilter).then((rows) => {
         if (cancelled) return;
         setTreasuryAccounts(rows);
         setTreasuryId((prev) => rows.some((x) => x.id === prev) ? prev : (rows[0]?.id || ''));
         setLoadedSelectorContextKey(selectorContextKey);
-      });
+      }).catch(handleSelectorError);
     } else if (view === 'inventory_movement') {
       void loadInventoryStatementOptions(effectiveBranchFilter, inventoryItemType).then(({ items, warehouses: warehouseRows }) => {
         if (cancelled) return;
@@ -135,7 +139,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         setWarehouses(warehouseRows);
         setWarehouseId((prev) => warehouseRows.some((x) => x.id === prev) ? prev : '');
         setLoadedSelectorContextKey(selectorContextKey);
-      });
+      }).catch(handleSelectorError);
     } else if (view === 'party_statement') {
       void loadPartyStatementOptions(effectiveBranchFilter, partySide).then((rows) => {
         if (cancelled) return;
@@ -149,11 +153,11 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
           setPartyId((prev) => suppliers.some((x) => x.id === prev) ? prev : '');
         }
         setLoadedSelectorContextKey(selectorContextKey);
-      });
+      }).catch(handleSelectorError);
     }
 
     return () => { cancelled = true; };
-  }, [effectiveBranchFilter, view, partySide, inventoryItemType, selectorContextKey]);
+  }, [effectiveBranchFilter, view, partySide, inventoryItemType, selectorContextKey, selectorRetry]);
 
   const load = useCallback(async () => {
     const generation = ++readGeneration.current;
@@ -290,12 +294,13 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
     { key: 'party_statement', label: t('partyStatement'), icon: <Receipt className="w-4 h-4" /> },
   ];
 
+  const periodView = ['ledger','treasury_statement','inventory_movement','income','cash_flow','party_statement'].includes(view);
   const exportData = () => {
     const ar = (arabic: string, english: string) => isAr ? arabic : english;
     const currentTitle = views.find((item) => item.key === view)?.label || view;
     const base = {
       title: currentTitle,
-      subtitle: `${from} — ${to}`,
+      subtitle: periodView ? `${from} — ${to}` : `${t('asOf')}: ${to}`,
       lang: lang as 'ar' | 'en',
       sourceNote: ar(
         'الأرقام من نفس RPC المحاسبي المستخدم في الشاشة؛ لا يعاد حسابها داخل ملف Excel.',
@@ -331,6 +336,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
       }));
       void exportToExcelAdvanced({
         ...base, data: rows, filename: `general_ledger_${to}`, sheetName: currentTitle,
+        totalRow: { [ar('مدين','Debit')]: sum(gl,row=>row.debit), [ar('دائن','Credit')]: sum(gl,row=>row.credit), [ar('الرصيد','Balance')]: gl.length ? gl[gl.length-1].balance : null },
         currencyColumns: [ar('مدين', 'Debit'), ar('دائن', 'Credit'), ar('الرصيد', 'Balance')],
         columns: [ar('التاريخ', 'Date'), ar('رقم القيد', 'Entry'), ar('البيان', 'Description'), ar('المرجع', 'Reference'), ar('مدين', 'Debit'), ar('دائن', 'Credit'), ar('الرصيد', 'Balance')],
         columnWidths: { [ar('التاريخ', 'Date')]: 16, [ar('رقم القيد', 'Entry')]: 18, [ar('البيان', 'Description')]: 38, [ar('المرجع', 'Reference')]: 20 },
@@ -348,6 +354,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
       }));
       void exportToExcelAdvanced({
         ...base, data: rows, filename: `treasury_statement_${to}`, sheetName: currentTitle,
+        totalRow: { [ar('وارد','Inflow')]:treasuryStmt.total_inflow, [ar('منصرف','Outflow')]:treasuryStmt.total_outflow, [ar('الرصيد','Balance')]:treasuryStmt.closing_balance },
         currencyColumns: [ar('وارد', 'Inflow'), ar('منصرف', 'Outflow'), ar('الرصيد', 'Balance')],
         columns: [ar('التاريخ', 'Date'), ar('رقم القيد', 'Entry'), ar('نوع الحركة', 'Movement'), ar('المرجع', 'Reference'), ar('البيان', 'Description'), ar('وارد', 'Inflow'), ar('منصرف', 'Outflow'), ar('الرصيد', 'Balance')],
         columnWidths: { [ar('التاريخ', 'Date')]: 16, [ar('رقم القيد', 'Entry')]: 18, [ar('نوع الحركة', 'Movement')]: 18, [ar('المرجع', 'Reference')]: 20, [ar('البيان', 'Description')]: 38 },
@@ -368,6 +375,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
       }));
       void exportToExcelAdvanced({
         ...base, data: rows, filename: `inventory_movement_${to}`, sheetName: currentTitle,
+        totalRow: { [ar('وارد','In')]:inventoryStmt.total_in, [ar('منصرف','Out')]:inventoryStmt.total_out, [ar('الرصيد','Balance')]:inventoryStmt.closing_quantity },
         currencyColumns: [ar('تكلفة الوحدة', 'Unit Cost'), ar('إجمالي التكلفة', 'Total Cost')],
         columns: [ar('التاريخ', 'Date'), ar('نوع الحركة', 'Type'), ar('المخزن', 'Warehouse'), ar('المرجع', 'Reference'), ar('التشغيلة', 'Batch'), ar('وارد', 'In'), ar('منصرف', 'Out'), ar('الرصيد', 'Balance'), ar('تكلفة الوحدة', 'Unit Cost'), ar('إجمالي التكلفة', 'Total Cost')],
         columnWidths: { [ar('التاريخ', 'Date')]: 18, [ar('نوع الحركة', 'Type')]: 18, [ar('المخزن', 'Warehouse')]: 22, [ar('المرجع', 'Reference')]: 20, [ar('التشغيلة', 'Batch')]: 18 },
@@ -379,6 +387,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         { [ar('البند', 'Item')]: t('netRevenue'), [ar('القيمة', 'Amount')]: income.net_revenue },
         { [ar('البند', 'Item')]: t('cogs'), [ar('القيمة', 'Amount')]: income.cogs },
         { [ar('البند', 'Item')]: t('grossProfit'), [ar('القيمة', 'Amount')]: income.gross_profit },
+        ...(income.other_income === undefined ? [] : [{ [ar('البند', 'Item')]: ar('إيرادات أخرى وإضافية', 'Other and additional income'), [ar('القيمة', 'Amount')]: income.other_income }]),
         { [ar('البند', 'Item')]: t('expenses'), [ar('القيمة', 'Amount')]: income.expenses },
         { [ar('البند', 'Item')]: t('netIncome'), [ar('القيمة', 'Amount')]: income.net_income },
       ];
@@ -405,6 +414,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
       }));
       void exportToExcelAdvanced({
         ...base, data: rows, filename: `${view}_${to}`, sheetName: currentTitle,
+        totalRow: { [outstandingLabel]:sum<ArAgingRow | ApAgingRow>(source,row=>row.open_amount), '0-30':sum<ArAgingRow | ApAgingRow>(source,row=>row.bucket_0_30), '31-60':sum<ArAgingRow | ApAgingRow>(source,row=>row.bucket_31_60), '61-90':sum<ArAgingRow | ApAgingRow>(source,row=>row.bucket_61_90), '90+':sum<ArAgingRow | ApAgingRow>(source,row=>row.bucket_90_plus) },
         currencyColumns: [outstandingLabel, '0-30', '31-60', '61-90', '90+'],
         columns: [partyLabel, ar('الهاتف', 'Phone'), outstandingLabel, '0-30', '31-60', '61-90', '90+'],
         columnWidths: { [partyLabel]: 30, [ar('الهاتف', 'Phone')]: 18 },
@@ -425,6 +435,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
       }));
       void exportToExcelAdvanced({
         ...base, data: rows, filename: `cash_flow_${to}`, sheetName: currentTitle,
+        totalRow: { [ar('وارد','Inflow')]:sum(cashFlow,row=>row.inflow), [ar('منصرف','Outflow')]:sum(cashFlow,row=>row.outflow), [ar('الصافي','Net')]:sum(cashFlow,row=>row.net) },
         currencyColumns: [ar('وارد', 'Inflow'), ar('منصرف', 'Outflow'), ar('الصافي', 'Net')],
         columns: [ar('الحساب', 'Account'), ar('النوع', 'Type'), ar('وارد', 'Inflow'), ar('منصرف', 'Outflow'), ar('الصافي', 'Net')],
         columnWidths: { [ar('الحساب', 'Account')]: 32, [ar('النوع', 'Type')]: 18 },
@@ -442,6 +453,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
       }));
       void exportToExcelAdvanced({
         ...base, data: rows, filename: `party_statement_${to}`, sheetName: currentTitle,
+        totalRow: { [ar('مدين','Debit')]:sum(partyStmt.rows,row=>row.debit), [ar('دائن','Credit')]:sum(partyStmt.rows,row=>row.credit), [ar('الرصيد','Balance')]:partyStmt.rows.length ? partyStmt.rows[partyStmt.rows.length-1].balance : partyStmt.opening },
         currencyColumns: [ar('مدين', 'Debit'), ar('دائن', 'Credit'), ar('الرصيد', 'Balance')],
         columns: [ar('التاريخ', 'Date'), ar('رقم القيد', 'Entry'), ar('البيان', 'Description'), ar('المرجع', 'Reference'), ar('مدين', 'Debit'), ar('دائن', 'Credit'), ar('الرصيد', 'Balance')],
         columnWidths: { [ar('التاريخ', 'Date')]: 16, [ar('رقم القيد', 'Entry')]: 18, [ar('البيان', 'Description')]: 38, [ar('المرجع', 'Reference')]: 20 },
@@ -462,11 +474,15 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
     { label: t('netRevenue'), value: income.net_revenue, bold: true },
     { label: t('cogs'), value: income.cogs },
     { label: t('grossProfit'), value: income.gross_profit, bold: true },
+    ...(income.other_income === undefined ? [] : [{ label: isAr ? 'إيرادات أخرى وإضافية' : 'Other and additional income', value: income.other_income }]),
     { label: t('expenses'), value: income.expenses },
     { label: t('netIncome'), value: income.net_income, bold: true },
   ] : [];
 
   const tbTotals = tb.reduce((acc, r) => ({ debit: acc.debit + Number(r.debit), credit: acc.credit + Number(r.credit) }), { debit: 0, credit: 0 });
+
+  const footer = (cells: Array<string | number | null>) => <tfoot><tr>{cells.map((value,index)=><td key={index} className="text-end">{typeof value==='number'?formatCurrency(value,currency,lang):value ?? '—'}</td>)}</tr></tfoot>;
+  const sum = <T,>(rows: T[], value: (row: T) => number) => rows.every(row=>Number.isFinite(value(row))) ? rows.reduce((total,row)=>total+value(row),0) : null;
 
   const partyList = partySide === 'ar' ? customers : suppliers;
   const movementLabel = (type: string | null | undefined) => {
@@ -488,7 +504,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
 
   return (
     <DesignSurface testId="financial-reports-page">
-      <DesignPageHeader title={t('financialReports')} actions={<Button variant="outline" size="sm" disabled={loading || !!reportError || loadedReportScope !== reportScope} onClick={exportData}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>} />
+      <div className={hideViewPicker ? 'report-actions-only' : undefined}><DesignPageHeader title={t('financialReports')} actions={<Button variant="outline" size="sm" disabled={loading || !!reportError || loadedReportScope !== reportScope} onClick={exportData}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>} /></div>
 
       {!history.unlimited && (
         <div className="mb-3 rounded-xl border border-ui-warning/30 bg-ui-warning-soft px-4 py-3 text-sm text-ui-warning">
@@ -498,7 +514,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         </div>
       )}
 
-      <DesignPanel testId="financial-reports-filters" className="ui-accent-finance">
+      <details open className="mb-2"><summary className="cursor-pointer text-sm font-semibold">{isAr ? 'الفترة والفلاتر' : 'Period & filters'}{periodView ? ` · ${from} — ${to}` : ` · ${t('asOf')}: ${to}`}</summary><DesignPanel testId="financial-reports-filters" className="ui-accent-finance">
         <div className="flex flex-col gap-4">
           {!hideViewPicker && (
             <div className="flex flex-wrap gap-2">
@@ -511,8 +527,8 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
             </div>
           )}
           <div className="flex flex-wrap items-end gap-4">
-            {(view === 'ledger' || view === 'treasury_statement' || view === 'inventory_movement' || view === 'income' || view === 'cash_flow') && <Input label={t('from')} type="date" value={from} min={history.minDate} onChange={(e) => setFrom(history.clampRange(e.target.value, to).from)} />}
-            <Input label={view === 'income' || view === 'ledger' || view === 'treasury_statement' || view === 'inventory_movement' || view === 'cash_flow' ? t('to') : t('asOf')} type="date" value={to} onChange={(e) => { const allowed = history.clampRange(from, e.target.value); setFrom(allowed.from); setTo(allowed.to); }} />
+            {periodView && <Input label={t('from')} type="date" value={from} min={history.minDate} onChange={(e) => setFrom(history.clampRange(e.target.value, to).from)} />}
+            <Input label={periodView ? t('to') : t('asOf')} type="date" value={to} onChange={(e) => { const allowed = history.clampRange(from, e.target.value); setFrom(allowed.from); setTo(allowed.to); }} />
             {view === 'ledger' && accounts.length > 0 && (
               <Select label={t('accountName')} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
                 <option value="">{t('allAccounts')}</option>
@@ -555,13 +571,14 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
             )}
           </div>
         </div>
-      </DesignPanel>
+      </DesignPanel></details>
 
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-2">
         <Button data-testid="financial-run-report" disabled={loading || !effectiveBranchFilter || (['ledger', 'treasury_statement', 'inventory_movement', 'party_statement'].includes(view) && loadedSelectorContextKey !== selectorContextKey)} onClick={() => void load()}>{isAr ? 'عرض التقرير' : 'Run report'}</Button>
         <Button variant="outline" disabled={loading || loadedReportScope !== reportScope} onClick={() => { clearReportRequestCache(); void load(); }}>{isAr ? 'تحديث التقرير' : 'Refresh report'}</Button>
       </div>
       <p className="mb-3 text-xs text-ui-muted">{isAr ? 'تتشارك الصفحات النتائج المتطابقة لمدة دقيقة. اضغط تحديث التقرير لطلب أحدث البيانات.' : 'Identical results are shared for up to one minute. Refresh report requests the latest data.'}</p>
+      {!!selectorError && <div role="alert" className="rounded border border-ui-border p-3">{isAr ? 'تعذر تحميل خيارات التقرير؛ القائمة الفارغة لا تعني عدم وجود بيانات.' : 'Report options could not load; an empty list does not mean there are no records.'} {userFacingErrorMessage(selectorError, lang)} <Button size="sm" onClick={() => setSelectorRetry(value => value + 1)}>{isAr ? 'إعادة المحاولة' : 'Retry'}</Button></div>}
       {!!reportError && <div role="alert" className="rounded border border-ui-border p-3">{userFacingErrorMessage(reportError, lang)} <Button size="sm" onClick={() => void load()}>{isAr ? 'إعادة المحاولة' : 'Retry'}</Button></div>}
       {reportError ? null : !loading && loadedReportScope !== reportScope ? (
         <DesignPanel testId="financial-reports-idle"><p className="py-12 text-center text-ui-subtle">{isAr ? 'اختر الفترة واضغط عرض التقرير' : 'Choose filters and run the report.'}</p></DesignPanel>
@@ -578,7 +595,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold bg-ui-danger-soft text-ui-danger"><BadgeAlert className="w-4 h-4" /> {t('notBalanced')}</span>
             )}
           </div>
-          <div className="overflow-x-auto">
+          <div className="report-grid">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-ui-border">
@@ -602,6 +619,8 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                     <td className={`px-4 py-3 text-end font-semibold ${r.balance < 0 ? 'text-ui-danger' : 'text-ui-text'}`}>{formatCurrency(r.balance, currency, lang)}</td>
                   </tr>
                 ))}
+              </tbody>
+              <tfoot>
                 {tb.length > 0 && (
                   <tr className="bg-ui-page-alt/60 font-semibold text-ui-text">
                     <td className="px-4 py-3" colSpan={3}>{t('total')}</td>
@@ -610,13 +629,13 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                     <td className="px-4 py-3 text-end">{formatCurrency(tbTotals.debit - tbTotals.credit, currency, lang)}</td>
                   </tr>
                 )}
-              </tbody>
+              </tfoot>
             </table>
           </div>
         </Card>
       ) : view === 'ledger' ? (
         <Card className="p-4">
-          <div className="overflow-x-auto">
+          <div className="report-grid">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-ui-border">
@@ -643,6 +662,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                   </tr>
                 ))}
               </tbody>
+              {footer([t('total'),'','','',sum(gl,row=>row.debit),sum(gl,row=>row.credit),gl.length ? gl[gl.length-1].balance : null])}
             </table>
           </div>
         </Card>
@@ -657,7 +677,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                 {summaryCard(isAr ? 'رصيد آخر المدة' : 'Closing balance', treasuryStmt.closing_balance)}
               </div>
               <p className="text-sm text-ui-muted mb-3">{isAr ? 'هذا كشف حركة مفهوم للبنك أو الخزنة: الوارد يزيد الرصيد والمنصرف يخفضه. لا توجد تسمية Credit كطريقة دفع.' : 'Readable bank/treasury movement: inflow increases balance and outflow decreases it.'}</p>
-              <div className="overflow-x-auto">
+              <div className="report-grid">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-ui-border">
                     <th className="px-3 py-3 text-start">{t('date')}</th>
@@ -680,6 +700,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                       <td className="px-3 py-3 text-end font-semibold">{formatCurrency(r.balance, currency, lang)}</td>
                     </tr>)}
                   </tbody>
+              {footer([t('total'),'','','',treasuryStmt.total_inflow,treasuryStmt.total_outflow,treasuryStmt.closing_balance])}
                 </table>
               </div>
             </>
@@ -695,7 +716,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                 <div className="bg-ui-page-alt/60 rounded-xl p-4"><p className="text-xs text-ui-subtle">{isAr ? 'إجمالي المنصرف' : 'Total out'}</p><p className="text-lg font-bold mt-1 text-ui-danger">{inventoryStmt.total_out}</p></div>
                 <div className="bg-ui-page-alt/60 rounded-xl p-4"><p className="text-xs text-ui-subtle">{isAr ? 'الرصيد الحالي للفترة' : 'Closing qty'}</p><p className="text-lg font-bold mt-1">{inventoryStmt.closing_quantity}</p></div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="report-grid">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-ui-border">
                     <th className="px-3 py-3 text-start">{t('date')}</th>
@@ -719,7 +740,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                       <td className="px-3 py-3 text-end font-semibold">{r.balance}</td>
                       <td className="px-3 py-3 text-end">{formatCurrency(r.unit_cost, currency, lang)}</td>
                     </tr>)}
-                  </tbody>
+                  </tbody><tfoot><tr><td>{t('total')}</td><td></td><td></td><td></td><td>{inventoryStmt.total_in}</td><td>{inventoryStmt.total_out}</td><td>{inventoryStmt.closing_quantity}</td><td></td></tr></tfoot>
                 </table>
               </div>
             </>
@@ -727,6 +748,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         </Card>
       ) : view === 'income' ? (
         <Card className="p-4">
+          <p className="mb-3 text-sm text-ui-muted">{isAr ? 'الربح المحاسبي من القيود المرحلة. تكلفة الوصفات تقدير بالأسعار والوصفات الحالية وقد تختلف؛ التحصيل ورصيد الخزنة ليسا ربحًا.' : 'Accounting profit comes from posted journals. Recipe cost uses current prices and recipes and may differ; collections and treasury balances are not profit.'}</p>
           {income && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               {summaryCard(t('revenue'), income.revenue)}
@@ -735,7 +757,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
               {summaryCard(t('netIncome'), income.net_income, income.net_income >= 0 ? 'text-ui-success dark:text-ui-success' : 'text-ui-danger')}
             </div>
           )}
-          <div className="overflow-x-auto">
+          <div className="report-grid">
             <table className="w-full text-sm">
               <tbody>
                 {incomeRows.map((r) => (
@@ -772,7 +794,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         </Card>
       ) : view === 'ar_aging' ? (
         <Card className="p-4">
-          <div className="overflow-x-auto">
+          <div className="report-grid">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-ui-border">
@@ -799,12 +821,13 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                   </tr>
                 ))}
               </tbody>
+              {footer([t('total'),'',sum(arAging,row=>row.open_amount),sum(arAging,row=>row.bucket_0_30),sum(arAging,row=>row.bucket_31_60),sum(arAging,row=>row.bucket_61_90),sum(arAging,row=>row.bucket_90_plus)])}
             </table>
           </div>
         </Card>
       ) : view === 'ap_aging' ? (
         <Card className="p-4">
-          <div className="overflow-x-auto">
+          <div className="report-grid">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-ui-border">
@@ -831,6 +854,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                   </tr>
                 ))}
               </tbody>
+              {footer([t('total'),'',sum(apAging,row=>row.open_amount),sum(apAging,row=>row.bucket_0_30),sum(apAging,row=>row.bucket_31_60),sum(apAging,row=>row.bucket_61_90),sum(apAging,row=>row.bucket_90_plus)])}
             </table>
           </div>
         </Card>
@@ -841,16 +865,16 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 {summaryCard(t('arTotal'), agingSummary.ar_open, 'text-ui-info')}
                 {summaryCard(t('apTotal'), agingSummary.ap_open, 'text-ui-warning')}
-                {summaryCard(t('openBalance'), agingSummary.ar_open + agingSummary.ap_open)}
                 <div className="bg-ui-page-alt/60 rounded-xl p-4">
                   <p className="text-xs font-medium text-ui-subtle dark:text-ui-subtle">{t('asOf')}</p>
                   <p className="text-lg font-bold mt-1 text-ui-text dark:text-white">{formatDate(agingSummary.as_of, lang)}</p>
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="report-grid">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-ui-border">
+                      <th className="px-4 py-3 text-start font-semibold text-ui-muted">{isAr ? 'البيان' : 'Description'}</th>
                       <th className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('days30')}</th>
                       <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('days60')}</th>
                       <th className="px-4 py-3 text-end font-semibold text-ui-muted text-xs uppercase tracking-wider">{t('days90')}</th>
@@ -881,7 +905,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
       ) : view === 'cash_flow' ? (
         <Card className="p-4">
           <p className="mb-4 text-sm text-ui-muted">{isAr ? 'ملخص من نفس القيود اليومية المستخدمة في كشف حساب البنك والخزنة. الوارد = مدين حساب الخزنة، والمنصرف = دائن حساب الخزنة.' : 'Summary from the same journal source used by bank/treasury statements.'}</p>
-          <div className="overflow-x-auto">
+          <div className="report-grid">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-ui-border">
@@ -904,6 +928,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                   </tr>
                 ))}
               </tbody>
+              {footer([t('total'),'',sum(cashFlow,row=>row.inflow),sum(cashFlow,row=>row.outflow),sum(cashFlow,row=>row.net)])}
             </table>
           </div>
         </Card>
@@ -919,7 +944,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                   <p className="text-lg font-bold mt-1 text-ui-text dark:text-white">{formatDate(to, lang)}</p>
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="report-grid">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-ui-border">
@@ -944,6 +969,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                       </tr>
                     ))}
                   </tbody>
+              {footer([t('total'),'','',sum(partyStmt.rows,row=>row.debit),sum(partyStmt.rows,row=>row.credit),partyStmt.rows.length ? partyStmt.rows[partyStmt.rows.length-1].balance : partyStmt.opening])}
                 </table>
               </div>
             </>

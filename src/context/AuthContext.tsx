@@ -1,5 +1,5 @@
 import { invalidateReportPermissions } from '../lib/reportRequestCache';
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import * as api from '../api';
@@ -11,6 +11,7 @@ interface AuthContextValue {
   session: Session | null;
   user: AppUser | null;
   loading: boolean;
+  needsOrganizationSetup: boolean;
   signIn: (email: string, password: string) => Promise<{ error: { code: string; message: string } | null }>;
   signInWithUsername: (username: string, pin: string) => Promise<{ error: { code: string; message: string } | null }>;
   signOut: (options?: { scope: 'local' | 'global' }) => Promise<void>;
@@ -25,11 +26,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needsOrganizationSetup, setNeedsOrganizationSetup] = useState(false);
+  const organizationSetupRef=useRef(false);
 
   useLayoutEffect(() => { invalidateReportPermissions(); }, [user?.id, user?.role, user?.branch_id]);
 
   const clearAuthState = useCallback(() => {
     invalidateReportPermissions();
+    organizationSetupRef.current=false;
+    setNeedsOrganizationSetup(false);
     setSession(null);
     setUser(null);
   }, []);
@@ -57,7 +62,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // A Supabase Auth identity is not an application account by itself.
-    // Never synthesize a role, auto-create a profile, or trust auth metadata.
+    // Never synthesize a role or trust metadata for authorization. A verified
+    // signup marker can show only the public setup form; it grants no app user.
+    if (!data && activeSession.user.email_confirmed_at && activeSession.user.user_metadata?.organization_signup === true) {
+      setUser(null); organizationSetupRef.current=true; setNeedsOrganizationSetup(true); return null;
+    }
     // Missing/inactive profiles are definitive failures; transport failures
     // are handled separately above and keep the current session alive.
     if (!data || data.is_active === false) {
@@ -66,6 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
 
+    organizationSetupRef.current=false;
+    setNeedsOrganizationSetup(false);
     const profile = data as AppUser;
     setUser(profile);
     return profile;
@@ -214,6 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: { code: 'profile_check_unavailable', message: 'Could not verify the application profile. Please retry.' } };
       }
     }
+    if (!profile && organizationSetupRef.current) return { error: null };
     if (!profile) {
       return { error: { code: 'profile_missing', message: 'This authentication account has no active application profile.' } };
     }
@@ -289,7 +301,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, signIn, signInWithUsername, signOut, refreshUser }}>
+    <AuthContext.Provider value={{ session, user, loading, needsOrganizationSetup, signIn, signInWithUsername, signOut, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

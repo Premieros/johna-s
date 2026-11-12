@@ -95,6 +95,8 @@ describe.skipIf(skip)('raw FIFO debt health valuation report', () => {
         userId,
       ],
     );
+    // Receipt settlement is unchanged; current estimates use an approved price record.
+    await client.query("INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,reference_number) VALUES($1,$2,$3,$4)",[rawMaterialId,branchId,cost,'APPROVED-RECEIPT-'+randomUUID()]);
     return result[0].r;
   }
 

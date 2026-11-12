@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Banknote, CreditCard, Smartphone, FileText, Tag, UtensilsCrossed, Users, CheckCircle2, Car, Bike, SplitSquareHorizontal } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import { Button } from '@/components/Button';
@@ -6,7 +6,6 @@ import { formatCurrency } from '@/lib/format';
 import type { PosPaymentMethod } from '@/lib/posMath';
 import type { CartItem, Customer, DiningTable, OrderType } from '@/lib/types';
 import type { SplitTenderInput } from '@/api';
-import { armSplitTender, clearArmedSplitTender } from '../../services/payment';
 import { orderTypeLabel } from '../../utils/format';
 import { parseCarNotes, parseDeliveryNotes } from '../../utils/orderLabels';
 import { CashierDiscountApprovalCard } from './CashierDiscountApprovalCard';
@@ -40,7 +39,7 @@ interface PaymentPanelProps {
   canDirectDiscount?: boolean;
   activeOrderId?: string | null;
   onApprovedDiscount?: (type: 'amount' | 'percent', amount: number, requestId: string) => Promise<void>;
-  onComplete: () => void;
+  onComplete: (payments?: SplitTenderInput[]) => void;
   onBack: () => void;
   currency: string;
   cart: CartItem[];
@@ -71,8 +70,6 @@ export function PaymentPanel(p: PaymentPanelProps) {
   const deliveryPhone = p.orderType === 'delivery' && !customerName ? parseDeliveryNotes(p.orderNotes).phone : '';
   const [splitMode, setSplitMode] = useState(false);
   const [splitAmounts, setSplitAmounts] = useState<Record<SplitTenderInput['payment_method'], number>>({ cash: 0, card: 0, transfer: 0 });
-  const armedRef = useRef(false);
-  const sawCompletingRef = useRef(false);
 
   const splitPayments = useMemo<SplitTenderInput[]>(() => SPLIT_METHODS
     .map((payment_method) => ({ payment_method, amount: Number(splitAmounts[payment_method] || 0) }))
@@ -83,26 +80,13 @@ export function PaymentPanel(p: PaymentPanelProps) {
   const splitValid = splitPayments.length >= 2 && Math.abs(splitPaid - p.total) <= 0.01;
 
   useEffect(() => {
-    if (p.completing) sawCompletingRef.current = true;
-    if (!p.completing && sawCompletingRef.current && armedRef.current) {
-      clearArmedSplitTender();
-      armedRef.current = false;
-      sawCompletingRef.current = false;
-    }
-  }, [p.completing]);
-
-  useEffect(() => () => clearArmedSplitTender(), []);
-
-  useEffect(() => {
     if (paymentMethod === 'credit' && !creditAllowed) {
       onPaymentMethodChange('cash');
     }
   }, [creditAllowed, paymentMethod, onPaymentMethodChange]);
 
   const toggleSplit = () => {
-    clearArmedSplitTender();
-    armedRef.current = false;
-    sawCompletingRef.current = false;
+    if (p.completing) return;
     const next = !splitMode;
     setSplitMode(next);
     if (next) {
@@ -124,30 +108,14 @@ export function PaymentPanel(p: PaymentPanelProps) {
   };
 
   const complete = () => {
-    if (discountPending) return;
-    if (!splitMode && p.paymentMethod === 'credit' && !creditAllowed) {
-      return;
-    }
-    if (splitMode) {
-      if (!splitValid) return;
-      armSplitTender(splitPayments);
-      armedRef.current = true;
-      window.setTimeout(() => {
-        if (armedRef.current && !sawCompletingRef.current) {
-          clearArmedSplitTender();
-          armedRef.current = false;
-        }
-      }, 15_500);
-    } else {
-      clearArmedSplitTender();
-    }
-    if (!discountPending) p.onComplete();
+    if (discountPending || p.completing || !p.canComplete) return;
+    if (!splitMode && p.paymentMethod === 'credit' && !creditAllowed) return;
+    if (splitMode && !splitValid) return;
+    p.onComplete(splitMode ? splitPayments.map(entry => ({...entry})) : undefined);
   };
 
   const back = () => {
-    if (discountPending) return;
-    clearArmedSplitTender();
-    armedRef.current = false;
+    if (discountPending || p.completing) return;
     p.onBack();
   };
 

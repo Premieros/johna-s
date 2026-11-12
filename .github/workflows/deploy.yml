@@ -1,9 +1,12 @@
 name: Deploy to GitHub Pages
 
+# Publish only a commit that has already passed ALL four verification jobs.
+# GitHub Pages does not receive an independent, unverified push deployment.
 on:
-  push:
+  workflow_run:
+    workflows: ["Verify main"]
+    types: [completed]
     branches: [main, master]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -19,41 +22,85 @@ env:
   SUPABASE_PROJECT_REF: azzdesuowpdcoflmyezn
   VITE_SUPABASE_URL: https://azzdesuowpdcoflmyezn.supabase.co
   VITE_WORK_AUTHORIZATION_GATE: "1"
+  # PILOT: ONLY Smoha; Cleopatra remains on legacy send. Server database
+  # gate starts OFF and must be separately leased for <=5 minutes.
+  # Rollback: disable the server lease immediately; then remove these flags.
+  VITE_KITCHEN_ATOMIC_PRINT_HANDOFF: "true"
+  VITE_KITCHEN_ATOMIC_PRINT_BRANCH_IDS: "19c3fd23-d784-455b-8840-f4f2ac619651"
 
 jobs:
   build:
+    outputs:
+      runtime: ${{ steps.scope.outputs.runtime }}
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_repository.full_name == github.repository &&
+        (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'master')
+      }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Ensure verified source is still current branch HEAD
+        env:
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+          VERIFIED_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          case "$VERIFIED_BRANCH" in main|master) ;; *) exit 1 ;; esac
+          actual="$(git ls-remote origin "refs/heads/$VERIFIED_BRANCH" | cut -f1)"
+          test -n "$actual" && test "$actual" = "$VERIFIED_SHA"
+
+      - name: Download exact verified scope
+        uses: actions/download-artifact@v4
+        with:
+          name: verify-scope-plan
+          path: ci-scope
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+      - name: Validate exact verified scope
+        id: scope
+        env:
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/ci/verification-scope.mjs verify ci-scope/verification-scope.json
 
       - uses: actions/setup-node@v4
+        if: steps.scope.outputs.runtime == 'true'
         with:
           node-version: 22
           cache: npm
 
       - name: Install dependencies
+        if: steps.scope.outputs.runtime == 'true'
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
       - name: Verify locked Supabase project identity
+        if: steps.scope.outputs.runtime == 'true'
         run: node scripts/db/verify-database-identity.js
 
       - run: npm run build
+        if: steps.scope.outputs.runtime == 'true'
         env:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Preserve assets for active sessions
+        if: steps.scope.outputs.runtime == 'true'
         uses: ./.github/actions/preserve-pages-assets
         with:
           github-token: ${{ github.token }}
-          deployment-branch: ${{ github.ref_name }}
+          deployment-branch: ${{ github.event.workflow_run.head_branch }}
 
       - uses: actions/upload-pages-artifact@v3
+        if: steps.scope.outputs.runtime == 'true'
         with:
           path: dist
           retention-days: 30
 
   production-parity:
     needs: build
+    if: needs.build.outputs.runtime == 'true'
     runs-on: ubuntu-latest
     env:
       SUPABASE_PROJECT_REF: azzdesuowpdcoflmyezn
@@ -61,6 +108,8 @@ jobs:
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -81,5 +130,16 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Refuse stale source between verification and publication
+        env:
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+          VERIFIED_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          case "$VERIFIED_BRANCH" in main|master) ;; *) exit 1 ;; esac
+          actual="$(git ls-remote origin "refs/heads/$VERIFIED_BRANCH" | cut -f1)"
+          test -n "$actual" && test "$actual" = "$VERIFIED_SHA"
       - id: deployment
         uses: actions/deploy-pages@v4

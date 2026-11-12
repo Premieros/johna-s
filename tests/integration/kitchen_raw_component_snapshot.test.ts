@@ -2,11 +2,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
+import { activateApprovedBranchFixture, installApprovedRawWriterFixture } from './approvedRawWriterFixture';
 
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
 
-describe.skipIf(skip)('Phase 3 direct raw kitchen deduction helper', () => {
+describe.skipIf(skip).each(['legacy','approved'] as const)('Phase 3 direct raw kitchen deduction helper (%s)', (engine) => {
   let client: pg.Client;
   const branchId = randomUUID();
   const warehouseId = randomUUID();
@@ -31,6 +32,7 @@ describe.skipIf(skip)('Phase 3 direct raw kitchen deduction helper', () => {
     client = openDb(dbUrl!);
     await client.connect();
     await client.query('BEGIN');
+    if (engine==='approved') await installApprovedRawWriterFixture(client,dbUrl!);
 
     await client.query('INSERT INTO public.branches(id,name) VALUES($1,$2)', [branchId, 'Phase 3 Branch']);
     await client.query(
@@ -69,6 +71,9 @@ describe.skipIf(skip)('Phase 3 direct raw kitchen deduction helper', () => {
       'INSERT INTO public.raw_material_batches(raw_material_id,branch_id,warehouse_id,batch_number,quantity,unit_cost) VALUES($1,$3,$4,$5,1,5),($2,$3,$4,$6,10,7)',
       [directRawId, groupRawId, branchId, warehouseId, 'B-' + randomUUID(), 'B-' + randomUUID()],
     );
+    if (engine==='approved') {
+      await activateApprovedBranchFixture(client,branchId);
+    }
   });
 
   afterAll(async () => {
@@ -103,6 +108,12 @@ describe.skipIf(skip)('Phase 3 direct raw kitchen deduction helper', () => {
       [unitId],
     );
     expect(afterProduction.rows[0].c).toBe(beforeProduction.rows[0].c);
+    expect((await client.query('SELECT id FROM public.inventory_unit_batches WHERE unit_id=$1',[unitId])).rows).toEqual([]);
+    if (engine==='approved') {
+      expect((await client.query('SELECT id FROM public.raw_fifo_debts WHERE raw_material_id=ANY($1::uuid[])',[[directRawId,groupRawId]])).rows).toEqual([]);
+      const cost=(await client.query('SELECT sum(-total_cost) cost FROM public.inventory_ledger WHERE reference_id=$1',[eventId])).rows[0].cost;
+      expect(Number(cost)).toBe(4*5+6*7);
+    }
 
     const ledger = await client.query<{ c: number }>(
       "SELECT count(*)::int c FROM public.inventory_ledger WHERE reference_id=$1 AND entry_type='kitchen_send' AND reference_type='kitchen_send'",
@@ -111,6 +122,22 @@ describe.skipIf(skip)('Phase 3 direct raw kitchen deduction helper', () => {
     expect(ledger.rows[0].c).toBeGreaterThanOrEqual(2);
   });
 
+  it('uses one actual four-decimal quantity for the ledger, physical stock and component response', async () => {
+    if (engine !== 'approved') return;
+    await client.query('SAVEPOINT fractional_raw');
+    try {
+      await client.query('UPDATE public.recipe_items SET quantity=0.166667 WHERE recipe_id=$1',[recipeId]);
+      const before=await rawQty(directRawId),ref=randomUUID();
+      const result=(await client.query('SELECT public._deduct_kitchen_raw_components($1,$2,$3,1,$4::jsonb,$5,$6,NULL) r',[productId,branchId,warehouseId,'[]',ref,'QA-FRACTION'])).rows[0].r;
+      expect(result.success,JSON.stringify(result)).toBe(true);
+      const component=result.raw_materials_deducted.find((r:{raw_material_id:string})=>r.raw_material_id===directRawId);
+      expect(component.quantity).toBe(0.1667);
+      expect(await rawQty(directRawId)).toBeCloseTo(before-0.1667,4);
+      const ledger=(await client.query('SELECT sum(quantity) qty,sum(total_cost) cost FROM public.inventory_ledger WHERE reference_id=$1 AND raw_material_id=$2',[ref,directRawId])).rows[0];
+      expect(Number(ledger.qty)).toBe(-component.quantity);
+      expect(Number(ledger.cost)).toBe(-component.total_cost);
+    } finally {await client.query('ROLLBACK TO fractional_raw');await client.query('RELEASE fractional_raw');}
+  });
   it('creates a same-name fallback raw for an unconfigured product and records negative stock', async () => {
     const result = await client.query<{
       r: {
@@ -126,6 +153,7 @@ describe.skipIf(skip)('Phase 3 direct raw kitchen deduction helper', () => {
     expect(result.rows[0].r.raw_materials_deducted).toHaveLength(1);
 
     const fallback = result.rows[0].r.raw_materials_deducted![0];
+    if (engine==='approved') expect(fallback).toMatchObject({unit_cost:0,total_cost:0,price_source:'catalog_zero'});
     expect(fallback.raw_name).toBe('Unconfigured Kitchen Product');
     expect(Number(fallback.quantity)).toBeCloseTo(2, 6);
 
@@ -146,5 +174,6 @@ describe.skipIf(skip)('Phase 3 direct raw kitchen deduction helper', () => {
     expect(raw.rows[0].name).toBe('Unconfigured Kitchen Product');
     expect(Number(raw.rows[0].q)).toBeCloseTo(-2, 6);
     expect(raw.rows[0].id).toBe(fallback.raw_material_id);
+    if (engine==='approved') expect((await client.query('SELECT id FROM public.raw_fifo_debts WHERE raw_material_id=$1',[fallback.raw_material_id])).rows).toEqual([]);
   });
 });

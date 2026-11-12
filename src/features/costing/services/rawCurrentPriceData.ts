@@ -11,7 +11,7 @@ export type RawCurrentPriceRow = {
 
 export function rawCurrentPrice(row: RawCurrentPriceRow | undefined): number | null {
   const value = Number(row?.unit_cost);
-  return Number.isFinite(value) && value > 0 ? value : null;
+  return row?.unit_cost != null && Number.isFinite(value) && value >= 0 ? value : null;
 }
 export function rawCurrentPriceMap(rows: RawCurrentPriceRow[]): Record<string, number | null> {
   return Object.fromEntries(rows.map(row => [row.raw_material_id, rawCurrentPrice(row)]));
@@ -36,12 +36,13 @@ export async function loadRawCurrentPrices(branchId: string | null, rawIds: stri
   }
   const rows: RawCurrentPriceRow[] = [];
   const selected = [...ids].sort();
+  // The indexed price projection supports one bounded500-row branch read.
   // Sequential batches limit database pressure. A failed batch rejects the
   // whole read; no partial price map or invented zero reaches the caller.
-  for (let from = 0; from < selected.length; from += 100) {
+  for (let from = 0; from < selected.length; from += 500) {
     const result = await supabase.rpc('get_raw_material_current_prices', {
       p_branch_id: branchId,
-      p_raw_material_ids: selected.slice(from, from + 100),
+      p_raw_material_ids: selected.slice(from, from + 500),
     }).order('raw_material_id');
     if (result.error) throw result.error;
     rows.push(...((result.data || []) as RawCurrentPriceRow[]));
@@ -49,48 +50,7 @@ export async function loadRawCurrentPrices(branchId: string | null, rawIds: stri
   return rows;
 }
 
-/**
- * Canonical read for material cost displays: use actual FIFO inventory cost
- * when present, otherwise the last explicitly known positive price. Never
- * turn unknown/null prices into zero or invent a price.
- */
-export function mergeRawFifoKnownPrices(known: RawCurrentPriceRow[], fifoRows: import('./rawFifoCostData').RawFifoCostRow[], rawIds: string[] | null = null): RawCurrentPriceRow[] {
-  const byId = new Map(known.map(row => [row.raw_material_id, row]));
-  for (const row of fifoRows) {
-    if (rawIds !== null && !rawIds.includes(row.raw_material_id)) continue;
-    const fifoCost = Number(row.avg_cost);
-    if (!Number.isFinite(fifoCost) || fifoCost <= 0) continue;
-    const previous = byId.get(row.raw_material_id);
-    byId.set(row.raw_material_id, {
-      ...(previous || { raw_material_id: row.raw_material_id, branch_id: row.branch_id,
-        unit_cost: null, price_source: 'unpriced', priced_at: null, reference_number: null }),
-      unit_cost: fifoCost, price_source: 'fifo',
-    });
-  }
-  return [...byId.values()];
-}
-
+/** Current display/recipe prices share the approved-price API; no FIFO overlay. */
 export async function loadRawMaterialDisplayPrices(branchId: string | null, rawIds: string[] | null = null): Promise<RawCurrentPriceRow[]> {
-  const { loadRawFifoCosts } = await import('./rawFifoCostData');
-  const fifoRows = await loadRawFifoCosts(branchId, rawIds);
-  // Enumerate all visible material identities only for full-screen reads.
-  // Keep pricing RPCs restricted to raw materials without a positive FIFO cost.
-  const selected = rawIds === null ? [] as string[] : rawIds;
-  if (rawIds === null) {
-    for (let from = 0; ; from += 500) {
-      let query = supabase.from('raw_materials').select('id').order('id').range(from, from + 499);
-      if (branchId) query = query.eq('branch_id', branchId);
-      const result = await query;
-      if (result.error) throw result.error;
-      const page = (result.data || []) as Array<{ id: string }>;
-      selected.push(...page.map(row => row.id));
-      if (page.length < 500) break;
-    }
-  }
-  const positiveFifo = new Set(fifoRows.filter(row =>
-    Number.isFinite(Number(row.avg_cost)) && Number(row.avg_cost) > 0
-  ).map(row => row.raw_material_id));
-  const missingIds = selected.filter(id => !positiveFifo.has(id));
-  const known = missingIds.length ? await loadRawCurrentPrices(branchId, missingIds) : [];
-  return mergeRawFifoKnownPrices(known, fifoRows, selected);
+  return loadRawCurrentPrices(branchId, rawIds);
 }

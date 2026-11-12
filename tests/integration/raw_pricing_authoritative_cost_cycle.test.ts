@@ -323,7 +323,7 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     await client.query(`INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent) VALUES($1,$2,1,0)`,[recipe,raw]);
     await client.query(`INSERT INTO public.recipe_items(recipe_id,raw_material_id,quantity,wastage_percent) VALUES($1,$2,1,0)`,[recipe,rawA]);
     const prices=await asUser(viewerUser,async()=>await client.query(`SELECT unit_cost FROM public.get_raw_material_current_prices($1,ARRAY[$2::uuid])`,[branchA,raw]));
-    expect(prices.rows[0].unit_cost).toBeNull();
+    expect(Number(prices.rows[0].unit_cost)).toBe(0);
     const overview=await asUser(viewerUser,async()=>await client.query(`SELECT actual_cost FROM public.get_costing_overview($1) WHERE product_id=$2`,[branchA,product]));
     expect(Number(overview.rows[0].actual_cost)).toBe(50); // sum visible price; hidden price contributes no value
     const detail=await asUser(viewerUser,async()=>await client.query(`SELECT public.get_product_costing_detail($1,$2) AS r`,[product,branchA]));
@@ -333,7 +333,7 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
     expect(hidden.cost_reference).toBeNull();
   });
 
-  it('matches the previous complete price and valuation results for events and every fallback', async () => {
+  it('keeps explicit manual prices authoritative over inventory averages and retains previous resolver parity', async () => {
     const fallbackIds = [randomUUID(), randomUUID(), randomUUID()];
     for (const [index, id] of fallbackIds.entries()) {
       await client.query(`INSERT INTO public.raw_materials(id,code,name,unit_id,branch_id,default_cost,is_active)
@@ -352,12 +352,17 @@ describe.skipIf(skip)('raw pricing authoritative costing cycle', () => {
       return { prices, value };
     });
     const updated = [await snapshot(managerUser), await snapshot(viewerUser)];
-    expect(fallbackIds.map(id => Number(updated[0].prices.find(row => row.raw_material_id === id)?.unit_cost))).toEqual([7, 9, 11]);
+    expect(fallbackIds.map(id => Number(updated[0].prices.find(row => row.raw_material_id === id)?.unit_cost))).toEqual([7, 7, 7]);
     await client.query('SAVEPOINT price_read_parity');
     try {
+      // This is the immutable October resolver optimization rehearsal. First
+      // rehearse the November zero-default rollback on its exact baseline;
+      // all source, visibility and valuation parity checks below remain exact.
+      await client.query(readFileSync('scripts/rollback/unified_raw_stock_last_price_reads_20261104.sql', 'utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
+      const previous = [await snapshot(managerUser), await snapshot(viewerUser)];
       await client.query(readFileSync('supabase/rollback/20261009001500_raw_price_read_reuse.sql', 'utf8'));
-      expect(await snapshot(managerUser)).toEqual(updated[0]);
-      expect(await snapshot(viewerUser)).toEqual(updated[1]);
+      expect(await snapshot(managerUser)).toEqual(previous[0]);
+      expect(await snapshot(viewerUser)).toEqual(previous[1]);
     } finally {
       await client.query('ROLLBACK TO SAVEPOINT price_read_parity');
       await client.query('RELEASE SAVEPOINT price_read_parity');

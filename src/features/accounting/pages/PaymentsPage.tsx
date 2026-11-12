@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { HandCoins, Phone, User, Building2 } from 'lucide-react';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -18,6 +19,9 @@ import { useCan } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import type { ArAgingRow, ApAgingRow, CustomerPayment, SupplierPayment, TreasurySource } from '@/lib/types';
+import { useFinanceScope } from '../hooks/useFinanceScope';
+import { exceedsMoney, financeRejectionMessage, type FinanceResult } from '../services/financeFeedback';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { fetchOpenCustomerInvoices, fetchOpenSupplierPurchases } from '../services/paymentOpenInvoices';
 
 type Tab = 'ar' | 'ap';
@@ -29,13 +33,34 @@ export function PaymentsPage() {
   const history = useHistoryAccess();
   const can = useCan();
   const { effectiveSettings } = useSettings();
-  const [tab, setTab] = useState<Tab>('ar');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab: Tab = searchParams.get('tab') === 'ap' ? 'ap' : 'ar';
+  const setTab = (next: Tab) => setSearchParams((previous) => {
+    const params = new URLSearchParams(previous);
+    params.set('tab', next);
+    return params;
+  });
   const [rows, setRows] = useState<ArAgingRow[]>([]);
   const [apRows, setApRows] = useState<ApAgingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const effectiveBranchFilter = branchFilter;
+  const scope = useFinanceScope(effectiveBranchFilter, tab);
+  const { key: scopeKey, capture } = scope;
+  const [loadedScope, setLoadedScope] = useState('');
+  const [sourcesScope, setSourcesScope] = useState('');
+  const [dialogScope, setDialogScope] = useState('');
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [invoicesHasMore, setInvoicesHasMore] = useState(false);
+  const invoiceReadBusy = useRef(false);
+  const [invoicesError, setInvoicesError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [sourceError, setSourceError] = useState('');
+  const [outcomeUnconfirmed, setOutcomeUnconfirmed] = useState(false);
+  const submitting = useRef(false);
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
+  const canCollect = can('sales.payment.receive');
+  const canPaySupplier = can('procurement.payment.create');
   const canUseMainTreasury = can('accounting.treasury.main_cash.pay') || can('accounting.treasury.transfer');
   const { rows: payments, loading: paymentsLoading, error: paymentsError, total: paymentsTotal, hasMore: paymentsHasMore, loadMore: loadMorePayments, loadingMore: loadingMorePayments, refresh: reloadPayments } = usePaginatedRows<CustomerPayment>({
     table: 'customer_payments',
@@ -44,6 +69,7 @@ export function PaymentsPage() {
     branch_id: effectiveBranchFilter,
     min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
+    cursorPagination: true,
     enabled: !!effectiveBranchFilter && tab === 'ar',
   });
   const { rows: supplierPayments, loading: supplierPaymentsLoading, error: supplierPaymentsError, total: supplierPaymentsTotal, hasMore: supplierPaymentsHasMore, loadMore: loadMoreSupplierPayments, loadingMore: loadingMoreSupplierPayments, refresh: reloadSupplierPayments } = usePaginatedRows<SupplierPayment>({
@@ -53,6 +79,7 @@ export function PaymentsPage() {
     branch_id: effectiveBranchFilter,
     min: history.minIso ? { column: 'created_at', value: history.minIso } : undefined,
     pageSize: 100,
+    cursorPagination: true,
     enabled: !!effectiveBranchFilter && tab === 'ap',
   });
 
@@ -67,144 +94,181 @@ export function PaymentsPage() {
   const [apForm, setApForm] = useState({ purchase_id: '', amount: '', treasury_account_id: '', notes: '' });
 
   const loadAging = useCallback(async () => {
+    const isCurrent = capture('aging');
     setLoading(true);
+    setLoadError('');
+    setLoadedScope('');
     try {
       if (effectiveBranchFilter) {
         const asOf = businessDateISO();
         if (tab === 'ar') {
-          const { data: aging } = await api.accounting.getArAging({
+          const { data: aging, error } = await api.accounting.getArAging({
             p_branch_id: effectiveBranchFilter,
             p_as_of: asOf,
           });
+          if (!isCurrent()) return;
+          if (error || !Array.isArray(aging)) throw error || new Error('FINANCE_INVOICES_UNAVAILABLE');
           setRows(((aging as ArAgingRow[]) || []).map((r) => ({ ...r, id: r.customer_id })));
         } else {
-          const { data: apAging } = await api.accounting.getApAging({
+          const { data: apAging, error } = await api.accounting.getApAging({
             p_branch_id: effectiveBranchFilter,
             p_as_of: asOf,
           });
+          if (!isCurrent()) return;
+          if (error || !Array.isArray(apAging)) throw error || new Error('FINANCE_INVOICES_UNAVAILABLE');
           setApRows(((apAging as ApAgingRow[]) || []).map((r) => ({ ...r, id: r.supplier_id })));
         }
       } else {
         setRows([]);
         setApRows([]);
       }
+      if (isCurrent()) setLoadedScope(scopeKey);
+    } catch {
+      if (isCurrent()) { setLoadError(userFacingErrorMessage('FINANCE_INVOICES_UNAVAILABLE', lang)); setRows([]); setApRows([]); }
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [effectiveBranchFilter, tab]);
+  }, [effectiveBranchFilter, tab, scopeKey, capture, lang]);
 
   useEffect(() => { void loadAging(); }, [loadAging]);
 
-  useEffect(() => {
-    if (!effectiveBranchFilter || tab !== 'ap') {
-      setTreasurySources([]);
-      return;
+  const loadSources = useCallback(async () => {
+    const isCurrent = capture('sources');
+    setSourcesScope('');
+    setSourceError('');
+    if (!effectiveBranchFilter || tab !== 'ap') { setTreasurySources([]); return; }
+    try {
+      const { data, error } = await api.accounting.getAccessibleTreasuryAccounts({ p_branch_id: effectiveBranchFilter });
+      if (!isCurrent()) return;
+      if (error || !Array.isArray(data)) throw new Error('FINANCE_BALANCE_UNAVAILABLE');
+      setTreasurySources(data as TreasurySource[]);
+      setSourcesScope(scopeKey);
+    } catch {
+      if (isCurrent()) { setTreasurySources([]); setSourceError(userFacingErrorMessage('FINANCE_BALANCE_UNAVAILABLE', lang)); }
     }
-    void api.accounting.getAccessibleTreasuryAccounts({
-      p_branch_id: effectiveBranchFilter,
-    }).then(({ data }) => {
-      setTreasurySources((data as TreasurySource[]) || []);
-    });
-  }, [effectiveBranchFilter, tab]);
+  }, [capture, effectiveBranchFilter, tab, scopeKey, lang]);
+  useEffect(() => { void loadSources(); }, [loadSources]);
+  useEffect(() => {
+    setCollecting(null); setPaying(null); setOpenInvoices([]); setOpenApInvoices([]);
+    setInvoicesError(''); setInvoicesLoading(false); setOutcomeUnconfirmed(false);
+  }, [scopeKey]);
 
-  const filtered = rows.filter((r) => !search || r.name.toLowerCase().includes(search.toLowerCase()) || (r.phone || '').includes(search));
-  const filteredAp = apRows.filter((r) => !search || r.name.toLowerCase().includes(search.toLowerCase()) || (r.phone || '').includes(search));
+  const filtered = (loadedScope === scopeKey ? rows : []).filter((r) => !search || r.name.toLowerCase().includes(search.toLowerCase()) || (r.phone || '').includes(search));
+  const filteredAp = (loadedScope === scopeKey ? apRows : []).filter((r) => !search || r.name.toLowerCase().includes(search.toLowerCase()) || (r.phone || '').includes(search));
 
   async function openCollect(row: ArAgingRow) {
-    setCollecting(row);
+    if (!canCollect) return;
+    if (!effectiveBranchFilter || loadedScope !== scopeKey) return;
+    const isCurrent = capture('invoices');
+    setDialogScope(scopeKey); setCollecting(row); setOutcomeUnconfirmed(false);
     setForm({ sale_id: '', amount: String(row.open_amount), payment_method: 'cash', notes: '' });
-    if (!effectiveBranchFilter) {
-      setOpenInvoices([]);
-      return;
-    }
-    setOpenInvoices(await fetchOpenCustomerInvoices({
-      customerId: row.customer_id,
-      branchId: effectiveBranchFilter,
-    }));
+    setInvoicesHasMore(false); setOpenInvoices([]); setInvoicesError(''); setInvoicesLoading(true);
+    try {
+      const invoices = await fetchOpenCustomerInvoices({ customerId: row.customer_id, branchId: effectiveBranchFilter, isCurrent });
+      if (isCurrent()) { setOpenInvoices(invoices.rows); setInvoicesHasMore(invoices.hasMore); }
+    } catch (error) {
+      if (isCurrent()) setInvoicesError(userFacingErrorMessage(error, lang));
+    } finally { if (isCurrent()) setInvoicesLoading(false); }
   }
 
   async function openPay(row: ApAgingRow) {
-    setPaying(row);
-    const preferredSource =
-      treasurySources.find((source) => source.branch_id === effectiveBranchFilter && source.kind === 'branch_cash')
-      || treasurySources.find((source) => source.branch_id === effectiveBranchFilter && source.kind === 'bank')
-      || treasurySources[0];
-    setApForm({
-      purchase_id: '',
-      amount: String(row.open_amount),
-      treasury_account_id: preferredSource?.id || '',
-      notes: '',
-    });
-    if (!effectiveBranchFilter) {
-      setOpenApInvoices([]);
-      return;
-    }
-    setOpenApInvoices(await fetchOpenSupplierPurchases({
-      supplierId: row.supplier_id,
-      branchId: effectiveBranchFilter,
-    }));
+    if (!canPaySupplier) return;
+    if (!effectiveBranchFilter || loadedScope !== scopeKey || sourcesScope !== scopeKey) return;
+    const isCurrent = capture('invoices');
+    setDialogScope(scopeKey); setPaying(row); setOutcomeUnconfirmed(false);
+    const preferredSource = treasurySources.find((source) => source.branch_id === effectiveBranchFilter && source.kind === 'branch_cash')
+      || treasurySources.find((source) => source.branch_id === effectiveBranchFilter && source.kind === 'bank') || treasurySources[0];
+    setApForm({ purchase_id: '', amount: String(row.open_amount), treasury_account_id: preferredSource?.id || '', notes: '' });
+    setInvoicesHasMore(false); setOpenApInvoices([]); setInvoicesError(''); setInvoicesLoading(true);
+    try {
+      const invoices = await fetchOpenSupplierPurchases({ supplierId: row.supplier_id, branchId: effectiveBranchFilter, isCurrent });
+      if (isCurrent()) { setOpenApInvoices(invoices.rows); setInvoicesHasMore(invoices.hasMore); }
+    } catch (error) {
+      if (isCurrent()) setInvoicesError(userFacingErrorMessage(error, lang));
+    } finally { if (isCurrent()) setInvoicesLoading(false); }
+  }
+
+  async function loadMoreInvoices() {
+    if (!effectiveBranchFilter || dialogScope !== scopeKey || invoicesLoading || invoiceReadBusy.current || !invoicesHasMore) return;
+    const isCurrent = capture('invoices');
+    invoiceReadBusy.current = true; setInvoicesLoading(true); setInvoicesError('');
+    try {
+      const previous = paying ? openApInvoices : openInvoices;
+      const afterId = previous[previous.length - 1]?.id;
+      const page = paying
+        ? await fetchOpenSupplierPurchases({ supplierId: paying.supplier_id, branchId: effectiveBranchFilter, afterId, isCurrent })
+        : collecting ? await fetchOpenCustomerInvoices({ customerId: collecting.customer_id, branchId: effectiveBranchFilter, afterId, isCurrent }) : null;
+      if (!isCurrent() || !page) return;
+      const append = (rows: typeof openInvoices) => [...rows, ...page.rows.filter(row => !rows.some(old => old.id === row.id))];
+      if (paying) setOpenApInvoices(append); else setOpenInvoices(append);
+      setInvoicesHasMore(page.hasMore);
+    } catch (error) {
+      if (isCurrent()) setInvoicesError(userFacingErrorMessage(error, lang));
+    } finally { invoiceReadBusy.current = false; if (isCurrent()) setInvoicesLoading(false); }
   }
 
   const collect = async () => {
-    if (!collecting) return;
+    if (!canCollect) return;
+    if (!collecting || !effectiveBranchFilter || dialogScope !== scopeKey || submitting.current || invoicesLoading || invoicesError || outcomeUnconfirmed) return;
     const amount = Number(form.amount);
-    if (!amount || amount <= 0) { show(t('required'), 'error'); return; }
-    setSaving(true);
-    const { data, error } = await api.accounting.receivePayment( {
-      p_customer_id: collecting.customer_id,
-      p_branch_id: effectiveBranchFilter,
-      p_amount: amount,
-      p_payment_method: form.payment_method,
-      p_sale_id: form.sale_id || null,
-      p_notes: form.notes || null,
-    });
-    setSaving(false);
-    if (error) { show(error.message, 'error'); return; }
-    const r = data as { success: boolean; error?: string; detail?: string; reference_number?: string } | null;
-    if (!r?.success) { show(r?.detail || r?.error || t('error'), 'error'); return; }
-    show(`${t('collect')} ${formatCurrency(amount, currency, lang)} (${r.reference_number || ''})`, 'success');
-    await logAudit('create', 'customer_payments', undefined, { customer_id: collecting.customer_id, amount });
-    setCollecting(null);
-    loadAging();
-    reloadPayments();
+    if (!Number.isFinite(amount) || amount <= 0) { show(t('required'), 'error'); return; }
+    const invoice = openInvoices.find((row) => row.id === form.sale_id);
+    if (invoice && exceedsMoney(amount, invoice.open)) { show(financeRejectionMessage({ error: 'PAYMENT_EXCEEDS_INVOICE', open: invoice.open }, currency, lang), 'error'); return; }
+    const branchId = effectiveBranchFilter;
+    const isCurrent = capture();
+    submitting.current = true; setSaving(true);
+    try {
+      const { data, error } = await api.accounting.receivePayment({ p_customer_id: collecting.customer_id, p_branch_id: branchId, p_amount: amount, p_payment_method: form.payment_method, p_sale_id: form.sale_id || null, p_notes: form.notes || null });
+      if (error || !data) throw error || new Error('FINANCE_RESULT_UNCONFIRMED');
+      const r = data as FinanceResult;
+      if (r.success) await logAudit('create', 'customer_payments', undefined, { customer_id: collecting.customer_id, amount }, branchId);
+      if (!isCurrent()) return;
+      if (!r.success) {
+        show(financeRejectionMessage(r, currency, lang), 'error', { source: r, branchId });
+        if (r.open != null && Number.isFinite(Number(r.open))) {
+          if (r.error === 'PAYMENT_EXCEEDS_INVOICE') setOpenInvoices(invoices => invoices.map(invoice => invoice.id === form.sale_id ? { ...invoice, open: Number(r.open) } : invoice));
+          if (r.error === 'PAYMENT_EXCEEDS_AR') setCollecting({ ...collecting, open_amount: Number(r.open) });
+        }
+        return;
+      }
+      show(`${t('collect')} ${formatCurrency(amount, currency, lang)} (${r.reference_number || ''})`, 'success');
+      setCollecting(null); void loadAging(); reloadPayments();
+    } catch (error) {
+      if (isCurrent()) { setOutcomeUnconfirmed(true); reloadPayments(); show(userFacingErrorMessage('FINANCE_RESULT_UNCONFIRMED', lang), 'error', { source: error, branchId }); }
+    } finally { submitting.current = false; setSaving(false); }
   };
 
   const paySupplier = async () => {
-    if (!paying) return;
+    if (!canPaySupplier) return;
+    if (!paying || !effectiveBranchFilter || dialogScope !== scopeKey || sourcesScope !== scopeKey || submitting.current || invoicesLoading || invoicesError || outcomeUnconfirmed) return;
     const amount = Number(apForm.amount);
-    if (!amount || amount <= 0 || !apForm.treasury_account_id || !effectiveBranchFilter) {
-      show(t('required'), 'error');
-      return;
-    }
-    setSaving(true);
-    const { data, error } = await api.accounting.paySupplierFromTreasury({
-      p_supplier_id: paying.supplier_id,
-      p_branch_id: effectiveBranchFilter,
-      p_amount: amount,
-      p_treasury_account_id: apForm.treasury_account_id,
-      p_purchase_id: apForm.purchase_id || null,
-      p_notes: apForm.notes || null,
-    });
-    setSaving(false);
-    if (error) { show(error.message, 'error'); return; }
-    const r = data as { success: boolean; error?: string; detail?: string; reference_number?: string } | null;
-    if (!r?.success) {
-      const message = r?.error === 'MAIN_TREASURY_PAYMENT_PERMISSION_REQUIRED'
-        ? (lang === 'ar'
-          ? 'لا تملك صلاحية «السداد من الخزنة الرئيسية». صلاحية تسجيل دفعة المورد وحدها لا تسمح باستخدام الخزنة الرئيسية.'
-          : 'You do not have “Pay from Main Treasury”. Supplier-payment permission alone does not allow Main Treasury funding.')
-        : r?.detail || r?.error || t('error');
-      show(message, 'error');
-      return;
-    }
-    show(`${t('paySupplier')} ${formatCurrency(amount, currency, lang)} (${r.reference_number || ''})`, 'success');
-    await logAudit('create', 'supplier_payments', undefined, { supplier_id: paying.supplier_id, amount });
-    setPaying(null);
-    void loadAging();
-    reloadSupplierPayments();
-    void api.accounting.getAccessibleTreasuryAccounts({
-      p_branch_id: effectiveBranchFilter,
-    }).then(({ data: sources }) => setTreasurySources((sources as TreasurySource[]) || []));
+    if (!Number.isFinite(amount) || amount <= 0 || !apForm.treasury_account_id) { show(t('required'), 'error'); return; }
+    const invoice = openApInvoices.find((row) => row.id === apForm.purchase_id);
+    if (invoice && exceedsMoney(amount, invoice.open)) { show(financeRejectionMessage({ error: 'PAYMENT_EXCEEDS_INVOICE', open: invoice.open }, currency, lang), 'error'); return; }
+    const branchId = effectiveBranchFilter;
+    const isCurrent = capture();
+    submitting.current = true; setSaving(true);
+    try {
+      const { data, error } = await api.accounting.paySupplierFromTreasury({ p_supplier_id: paying.supplier_id, p_branch_id: branchId, p_amount: amount, p_treasury_account_id: apForm.treasury_account_id, p_purchase_id: apForm.purchase_id || null, p_notes: apForm.notes || null });
+      if (error || !data) throw error || new Error('FINANCE_RESULT_UNCONFIRMED');
+      const r = data as FinanceResult;
+      // The authoritative supplier-payment RPC already writes its audit in the same transaction.
+      if (!isCurrent()) return;
+      if (!r.success) {
+        show(financeRejectionMessage(r, currency, lang), 'error', { source: r, branchId });
+        // Reconcile reads only after an authoritative business rejection. Never retry payment.
+        if (r.error === 'INSUFFICIENT_TREASURY_BALANCE') void loadSources();
+        if (r.open != null && Number.isFinite(Number(r.open))) {
+          if (r.error === 'PAYMENT_EXCEEDS_INVOICE') setOpenApInvoices((invoices) => invoices.map((invoice) => invoice.id === apForm.purchase_id ? { ...invoice, open: Number(r.open) } : invoice));
+          if (r.error === 'PAYMENT_EXCEEDS_AP') setPaying({ ...paying, open_amount: Number(r.open) });
+        }
+        return;
+      }
+      show(`${t('paySupplier')} ${formatCurrency(amount, currency, lang)} (${r.reference_number || ''})`, 'success');
+      setPaying(null); void loadAging(); reloadSupplierPayments(); void loadSources();
+    } catch (error) {
+      if (isCurrent()) { setOutcomeUnconfirmed(true); reloadSupplierPayments(); show(userFacingErrorMessage('FINANCE_RESULT_UNCONFIRMED', lang), 'error', { source: error, branchId }); }
+    } finally { submitting.current = false; setSaving(false); }
   };
 
   const columns: Column<ArAgingRow>[] = [
@@ -215,7 +279,7 @@ export function PaymentsPage() {
     { key: 'bucket_31_60', header: t('days60'), render: (r) => formatCurrency(r.bucket_31_60, currency, lang) },
     { key: 'bucket_61_90', header: t('days90'), render: (r) => formatCurrency(r.bucket_61_90, currency, lang) },
     { key: 'bucket_90_plus', header: t('days90Plus'), render: (r) => <span className={r.bucket_90_plus > 0 ? 'text-ui-danger font-semibold' : ''}>{formatCurrency(r.bucket_90_plus, currency, lang)}</span> },
-    { key: 'actions', header: t('actions'), render: (r) => <Button size="sm" onClick={() => openCollect(r)}><HandCoins className="w-4 h-4" /> {t('collect')}</Button> },
+    { key: 'actions', header: t('actions'), render: (r) => canCollect ? <Button size="sm" onClick={() => openCollect(r)}><HandCoins className="w-4 h-4" /> {t('collect')}</Button> : null },
   ];
 
   const apColumns: Column<ApAgingRow>[] = [
@@ -226,7 +290,7 @@ export function PaymentsPage() {
     { key: 'bucket_31_60', header: t('days60'), render: (r) => formatCurrency(r.bucket_31_60, currency, lang) },
     { key: 'bucket_61_90', header: t('days90'), render: (r) => formatCurrency(r.bucket_61_90, currency, lang) },
     { key: 'bucket_90_plus', header: t('days90Plus'), render: (r) => <span className={r.bucket_90_plus > 0 ? 'text-ui-danger font-semibold' : ''}>{formatCurrency(r.bucket_90_plus, currency, lang)}</span> },
-    { key: 'actions', header: t('actions'), render: (r) => <Button size="sm" onClick={() => openPay(r)}><HandCoins className="w-4 h-4" /> {t('paySupplier')}</Button> },
+    { key: 'actions', header: t('actions'), render: (r) => canPaySupplier ? <Button size="sm" onClick={() => openPay(r)} disabled={sourcesScope !== scopeKey}><HandCoins className="w-4 h-4" /> {t('paySupplier')}</Button> : null },
   ];
 
   const paymentColumns: Column<CustomerPayment>[] = [
@@ -250,6 +314,8 @@ export function PaymentsPage() {
 
   return (
     <DesignSurface testId="payments-page">
+      {loadError && <p role="alert" className="text-ui-danger">{loadError}</p>}
+      {sourceError && <p role="alert" className="text-ui-danger">{sourceError}<Button onClick={() => void loadSources()}>{t('refresh')}</Button></p>}
       <DesignPageHeader title={t('receivePayment')} subtitle={t('customerPayments')} />
 
       <div className="flex gap-2 mb-6">
@@ -263,19 +329,21 @@ export function PaymentsPage() {
         </button>
       </div>
 
-      {tab === 'ar' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {tab === 'ar' && loadedScope === scopeKey && !loadError && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           <StatCard title={t('openBalance')} value={formatCurrency(rows.reduce((s, r) => s + Number(r.open_amount), 0), currency, lang)} icon={<HandCoins className="w-5 h-5" />} color="red" />
           <StatCard title={t('days30')} value={formatCurrency(rows.reduce((s, r) => s + Number(r.bucket_0_30), 0), currency, lang)} icon={<HandCoins className="w-5 h-5" />} color="amber" />
+          <StatCard title={t('days60')} value={formatCurrency(rows.reduce((s, r) => s + Number(r.bucket_31_60), 0), currency, lang)} icon={<HandCoins className="w-5 h-5" />} color="amber" />
           <StatCard title={t('days90')} value={formatCurrency(rows.reduce((s, r) => s + Number(r.bucket_61_90), 0), currency, lang)} icon={<HandCoins className="w-5 h-5" />} color="blue" />
           <StatCard title={t('days90Plus')} value={formatCurrency(rows.reduce((s, r) => s + Number(r.bucket_90_plus), 0), currency, lang)} icon={<HandCoins className="w-5 h-5" />} color="purple" />
         </div>
       )}
 
-      {tab === 'ap' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {tab === 'ap' && loadedScope === scopeKey && !loadError && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           <StatCard title={t('apTotal')} value={formatCurrency(apRows.reduce((s, r) => s + Number(r.open_amount), 0), currency, lang)} icon={<Building2 className="w-5 h-5" />} color="red" />
           <StatCard title={t('days30')} value={formatCurrency(apRows.reduce((s, r) => s + Number(r.bucket_0_30), 0), currency, lang)} icon={<Building2 className="w-5 h-5" />} color="amber" />
+          <StatCard title={t('days60')} value={formatCurrency(apRows.reduce((s, r) => s + Number(r.bucket_31_60), 0), currency, lang)} icon={<Building2 className="w-5 h-5" />} color="amber" />
           <StatCard title={t('days90')} value={formatCurrency(apRows.reduce((s, r) => s + Number(r.bucket_61_90), 0), currency, lang)} icon={<Building2 className="w-5 h-5" />} color="blue" />
           <StatCard title={t('days90Plus')} value={formatCurrency(apRows.reduce((s, r) => s + Number(r.bucket_90_plus), 0), currency, lang)} icon={<Building2 className="w-5 h-5" />} color="purple" />
         </div>
@@ -290,7 +358,7 @@ export function PaymentsPage() {
       {tab === 'ar' ? (
         <>
           <DesignPanel title={t('arAging')} testId="payments-ar-aging-panel">
-            <DataTable columns={columns} data={filtered} loading={loading} error={paymentsError} emptyMessage={t('noData')} />
+            <DataTable columns={columns} data={filtered} loading={loading} error={loadError || paymentsError} emptyMessage={t('noData')} />
           </DesignPanel>
 
           <DesignPanel title={t('customerPayments')} testId="payments-ar-table-panel">
@@ -301,7 +369,7 @@ export function PaymentsPage() {
       ) : (
         <>
           <DesignPanel title={t('apAging')} testId="payments-ap-aging-panel">
-            <DataTable columns={apColumns} data={filteredAp} loading={loading} error={supplierPaymentsError} emptyMessage={t('noData')} />
+            <DataTable columns={apColumns} data={filteredAp} loading={loading} error={loadError || supplierPaymentsError} emptyMessage={t('noData')} />
           </DesignPanel>
 
           <DesignPanel title={t('supplierPayments')} testId="payments-ap-table-panel">
@@ -311,9 +379,13 @@ export function PaymentsPage() {
         </>
       )}
 
-      <Modal open={!!collecting} onClose={() => setCollecting(null)} title={collecting ? `${t('collect')} - ${collecting.name}` : ''}>
+      <Modal open={canCollect && !!collecting && dialogScope === scopeKey} onClose={() => setCollecting(null)} title={collecting ? `${t('collect')} - ${collecting.name}` : ''}>
         {collecting && (
           <div className="space-y-4">
+            {invoicesLoading && <p role="status">{t('loading')}</p>}
+            {invoicesHasMore && <div className="space-y-2"><p className="text-xs text-ui-muted">{lang === 'ar' ? 'توجد فواتير مفتوحة أخرى. حمّل المزيد لاختيار فاتورة محددة.' : 'More outstanding invoices are available. Load more to select another invoice.'}</p><Button variant="secondary" disabled={invoicesLoading || saving} onClick={() => void loadMoreInvoices()}>{lang === 'ar' ? 'تحميل فواتير أخرى' : 'Load more invoices'}</Button></div>}
+            {invoicesError && <p role="alert" className="text-ui-danger">{invoicesError}</p>}
+            {outcomeUnconfirmed && <p role="alert" className="text-ui-danger">{userFacingErrorMessage('FINANCE_RESULT_UNCONFIRMED', lang)}</p>}
             <div className="flex items-center gap-3 p-3 rounded-xl bg-ui-page-alt dark:bg-navy-800/60">
               <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 flex items-center justify-center"><User className="w-5 h-5" /></div>
               <div>
@@ -334,7 +406,7 @@ export function PaymentsPage() {
               </Select>
             </div>
             {openInvoices.length > 0 && (
-              <Select label={t('invoice')} value={form.sale_id} onChange={(e) => setForm({ ...form, sale_id: e.target.value })}>
+              <Select label={t('invoice')} value={form.sale_id} onChange={(e) => { const invoice = openInvoices.find((row) => row.id === e.target.value); setForm({ ...form, sale_id: e.target.value, amount: String(invoice?.open ?? collecting.open_amount) }); }}>
                 <option value="">{t('allInvoices')}</option>
                 {openInvoices.map((s) => <option key={s.id} value={s.id}>{s.invoice_number} - {formatCurrency(s.open, currency, lang)}</option>)}
               </Select>
@@ -342,15 +414,19 @@ export function PaymentsPage() {
             <Textarea label={t('paymentNotes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setCollecting(null)}>{t('cancel')}</Button>
-              <Button onClick={collect} disabled={saving}><HandCoins className="w-4 h-4" /> {saving ? t('loading') : t('collect')}</Button>
+              <Button onClick={collect} disabled={saving || invoicesLoading || !!invoicesError || outcomeUnconfirmed}><HandCoins className="w-4 h-4" /> {saving ? t('loading') : t('collect')}</Button>
             </div>
           </div>
         )}
       </Modal>
 
-      <Modal open={!!paying} onClose={() => setPaying(null)} title={paying ? `${t('paySupplier')} - ${paying.name}` : ''}>
+      <Modal open={canPaySupplier && !!paying && dialogScope === scopeKey} onClose={() => setPaying(null)} title={paying ? `${t('paySupplier')} - ${paying.name}` : ''}>
         {paying && (
           <div className="space-y-4">
+            {invoicesLoading && <p role="status">{t('loading')}</p>}
+            {invoicesHasMore && <div className="space-y-2"><p className="text-xs text-ui-muted">{lang === 'ar' ? 'توجد فواتير مفتوحة أخرى. حمّل المزيد لاختيار فاتورة محددة.' : 'More outstanding invoices are available. Load more to select another invoice.'}</p><Button variant="secondary" disabled={invoicesLoading || saving} onClick={() => void loadMoreInvoices()}>{lang === 'ar' ? 'تحميل فواتير أخرى' : 'Load more invoices'}</Button></div>}
+            {invoicesError && <p role="alert" className="text-ui-danger">{invoicesError}</p>}
+            {outcomeUnconfirmed && <p role="alert" className="text-ui-danger">{userFacingErrorMessage('FINANCE_RESULT_UNCONFIRMED', lang)}</p>}
             <div className="flex items-center gap-3 p-3 rounded-xl bg-ui-page-alt dark:bg-navy-800/60">
               <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 flex items-center justify-center"><Building2 className="w-5 h-5" /></div>
               <div>
@@ -407,7 +483,7 @@ export function PaymentsPage() {
               );
             })()}
             {openApInvoices.length > 0 && (
-              <Select label={t('invoice')} value={apForm.purchase_id} onChange={(e) => setApForm({ ...apForm, purchase_id: e.target.value })}>
+              <Select label={t('invoice')} value={apForm.purchase_id} onChange={(e) => { const invoice = openApInvoices.find((row) => row.id === e.target.value); setApForm({ ...apForm, purchase_id: e.target.value, amount: String(invoice?.open ?? paying.open_amount) }); }}>
                 <option value="">{t('allInvoices')}</option>
                 {openApInvoices.map((s) => <option key={s.id} value={s.id}>{s.invoice_number} - {formatCurrency(s.open, currency, lang)}</option>)}
               </Select>
@@ -415,7 +491,7 @@ export function PaymentsPage() {
             <Textarea label={t('paymentNotes')} value={apForm.notes} onChange={(e) => setApForm({ ...apForm, notes: e.target.value })} rows={2} />
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setPaying(null)}>{t('cancel')}</Button>
-              <Button onClick={paySupplier} disabled={saving}><HandCoins className="w-4 h-4" /> {saving ? t('loading') : t('paySupplier')}</Button>
+              <Button onClick={paySupplier} disabled={saving || invoicesLoading || !!invoicesError || outcomeUnconfirmed}><HandCoins className="w-4 h-4" /> {saving ? t('loading') : t('paySupplier')}</Button>
             </div>
           </div>
         )}

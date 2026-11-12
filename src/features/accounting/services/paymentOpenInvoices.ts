@@ -1,67 +1,29 @@
 import { supabase } from '@/api';
 
-export type OpenReceivableInvoice = {
-  id: string;
-  invoice_number: string;
-  open: number;
-};
+export type OpenReceivableInvoice = { id: string; invoice_number: string; open: number };
+export type OpenPayableInvoice = OpenReceivableInvoice;
+export type InvoicePage = { rows: OpenReceivableInvoice[]; hasMore: boolean };
+type Params = { branchId: string; afterId?: string; isCurrent?: () => boolean };
+const PAGE_SIZE = 100;
 
-export type OpenPayableInvoice = {
-  id: string;
-  invoice_number: string;
-  open: number;
-};
-
-export async function fetchOpenCustomerInvoices(params: {
-  customerId: string;
-  branchId: string;
-}): Promise<OpenReceivableInvoice[]> {
-  const { data } = await supabase
-    .from('sales')
-    .select('id, invoice_number, total, paid_amount, refunded_amount')
-    .eq('customer_id', params.customerId)
-    .eq('branch_id', params.branchId)
-    .neq('status', 'returned')
-    .order('created_at', { ascending: true });
-
-  return ((data as Array<{
-    id: string;
-    invoice_number: string;
-    total: number;
-    paid_amount: number;
-    refunded_amount: number | null;
-  }> | null) || [])
-    .map((sale) => ({
-      id: sale.id,
-      invoice_number: sale.invoice_number,
-      open: Number(sale.total) - Number(sale.paid_amount) - Number(sale.refunded_amount || 0),
-    }))
-    .filter((sale) => sale.open > 0);
+async function readInvoices(payable: boolean, partyId: string, params: Params): Promise<InvoicePage> {
+  if (params.isCurrent?.() === false) throw new Error('FINANCE_SCOPE_CHANGED');
+  // Security-invoker views retain base-table RLS. Filter before transferring rows;
+  // never scan paid history in the browser or automatically fetch another page.
+  let query = supabase.from(payable ? 'finance_open_payable_invoices' : 'finance_open_receivable_invoices')
+    .select('id, invoice_number, open')
+    .eq(payable ? 'supplier_id' : 'customer_id', partyId).eq('branch_id', params.branchId);
+  if (params.afterId) query = query.gt('id', params.afterId);
+  const { data, error } = await query.order('id', { ascending: true }).limit(PAGE_SIZE + 1);
+  if (params.isCurrent?.() === false) throw new Error('FINANCE_SCOPE_CHANGED');
+  if (error || !Array.isArray(data)) throw new Error('FINANCE_INVOICES_UNAVAILABLE');
+  const rows = (data as unknown as OpenReceivableInvoice[]).slice(0, PAGE_SIZE).map(row => ({ ...row, open: Number(row.open) }));
+  if (rows.some(row => !Number.isFinite(row.open) || row.open <= 0)) throw new Error('FINANCE_INVOICES_UNAVAILABLE');
+  return { rows, hasMore: data.length > PAGE_SIZE };
 }
-
-export async function fetchOpenSupplierPurchases(params: {
-  supplierId: string;
-  branchId: string;
-}): Promise<OpenPayableInvoice[]> {
-  const { data } = await supabase
-    .from('purchases')
-    .select('id, invoice_number, total, paid_amount, returned_amount')
-    .eq('supplier_id', params.supplierId)
-    .eq('branch_id', params.branchId)
-    .eq('status', 'completed')
-    .order('created_at', { ascending: true });
-
-  return ((data as Array<{
-    id: string;
-    invoice_number: string;
-    total: number;
-    paid_amount: number;
-    returned_amount: number | null;
-  }> | null) || [])
-    .map((purchase) => ({
-      id: purchase.id,
-      invoice_number: purchase.invoice_number,
-      open: Number(purchase.total) - Number(purchase.paid_amount) - Number(purchase.returned_amount || 0),
-    }))
-    .filter((purchase) => purchase.open > 0);
+export function fetchOpenCustomerInvoices(params: Params & { customerId: string }) {
+  return readInvoices(false, params.customerId, params);
+}
+export function fetchOpenSupplierPurchases(params: Params & { supplierId: string }) {
+  return readInvoices(true, params.supplierId, params);
 }

@@ -16,7 +16,7 @@ describe('POS UI guard permission contract', () => {
   });
 
   it('guards active-order actions with their exact permissions', () => {
-    expect(active).toContain("const canCreateOrder = can('pos.order.create')");
+    expect(active).toContain("const canCreateOrder = can('pos.order.dine_in')");
     expect(active).toContain("const canPayOrder = can('pos.payment.take')");
     expect(active).toContain("const canCancelOrder = can('pos.cancel_order')");
     expect(active).toContain("const canReassignCashier = can('pos.order.transfer')");

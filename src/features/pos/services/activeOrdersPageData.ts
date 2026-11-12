@@ -1,4 +1,4 @@
-import { supabase } from '@/api';
+import { supabase, floorPlan } from '@/api';
 import type { DiningArea } from '@/lib/types';
 
 export interface ActiveOrderProductOption {
@@ -27,11 +27,12 @@ export async function loadActiveOrderProducts(branchId: string): Promise<ActiveO
   return (data as ActiveOrderProductOption[]) || [];
 }
 
-export async function createDiningArea(params: { branchId: string; name: string }): Promise<void> {
-  const { error } = await supabase
-    .from('dining_areas')
-    .insert({ name: params.name, branch_id: params.branchId });
+export async function createDiningArea(params: { branchId: string; name: string; tableCount: number }): Promise<void> {
+  const { data, error } = await floorPlan.createAreaWithTables({
+    p_branch_id: params.branchId, p_name: params.name, p_table_count: params.tableCount,
+  });
   if (error) throw error;
+  if (!data?.success) throw new Error(data?.error || 'AREA_CREATE_FAILED');
 }
 
 export async function deleteDiningArea(areaId: string): Promise<void> {

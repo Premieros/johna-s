@@ -8,6 +8,7 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 export function Input({ label, error, className = '', id, ...props }: InputProps) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
+  const isCalendarInput = ['date', 'datetime-local', 'month', 'week'].includes(props.type || '');
   const isControlledNumber = props.type === 'number' && props.value !== undefined;
   const [numberDraft, setNumberDraft] = useState<string | null>(null);
   const numericClass = props.type === 'number'
@@ -20,6 +21,8 @@ export function Input({ label, error, className = '', id, ...props }: InputProps
       <input
         id={inputId}
         {...props}
+        lang={isCalendarInput ? 'en-GB-u-ca-gregory' : props.lang}
+        dir={isCalendarInput ? 'ltr' : props.dir}
         value={isControlledNumber && numberDraft !== null ? numberDraft : props.value}
         onFocus={(event) => {
           if (isControlledNumber) setNumberDraft(String(props.value ?? ''));

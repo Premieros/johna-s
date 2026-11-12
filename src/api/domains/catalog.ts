@@ -259,6 +259,14 @@ export const catalog = {
     if (error) throw error;
   },
 
+  getCashierAreaSettings(p: { p_branch_id: string }) {
+    return supabase.rpc('get_cashier_area_settings', p);
+  },
+
+  saveCashierAreaSettings(p: { p_branch_id: string; p_name: string; p_enabled: boolean; p_area_ids: string[] }) {
+    return supabase.rpc('save_cashier_area_settings', p);
+  },
+
   getKitchenStationAssignments(p_branch_id: string) {
     return supabase.rpc('get_kitchen_station_assignments', { p_branch_id });
   },
