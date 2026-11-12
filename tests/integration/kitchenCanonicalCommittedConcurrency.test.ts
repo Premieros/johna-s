@@ -78,6 +78,36 @@ describe.skipIf(!enabled)('committed public kitchen binding concurrency in an ow
     pidB=(await b.query('SELECT pg_backend_pid() pid')).rows[0].pid;
     await observer.query("SET app.kitchen_rollout_ack='johnas-kitchen-20261013-review-required'");
     if((await observer.query("SELECT to_regprocedure('public._kitchen_dispatch_component_plans(uuid,jsonb)') IS NOT NULL present")).rows[0].present)await observer.query(rollback());
+    // This suite rehearses the immutable October-13 rollout and its strict
+    // source guards, rather than activating it against later transfer code.
+    // Restore the historical capture/core fixture functions ONLY in this newly created
+    // qa_kitchen_* database. Shared CI and production definitions stay intact.
+    const historicalCapture=JSON.parse(readFileSync('scripts/db/candidates/partial_transfer_baseline.json','utf8'))
+      .find((row:{proname:string})=>row.proname==='_capture_kitchen_ingredient_prices');
+    if(!historicalCapture?.definition)throw new Error('HISTORICAL_CAPTURE_FIXTURE_MISSING');
+    await observer.query(historicalCapture.definition);
+    const historicalCore=JSON.parse(readFileSync('scripts/db/candidates/pos_order_type_original_order_defs.json','utf8'))
+      .find((row:{proname:string})=>row.proname==='_send_to_kitchen_core_20260914');
+    if(!historicalCore?.definition)throw new Error('HISTORICAL_CORE_FIXTURE_MISSING');
+    await observer.query(historicalCore.definition);
+    // The October-13 rollout review is intentionally pinned to the historical
+    // canonical apply_stock_count body. Later atomicity fixes must not weaken
+    // its fail-closed drift guard. Restore that historical body ONLY in this
+    // newly created qa_kitchen_* disposable database before replaying forward().
+    const historicalRollback = readFileSync('scripts/rollout/kitchen_dedup_rollback_review_20261013.sql','utf8');
+    const applyStart = historicalRollback.lastIndexOf('CREATE OR REPLACE FUNCTION public.apply_stock_count(');
+    const applyEnd = historicalRollback.indexOf('$function$;', applyStart);
+    if (applyStart < 0 || applyEnd < 0) throw new Error('HISTORICAL_COUNT_APPLY_FIXTURE_MISSING');
+    await observer.query(historicalRollback.slice(applyStart, applyEnd + '$function$;'.length));
+    // This October-13 rehearsal also pins the receipt writer. The approved-price
+    // count release intentionally freezes new count values on later receipts.
+    // Restore the historical writer only inside this owned qa_kitchen_* database;
+    // retain every canonical drift assertion in forward() and rollback().
+    const receiptStart = historicalRollback.lastIndexOf('CREATE OR REPLACE FUNCTION public._raw_fifo_settle_receipt(');
+    const receiptEnd = historicalRollback.indexOf('$function$;', receiptStart);
+    if (receiptStart < 0 || receiptEnd < 0) throw new Error('HISTORICAL_RECEIPT_FIXTURE_MISSING');
+    await observer.query(historicalRollback.slice(receiptStart, receiptEnd + '$function$;'.length));
+    await observer.query(`UPDATE public.roles SET permissions=permissions || '["pos.send_kitchen"]'::jsonb WHERE role='cashier'`);
     originalDefinitions=(await observer.query(catalogSQL)).rows;
     await observer.query("SET app.kitchen_rollout_ack='johnas-kitchen-20261013-review-required'");
     await observer.query(forward());

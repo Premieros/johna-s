@@ -15,7 +15,7 @@ import { logAudit } from '@/lib/audit';
 import { useBranchFilter } from '@/lib/useBranchFilter';
 import { useCan } from '@/lib/permissions';
 import { mergeEffectiveSettings, useSettings } from '@/context/SettingsContext';
-import { changeSalePaymentMethod, loadReceiptSettingsRows, loadSalePaymentRows, loadSalesCustomers, requestSaleManagerApproval, updateSaleMetadata } from '../services/salesPageData';
+import { changeSalePaymentMethod, saleReceiptOrderMetadata, loadReceiptSettingsRows, loadSalePaymentRows, loadSalesCustomers, requestSaleManagerApproval, updateSaleMetadata } from '../services/salesPageData';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useBranches } from '@/hooks/useBranches';
 import type { Customer, Settings } from '@/lib/types';
@@ -31,6 +31,8 @@ interface SaleRow {
   id: string;
   invoice_number: string;
   source_order_id: string | null;
+  table_id: string | null;
+  table?: { id: string; branch_id: string; name: string } | null;
   subtotal: number;
   discount_amount: number;
   tax_amount: number;
@@ -58,7 +60,7 @@ export function SalesPage() {
   const can = useCan();
   const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadSales } = usePaginatedRows<SaleRow>({
     table: 'sales',
-    select: 'id, invoice_number, source_order_id, subtotal, discount_amount, tax_amount, total, paid_amount, refunded_amount, payment_method, status, notes, created_at, customer_id, branch_id, order_type, guest_count, is_archived, customer:customers(name), source_order:orders!sales_source_order_id_fkey(order_number), sale_items(id, product_id, unit_name, quantity, unit_price, discount_amount, refunded_quantity, refunded_amount, total, product:products(name))',
+    select: 'id, invoice_number, source_order_id, table_id, table:dining_tables(id,branch_id,name), subtotal, discount_amount, tax_amount, total, paid_amount, refunded_amount, payment_method, status, notes, created_at, customer_id, branch_id, order_type, guest_count, is_archived, customer:customers(name), source_order:orders!sales_source_order_id_fkey(order_number), sale_items(id, product_id, unit_name, quantity, unit_price, discount_amount, refunded_quantity, refunded_amount, total, product:products(name))',
     order: { column: 'created_at', ascending: false },
     branch_id: branchFilter,
     filters: [{ column: 'is_archived', value: false }],
@@ -189,6 +191,7 @@ export function SalesPage() {
       change: Math.max(0, Number(sale.paid_amount || 0) - Number(sale.total || 0)),
       date: sale.created_at,
       customerName: sale.customer?.name || '',
+      ...saleReceiptOrderMetadata(sale),
       orderTypeLabel: orderTypeLabelForSale(sale.order_type),
       guestCount: sale.guest_count,
       payments,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { userFacingErrorMessage } from '../../src/lib/userFacingError';
+import { userFacingErrorMessage, userFacingErrorCategory } from '../../src/lib/userFacingError';
 
 describe('userFacingErrorMessage', () => {
   it('explains role assignment permission failures to Arabic users', () => {
@@ -9,7 +9,7 @@ describe('userFacingErrorMessage', () => {
     );
     expect(msg).toContain('لا يمكنك تعيين هذا الدور');
     expect(msg).toContain('تحصيل المدفوعات');
-    expect(msg).toContain('pos.payment.take');
+    expect(msg).not.toContain('pos.payment.take');
   });
 
   it('explains explicit required permissions', () => {
@@ -22,7 +22,7 @@ describe('userFacingErrorMessage', () => {
       'ar',
     );
     expect(msg).toContain('تحصيل المدفوعات');
-    expect(msg).toContain('pos.payment.take');
+    expect(msg).not.toContain('pos.payment.take');
   });
 
   it('translates common POS/KDS operational codes instead of exposing raw codes', () => {
@@ -128,5 +128,56 @@ describe('userFacingErrorMessage', () => {
   it('provides English messages when the UI is English', () => {
     expect(userFacingErrorMessage('EMAIL_TAKEN', 'en')).toContain('already used');
     expect(userFacingErrorMessage('TARGET_OUT_OF_SCOPE', 'en')).toContain('branch');
+  });
+});
+
+describe('operational error clarity', () => {
+  it('explains an unconfigured preparation station in both languages', () => {
+    expect(userFacingErrorMessage('KITCHEN_STATION_NOT_CONFIGURED', 'ar')).toContain('محطة تجهيز');
+    expect(userFacingErrorMessage('KITCHEN_STATION_NOT_CONFIGURED', 'en')).toContain('preparation station');
+    expect(userFacingErrorCategory('KITCHEN_STATION_NOT_CONFIGURED', 'ar')).toBe('إعدادات التشغيل');
+  });
+  it('retains a specific response code despite an unrelated human detail', () => {
+    expect(userFacingErrorMessage({error:'ORDER_CANCELLED',detail:'not editable'}, 'ar')).toContain('ملغى');
+  });
+  it('unwraps an actionable transaction cause without leaking database details', () => {
+    const error = {error:'TRANSACTION_FAILED',detail:'PERMISSION_DENIED:pos.order.transfer'};
+    expect(userFacingErrorMessage(error, 'ar')).toContain('نقل الطلبات');
+    expect(userFacingErrorCategory(error, 'en')).toBe('Permissions');
+    const sql = userFacingErrorMessage({error:'TRANSACTION_FAILED',detail:'duplicate key value violates unique constraint "private_secret" (23505)'}, 'ar');
+    expect(sql).toContain('سجل بنفس البيانات');
+    expect(sql).not.toContain('private_secret');
+  });
+  it('does not promise a rollback or safe blind retry for unknown/network outcomes', () => {
+    for (const error of ['MYSTERY_FAILURE', 'Failed to fetch', '57014 statement cancelled']) {
+      const msg = userFacingErrorMessage(error, 'ar');
+      expect(msg).not.toContain('لم يتم تنفيذ');
+      expect(msg).not.toContain('لم يتم اعتماد');
+      expect(msg).toContain('راجع حالة');
+    }
+  });
+  it('does not match a known error as a substring of an unknown code', () => {
+    expect(userFacingErrorMessage('NOT_ORDER_CLOSED_EXTRA', 'en')).not.toContain('already closed');
+  });
+});
+
+
+describe('read failures and distinct error categories', () => {
+  it('does not tell a report reader to check an order or blame the internet for a database timeout', () => {
+    const error = { code: '57014', message: 'canceling statement due to statement timeout' };
+    const message = userFacingErrorMessage(error, 'ar', { operation: 'read' });
+    expect(message).toContain('تحميل البيانات');
+    expect(message).not.toContain('راجع حالة');
+    expect(message).not.toContain('الإنترنت');
+    expect(message).not.toContain('57014');
+    expect(userFacingErrorCategory(error, 'ar')).toBe('تأخر استجابة الخادم');
+    expect(userFacingErrorCategory('55P03 lock timeout', 'ar')).toBe('البيانات مشغولة');
+    expect(userFacingErrorCategory('Failed to fetch', 'ar')).toBe('تعذر الاتصال');
+  });
+  it('keeps validation and safe write-outcome guidance while hiding unknown permission codes', () => {
+    expect(userFacingErrorMessage('INVALID_AMOUNT', 'ar', { operation: 'read' })).toContain('مبلغ');
+    expect(userFacingErrorMessage('57014 timeout', 'ar')).toContain('راجع حالة العملية');
+    expect(userFacingErrorMessage('PERMISSION_DENIED:private.internal', 'ar')).not.toContain('private.internal');
+    expect(userFacingErrorMessage('Failed to fetch', 'en', { operation: 'read' })).toContain('Data could not be loaded');
   });
 });

@@ -28,7 +28,9 @@ describe('Z-report cashier routing + tender detail contract', () => {
     expect(financials).toContain('shiftsApi.getSaleTenders');
     expect(financials).toContain('tenderBySale');
     expect(report).toContain('sale.payments.map');
-    expect(report).toContain('الفواتير وطرق الدفع');
+    const thermal = report.slice(report.indexOf('export function buildThermalZReportText'), report.indexOf('export function buildA4ZReportHtml'));
+    expect(thermal).not.toContain('sale.payments.map');
+    expect(thermal).toContain('CAPTAIN SALES');
     expect(report).toContain('الفواتير ودفعات كل فاتورة');
   });
 });

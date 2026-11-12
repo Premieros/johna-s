@@ -10,7 +10,6 @@ vi.mock('@/lib/useHistoryAccess', () => ({ useHistoryAccess: () => ({ unlimited:
 vi.mock('@/lib/permissions', () => ({ useCan: () => (permission: string) => mocks.permissions.includes(permission) }));
 vi.mock('@/context/SettingsContext', () => ({ useSettings: () => ({ effectiveSettings: () => ({ currency: 'EGP' }) }) }));
 vi.mock('@/hooks/useBranches', () => ({ useBranches: () => ({ branches: mocks.branches }) }));
-vi.mock('@/features/dashboard/components/DashboardStandbyBar', () => ({ DashboardStandbyBar: () => null }));
 vi.mock('@/features/dashboard/components/DashboardSalesChart', () => ({ DashboardSalesChart: () => null }));
 vi.mock('@/features/dashboard/services/dashboardSnapshot', () => ({ loadDashboardSalesSnapshot: mocks.snapshot }));
 vi.mock('@/features/dashboard/services/dashboardRawData', () => ({ loadDashboardStockRows: mocks.stock, loadDashboardOpsRows: mocks.ops, loadDashboardFallbackSales: mocks.fallback }));
@@ -26,6 +25,33 @@ beforeEach(() => {
   mocks.ops.mockReset().mockResolvedValue({ orders: [], purchases: [], expenses: [] });
 });
 describe('live dashboard period selection', () => {
+  it('shows sales analysis in the first card using the existing snapshot exactly once', async () => {
+    render(<MemoryRouter><DashboardDataPage /></MemoryRouter>);
+    const card = screen.getByTestId('dashboard-sales-analysis');
+    expect(card).toBe(screen.getByTestId('dashboard-surface').firstElementChild?.firstElementChild);
+    await waitFor(() => expect(screen.getByTestId('analysis-net-sales')).toHaveTextContent('100.00'));
+    expect(mocks.snapshot).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/Welcome|مرحباً|عرض التقويم/)).not.toBeInTheDocument();
+  });
+  it('carries the selected calendar dates into report links without an extra read', async () => {
+    mocks.permissions.push('reports.view');
+    render(<MemoryRouter><DashboardDataPage /></MemoryRouter>);
+    await waitFor(() => expect(mocks.snapshot).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId('dashboard-range-custom'));
+    fireEvent.change(screen.getByTestId('dashboard-custom-from'), { target: { value: '2026-10-01' } });
+    fireEvent.change(screen.getByTestId('dashboard-custom-to'), { target: { value: '2026-10-25' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(mocks.snapshot).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('link', { name: /^Sales report$/ })).toHaveAttribute('href', '/reports?reportType=sales&from=2026-10-01&to=2026-10-25');
+    expect(screen.getByTestId('kpi-returns').closest('a')).toHaveAttribute('href', '/reports?reportType=returns&from=2026-10-01&to=2026-10-25');
+  });
+  it('does not expose sales analysis without existing sales/report visibility', async () => {
+    mocks.permissions = [];
+    render(<MemoryRouter><DashboardDataPage /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled());
+    expect(screen.queryByTestId('dashboard-sales-analysis')).not.toBeInTheDocument();
+    expect(mocks.snapshot).not.toHaveBeenCalled();
+  });
   it('opens Today and sends the same calendar period to sales, finance and operational reads', async () => {
     render(<MemoryRouter><DashboardDataPage /></MemoryRouter>);
     await waitFor(() => expect(mocks.income).toHaveBeenCalled());
@@ -126,4 +152,17 @@ describe('complete dashboard refresh and failure isolation', () => {
     expect(screen.getByTestId('kpi-net-payments')).toHaveTextContent('300.00');
     expect(screen.queryByRole('status')).toBeNull();
   });
+});
+
+it('does not fan out into raw sales reads after a timeout and permits an explicit retry', async () => {
+  mocks.snapshot.mockRejectedValueOnce({ code: '57014', message: 'statement timeout' });
+  render(<MemoryRouter><DashboardDataPage /></MemoryRouter>);
+  await waitReady();
+  expect(mocks.fallback).not.toHaveBeenCalled();
+  expect(mocks.snapshot).toHaveBeenCalledTimes(1);
+  expect(screen.getByText('Sales data could not be loaded. Please retry.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+  await waitReady();
+  expect(mocks.snapshot).toHaveBeenCalledTimes(2);
+  expect(screen.getByTestId('analysis-net-sales')).toHaveTextContent('100.00');
 });

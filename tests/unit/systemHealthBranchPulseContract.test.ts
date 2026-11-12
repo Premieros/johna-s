@@ -56,7 +56,7 @@ describe('System Health Branch Pulse contract', () => {
   });
 
   it('captures centralized user-visible and render errors without blocking workflows', () => {
-    expect(toast).toContain("void reportUserIssue(message, { action: 'toast_error' })");
+    expect(toast).toContain("void reportUserIssue(message, { action: 'toast_error', correlationId: reference })");
     expect(boundary).toContain('void reportUserIssue(error');
     expect(telemetry).toContain('Telemetry must never block');
     expect(telemetry).toContain('redactTelemetryMessage');

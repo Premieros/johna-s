@@ -50,21 +50,3 @@
     justify-content: center;
   }
 }
-
-
-.dashboard-standby-viewport {
-  contain: layout paint;
-  isolation: isolate;
-}
-
-.dashboard-standby-slide-layer {
-  will-change: transform;
-  backface-visibility: hidden;
-  transform-style: preserve-3d;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dashboard-standby-slide-layer {
-    transition-duration: 0.01ms !important;
-  }
-}

@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable><AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../print-agent-v8/RealtimeWakeClient.cs" Link="RealtimeWakeClient.cs" />
     <Compile Include="../../print-agent-v8/EscPosPrinter.cs" Link="EscPosPrinter.cs" />
     <Compile Include="../../print-agent-v8/FixedTemplateRenderer.cs" Link="FixedTemplateRenderer.cs" />
     <Compile Include="../../print-agent-v8/BuildConfig.cs" Link="BuildConfig.cs" />

@@ -1,3 +1,8 @@
+import { foodCostPct } from '@/lib/costing';
+import { formatReportDate as formatDate, formatReportTimestamp } from '../reportDate';
+import { flattenReportSummaries, reportSummaryPresentation } from '../reportSummaryPresentation';
+import { analysisColumns } from '../reportDataContracts';
+import { additiveReportTotals, primaryReportColumn } from '../reportGrid';
 import { loadRawLatestPriceRows } from '@/features/costing/services/rawLatestPriceData';
 import { readReportBranches } from '../services/readReportBranches';
 import { clearReportRequestCache } from '@/lib/reportRequestCache';
@@ -9,6 +14,7 @@ import { ReportWorkbench } from '../ReportWorkbench';
 import { orderReportColumns } from '../reportColumnLayout';
 import { loadProductSalesSummary } from '../services/productSalesReport';
 import { loadStationSalesLines } from '../services/stationSalesReport';
+import { expenseCategoryLabel } from '../utils/expenseCategoryLabel';
 import { expenseAccountLabel } from '../utils/expenseAccountLabel';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLatestRead } from '@/hooks/useLatestRead';
@@ -20,7 +26,7 @@ import { costing, reporting } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { PageHeader, Card } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
-import { formatFinancialCurrency, formatDate, formatPercent, todayISO } from '@/lib/format';
+import { formatFinancialCurrency, formatPercent, formatPercentValue, todayISO } from '@/lib/format';
 import { reportDateRangeUtc } from '@/lib/businessTime';
 import { exportToExcelAdvanced } from '@/lib/excel';
 import { downloadCSV, openPrintWindow } from '@/lib/reportExport';
@@ -58,7 +64,7 @@ import {
 } from '../numericIntegrity';
 
 const EMPTY_REPORT_ROWS: Record<string, unknown>[] = [];
-interface ReportSnapshot { rows: Record<string, unknown>[]; summary: { total: number; count: number }; serverPaged?: boolean; from?: string; to?: string; metrics?: Record<string, number>; }
+interface ReportSnapshot { purchaseView?: string; branchSummaries?: Record<string,unknown>[]; receivedAt?: string; rows: Record<string, unknown>[]; summary: { total: number; count: number }; serverPaged?: boolean; from?: string; to?: string; metrics?: Record<string, number>; }
 
 type FinancialReportType = 'trial_balance' | 'ledger' | 'treasury_statement' | 'inventory_movement' | 'income' | 'balance_sheet' | 'ar_aging' | 'ap_aging' | 'aging_summary' | 'cash_flow' | 'party_statement';
 type PeriodKey = 'custom' | 'today' | 'yesterday' | 'last7' | 'last30' | 'this_month' | 'last_month' | 'this_year';
@@ -120,7 +126,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
   const { branches } = useBranches();
   // Equivalent lookup refreshes must not invalidate complete report data.
   const branchSourceKey = JSON.stringify(branches.map(({ id, name, name_en }) => [id, name, name_en]));
-  const { data: scopedOptions, error: optionsError, reload: retryOptions } = useReportFilterOptions(reportType, effectiveBranchFilter, user?.id);
+  const { data: scopedOptions, error: optionsError, loading: optionsLoading, reload: retryOptions } = useReportFilterOptions(reportType, effectiveBranchFilter, user?.id, branches.map(branch => branch.id));
   const options = scopedOptions || EMPTY_REPORT_FILTER_OPTIONS;
   const branchColumn = lang === 'ar' ? 'الفرع' : 'Branch';
   const branchNameById = (branchId: unknown): string => {
@@ -132,24 +138,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
     ...row,
     [branchColumn]: branchNameById(branchId),
   });
-  const rawDebtStatusLabel = (status: unknown): string => {
-    const key = String(status || 'OK');
-    const ar: Record<string, string> = {
-      OK: 'سليم',
-      OUTSTANDING: 'دين غير مسوّى',
-      NO_RECEIPT_HISTORY: 'لا يوجد توريد شراء',
-      UNPRICED: 'دين بلا سعر',
-      UNPRICED_NO_RECEIPT: 'دين بلا سعر ولا توريد شراء',
-    };
-    const en: Record<string, string> = {
-      OK: 'OK',
-      OUTSTANDING: 'Outstanding debt',
-      NO_RECEIPT_HISTORY: 'No purchase receipt history',
-      UNPRICED: 'Unpriced debt',
-      UNPRICED_NO_RECEIPT: 'Unpriced debt / no purchase receipt',
-    };
-    return (lang === 'ar' ? ar : en)[key] || key;
-  };
+
   const { effectiveSettings } = useSettings();
   const currency = effectiveSettings(effectiveBranchFilter)?.currency || 'EGP';
   const { visibleColumns, toggleColumn, showAllColumns, columnOrder, moveColumn, resetColumnOrder } = useColumnPreferences(reportType);
@@ -272,6 +261,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
 
   async function loadReport(page = 0, full = false, signal?: AbortSignal, range?: { from: string; to: string }, metricsOnly = false): Promise<ReportSnapshot> {
     let resultRows: Record<string, unknown>[] = [];
+    const branchSummaries: Record<string,unknown>[]=[];
     let resultSummary = { total: 0, count: 0 };
     const setData = (rows: Record<string, unknown>[]) => { resultRows = rows; };
     const setSummary = (value: { total: number; count: number }) => { resultSummary = value; };
@@ -295,7 +285,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
 
     const corePage = !full && (reportType === 'sales' || reportType === 'purchases' || reportType === 'expenses')
       ? await loadOperationalReportPage({ reportType, branchId: effectiveBranchFilter || null,
-        from: allowed.from, to: allowed.to, fromTs, toExclusiveTs, filters, page }) : null;
+        from: allowed.from, to: allowed.to, fromTs, toExclusiveTs, filters, page, signal }) : null;
 
     if (reportType === 'sales_by_station' || reportType === 'sales_costs') {
       if (!canStationView) throw new Error('PERMISSION_DENIED:reports.view');
@@ -388,17 +378,35 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         toExclusiveTs,
         filters, signal,
       });
-      const rows = purchases.map((purchase: Record<string, unknown>) => withBranch(purchase.branch_id, {
-        [lang === 'ar' ? 'الفاتورة' : 'Invoice']: purchase.invoice_number,
-        [lang === 'ar' ? 'التاريخ' : 'Date']: formatDate(purchase.created_at as string, lang),
-        [lang === 'ar' ? 'المورد' : 'Supplier']: (purchase.supplier as { name?: string })?.name || '',
-        [lang === 'ar' ? 'الإجمالي الأصلي' : 'Original Total']: Number(purchase.total || 0),
-        [lang === 'ar' ? 'مرتجع المشتريات' : 'Returned']: Number(purchase.returned_amount || 0),
-        [lang === 'ar' ? 'صافي المشتريات' : 'Net Purchases']: netPurchaseAmount(purchase),
-      }));
+      const label = (ar: string,en: string) => lang==='ar'?ar:en;
+      const view = filters.purchase_view || 'invoice';
+      const rows = purchases.map((purchase: Record<string, unknown>) => withBranch(purchase.branch_id,
+        view==='material' || view==='category' ? {
+          ...(view==='material' ? {
+            [label('الخامة','Material')]: purchase.material_name || label('صنف غير متاح','Unavailable item'),
+            [label('الوحدة','Unit')]: purchase.unit_name || '—',
+            [label('الكمية المشتراة','Purchased Quantity')]: Number(purchase.quantity || 0),
+            [label('الكمية المرتجعة','Returned Quantity')]: Number(purchase.returned_quantity || 0),
+            [label('صافي الكمية','Net Quantity')]: Number(purchase.net_quantity || 0),
+          } : {}),
+          [label('نوع الخامة','Material Category')]: purchase.material_category || label('غير مصنف','Uncategorized'),
+          [label('إجمالي البنود','Line Gross')]: Number(purchase.line_gross || 0),
+          [label('مرتجع البنود','Line Returned')]: Number(purchase.line_returned || 0),
+          [label('صافي قيمة البنود','Line Net')]: Number(purchase.line_net || 0),
+          [label('فواتير تتضمن الصنف','Invoices containing item')]: Number(purchase.invoice_count || 0),
+        } : {
+          ...(view==='supplier' ? {[label('عدد الفواتير','Invoices')]:Number(purchase.invoice_count || 0)} : {
+            [label('الفاتورة','Invoice')]:purchase.invoice_number,
+            [label('التاريخ','Date')]:formatDate(purchase.created_at as string,lang),
+          }),
+          [label('المورد','Supplier')]: (purchase.supplier as {name?:string})?.name || label('مورد غير متاح','Unavailable supplier'),
+          [label('الإجمالي الأصلي','Original Total')]:Number(purchase.total || 0),
+          [label('مرتجع المشتريات','Returned')]:Number(purchase.returned_amount || 0),
+          [label('صافي المشتريات','Net Purchases')]:view==='supplier'?Number(purchase.net_total || 0):netPurchaseAmount(purchase),
+        }));
       setData(rows);
       setChartData(purchases.slice(0, 10).map((purchase: Record<string, unknown>) => ({ name: String(purchase.invoice_number), value: netPurchaseAmount(purchase) })));
-      setSummary({ total: purchases.reduce((sum: number, purchase: Record<string, unknown>) => sum + netPurchaseAmount(purchase), 0), count: purchases.length });
+      setSummary({ total: purchases.reduce((sum: number,purchase: Record<string,unknown>) => sum + (['material','category'].includes(view)?Number(purchase.line_net || 0):view==='supplier'?Number(purchase.net_total || 0):netPurchaseAmount(purchase)),0),count:purchases.length });
     } else if (reportType === 'expenses') {
       const expenses = corePage?.rows ?? await loadExpenseReportRows({
         fromTs, toExclusiveTs,
@@ -409,14 +417,14 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       });
       const rows = expenses.map((expense: Record<string, unknown>) => withBranch(expense.branch_id, {
         [lang === 'ar' ? 'التاريخ' : 'Date']: formatDate(expense.expense_date as string, lang),
-        [lang === 'ar' ? 'الفئة' : 'Category']: expense.category || '',
+        [lang === 'ar' ? 'الفئة' : 'Category']: expenseCategoryLabel(expense.category, lang),
         [lang === 'ar' ? 'حساب المصروف' : 'Expense account']: expenseAccountLabel(expense, lang),
         [lang === 'ar' ? 'الوصف' : 'Description']: expense.description || '',
         [lang === 'ar' ? 'المبلغ' : 'Amount']: Number(expense.amount || 0),
       }));
       setData(rows);
       const catMap = new Map<string, number>();
-      expenses.forEach((expense: Record<string, unknown>) => catMap.set(String(expense.category || ''), (catMap.get(String(expense.category || '')) || 0) + Number(expense.amount || 0)));
+      expenses.forEach((expense: Record<string, unknown>) => catMap.set(expenseCategoryLabel(expense.category, lang), (catMap.get(expenseCategoryLabel(expense.category, lang)) || 0) + Number(expense.amount || 0)));
       setChartData(Array.from(catMap.entries()).map(([name, value]) => ({ name: name || (lang === 'ar' ? 'غير محدد' : 'Other'), value })));
       setSummary({ total: expenses.reduce((sum: number, expense: Record<string, unknown>) => sum + Number(expense.amount || 0), 0), count: expenses.length });
     } else if (reportType === 'profit') {
@@ -594,7 +602,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       const rows = products.map((product) => withBranch(product.branchId, {
         [label('المنتج', 'Product')]: product.name || label('غير معروف', 'Unknown'),
         [label('معرف المنتج', 'Product ID')]: product.productId || '-',
+        [label('التصنيف', 'Category')]: product.category,
+        [label('المحطة', 'Station')]: product.station,
         [label('الوحدة', 'Unit')]: product.unit,
+        ...(filters.sales_view === 'options' ? { [label('خيارات الإضافات المحفوظة', 'Saved modifier combination')]: product.options || label('بدون إضافات', 'No modifiers') } : {}),
+        [label('عدد الفواتير المحتوية', 'Containing invoices')]: product.invoiceCount,
+        [label('كمية مجانية مسجلة', 'Recorded bonus quantity')]: product.bonusQuantity,
         [label('الكمية المباعة', 'Sold Quantity')]: product.soldQuantity,
         [label('الكمية المرتجعة', 'Returned Quantity')]: product.returnedQuantity,
         [label('صافي الكمية', 'Net Quantity')]: product.netQuantity,
@@ -606,7 +619,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         [label('صافي الإيراد', 'Net Revenue')]: product.net,
       }));
       setData(rows);
-      setChartData(products.slice(0, 10).map((product) => ({ name: `${product.name || label('غير معروف', 'Unknown')} (${product.unit})`, value: product.net })));
+      setChartData(products.slice(0, 10).map((product) => ({ name: `${product.name || label('غير معروف', 'Unknown')} (${product.unit})${filters.sales_view==='options' ? ` · ${product.options || label('بدون إضافات','No modifiers')}` : ''}`, value: product.net })));
       setSummary({ total: products.reduce((sum, product) => sum + product.net, 0), count: rows.length });
     } else if (reportType === 'detailed_invoices') {
       const sales = await loadDetailedInvoiceRows({
@@ -722,6 +735,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
           [lang === 'ar' ? 'المنتج' : 'Product']: row.product_name,
           [lang === 'ar' ? 'تكلفة المكونات' : 'Component Cost']: Number(row.actual_cost),
           [lang === 'ar' ? 'سعر البيع' : 'Sale Price']: Number(row.sale_price),
+          [lang === 'ar' ? 'نسبة التكلفة %' : 'Cost ratio %']: row.actual_cost == null || Number(row.sale_price)<=0 ? '—' : formatPercentValue(foodCostPct(Number(row.actual_cost),Number(row.sale_price)),1),
           [lang === 'ar' ? 'الهامش' : 'Margin']: Number(row.sale_price) - Number(row.actual_cost),
         }));
       setData(rows);
@@ -996,32 +1010,19 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         ? branches.filter((branch) => branch.id === effectiveBranchFilter)
         : branches;
       const results = await readReportBranches(targetBranches, async (branch) => {
-        const result = await reporting.getCurrentRawMaterialValuation({ p_branch_id: branch.id }, signal);
-        if (result.error) throw result.error;
-        return { branchId: branch.id, rows: Array.isArray(result.data) ? result.data as Record<string, unknown>[] : [] };
+        const result = await costing.getRawMaterialCostOverview({ p_branch_id: branch.id }, signal);
+        const data = requireReportData(result, signal);
+        if (!Array.isArray(data)) throw new Error('REPORT_SOURCE_INVALID');
+        return { branchId: branch.id, rows: data };
       }, signal);
       const rows = results.flatMap(({ branchId, rows: rawRows }) => rawRows.map((row) => withBranch(branchId, {
         [lang === 'ar' ? 'الخامة' : 'Raw Material']: row.raw_material_name || '-',
         [lang === 'ar' ? 'الكود' : 'Code']: row.raw_material_code || '',
-        [lang === 'ar' ? 'الوحدة' : 'Unit']: row.unit_name || '',
-        [lang === 'ar' ? 'الكمية الحالية' : 'Current Qty']: Number(row.current_quantity || 0),
-        [lang === 'ar' ? 'سعر الخامة المعتمد (مركز التكلفة)' : 'Canonical Raw Cost (Costing Center)']: Number(row.latest_authoritative_cost || 0),
-        [lang === 'ar' ? 'متوسط تكلفة المخزون المتبقي FIFO' : 'Remaining Inventory FIFO Average Cost']: Number(row.fifo_current_unit_cost || 0),
-        [lang === 'ar' ? 'قيمة المخزون الحالية' : 'Current Inventory Value']: Number(row.current_inventory_value || 0),
+        [lang === 'ar' ? 'الكمية الحالية' : 'Current Qty']: Number(row.stock_quantity || 0),
+        [lang === 'ar' ? 'سعر الخامة المعتمد (مركز التكلفة)' : 'Canonical Raw Cost (Costing Center)']: Number(row.latest_cost || 0),
+        [lang === 'ar' ? 'قيمة المخزون الحالية' : 'Current Inventory Value']: Number(row.estimated_net_stock_value || 0),
         [lang === 'ar' ? 'مصدر السعر' : 'Price Source']: row.price_source || '',
-        [lang === 'ar' ? 'طبقات FIFO المفتوحة' : 'Open FIFO Batches']: Number(row.open_fifo_batches || 0),
-        [lang === 'ar' ? 'دين FIFO غير مسوّى' : 'Outstanding FIFO Debt']: Number(row.outstanding_fifo_debt_quantity || 0),
-        [lang === 'ar' ? 'عدد ديون FIFO' : 'FIFO Debt Rows']: Number(row.outstanding_fifo_debt_rows || 0),
-        [lang === 'ar' ? 'قيمة الدين التقديرية' : 'Estimated Debt Value']: Number(row.estimated_fifo_debt_value || 0),
-        [lang === 'ar' ? 'دين بلا سعر' : 'Unpriced Debt Qty']: Number(row.unpriced_fifo_debt_quantity || 0),
-        [lang === 'ar' ? 'تغطية تسعير الدين %' : 'Debt Pricing Coverage %']: Number(row.fifo_debt_pricing_coverage_pct || 0),
-        [lang === 'ar' ? 'أقدم دين' : 'Oldest Debt']: row.oldest_outstanding_debt_at
-          ? formatDate(String(row.oldest_outstanding_debt_at), lang)
-          : '',
-        [lang === 'ar' ? 'آخر توريد شراء' : 'Last Purchase Receipt']: row.last_purchase_receipt_at
-          ? formatDate(String(row.last_purchase_receipt_at), lang)
-          : '',
-        [lang === 'ar' ? 'حالة الدين' : 'Debt Status']: rawDebtStatusLabel(row.fifo_debt_status),
+        [lang === 'ar' ? 'حالة السعر' : 'Price Status']: row.price_missing ? (lang === 'ar' ? 'بلا سعر — محسوب بصفر' : 'Unpriced — valued at zero') : (lang === 'ar' ? 'مسعر' : 'Priced'),
       })));
       setData(rows);
       setChartData([]);
@@ -1039,8 +1040,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
           p_from_date: allowed.from,
           p_to_date: allowed.to,
         });
-        if (result.error) throw result.error;
-        const payload = (result.data || {}) as Record<string, unknown>;
+        const payload = requireReportData(result,signal) as Record<string,unknown>;
+        if (!payload.summary || typeof payload.summary!=='object' || !Array.isArray(payload.rows)) throw new Error('REPORT_SOURCE_INVALID');
         return {
           branchId: branch.id,
           summary: (payload.summary || {}) as Record<string, unknown>,
@@ -1070,7 +1071,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
           [lang === 'ar' ? 'كمية آخر المدة' : 'Closing Qty']: Number(row.closing_quantity || 0),
           [lang === 'ar' ? 'قيمة آخر المدة' : 'Closing Value']: Number(row.closing_value || 0),
         }));
-        return [summaryRow, ...detailRows];
+        branchSummaries.push(summaryRow);
+        return detailRows;
       });
       setData(rows);
       setChartData([]);
@@ -1088,8 +1090,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
           p_from_date: allowed.from,
           p_to_date: allowed.to,
         });
-        if (result.error) throw result.error;
-        const payload = (result.data || {}) as Record<string, unknown>;
+        const payload = requireReportData(result,signal) as Record<string,unknown>;
+        if (!payload.summary || typeof payload.summary!=='object' || !Array.isArray(payload.rows)) throw new Error('REPORT_SOURCE_INVALID');
         return {
           branchId: branch.id,
           summary: (payload.summary || {}) as Record<string, unknown>,
@@ -1131,7 +1133,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
           [lang === 'ar' ? 'مصدر التسعير' : 'Price Source']: row.price_source || '',
           [lang === 'ar' ? 'الحالة' : 'Status']: row.status || '',
         }));
-        return [summaryRow, ...detailRows];
+        branchSummaries.push(summaryRow);
+        return detailRows;
       });
       setData(rows);
       setChartData([]);
@@ -1163,34 +1166,24 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       setChartData(rows.slice(0, 10).map((row) => ({ name: String(row[lang === 'ar' ? 'المنتج' : 'Product']), value: Number(row[lang === 'ar' ? 'التكلفة الإجمالية' : 'Total Cost']) })));
       setSummary({ total: rows.reduce((sum, row) => sum + Number(row[lang === 'ar' ? 'التكلفة الإجمالية' : 'Total Cost'] || 0), 0), count: rows.length });
     }
-    return { rows: resultRows, summary: corePage?.summary ?? resultSummary, serverPaged: !!corePage, from: allowed.from, to: allowed.to };
+    return { branchSummaries, receivedAt:new Date().toISOString(), rows: resultRows, summary: corePage?.summary ?? resultSummary, serverPaged: !!corePage, purchaseView: reportType==='purchases' ? filters.purchase_view || 'invoice' : undefined, metrics: corePage?.metrics, from: allowed.from, to: allowed.to };
   }
 
   const handleExportExcel = async (complete: ReportSnapshot) => {
     const excelProfile = getReportExcelProfile(reportType, lang as 'ar' | 'en');
-    const totalRow = reportType === 'sales_by_station'
-      ? stationTotals(complete.rows)
-      : reportType === 'financial_reconciliation'
-      ? {
-        [lang === 'ar' ? 'صافي المبيعات' : 'Net Sales']: complete.summary.total,
-        [lang === 'ar' ? 'عدد الفروق' : 'Mismatch Count']: complete.summary.count,
-      }
-      : {
-        [lang === 'ar' ? 'الإجمالي' : 'Total']: complete.summary.total,
-        [lang === 'ar' ? 'عدد السجلات' : 'Record Count']: complete.summary.count,
-      };
+    const totalRow = additiveReportTotals(analysisColumns(reportType,complete.rows), complete.rows, true, complete.metrics);
     await exportToExcelAdvanced({
       data: complete.rows,
       filename: `report_${reportType}_${complete.from ?? from}_${complete.to ?? to}`,
       sheetName: (reportTypes.find((row) => row.key === reportType)?.label ?? reportType).slice(0, 31),
       title: reportTypes.find((row) => row.key === reportType)?.label ?? reportType,
-      subtitle: `${reportBranchLabel} — ${complete.from ?? from} — ${complete.to ?? to}`,
-      totalRow,
+      subtitle: `${reportBranchLabel} — ${formatDate(complete.from ?? from, lang)} — ${formatDate(complete.to ?? to, lang)}${complete.receivedAt ? ` · ${lang==='ar'?'استلام النتيجة':'Result received'}: ${formatReportTimestamp(complete.receivedAt, lang)}` : ''}`,
+      totalRow: {...totalRow,...flattenReportSummaries(complete.branchSummaries || [])},
       currencyColumns: moneyKeys,
       integerColumns: excelProfile.integerColumns,
       columns,
       columnWidths: excelProfile.columnWidths,
-      sourceNote: excelProfile.sourceNote,
+      sourceNote: reportType==='purchases' && ['material','category'].includes(complete.purchaseView || '') ? (lang==='ar'?'قيم البنود والمرتجعات المسجلة قبل خصم وضريبة الفاتورة.':'Recorded line values and returns before invoice discount/tax.') : excelProfile.sourceNote,
       lang,
     });
   };
@@ -1218,7 +1211,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
     reportTypes.push(
       { key: 'raw_material_consumption', label: lang === 'ar' ? 'حركة واستهلاك الخامات' : 'Raw Material Consumption', icon: <Layers className="w-4 h-4" /> },
       { key: 'raw_material_current_cost', label: lang === 'ar' ? 'أسعار الخامات الحالية' : 'Current Raw Material Prices', icon: <Package className="w-4 h-4" /> },
-      { key: 'raw_material_valuation', label: lang === 'ar' ? 'تقييم الخامات المحاسبي' : 'Raw Material Accounting Valuation', icon: <Package className="w-4 h-4" /> },
+      { key: 'raw_material_valuation', label: lang === 'ar' ? 'تقييم الخامات بآخر سعر' : 'Raw Material Latest-Price Valuation', icon: <Package className="w-4 h-4" /> },
       { key: 'sales_component_reconciliation', label: lang === 'ar' ? 'مطابقة المبيعات مع استهلاك المكونات' : 'Sales vs Component Consumption', icon: <BarChart3 className="w-4 h-4" /> },
     );
   }
@@ -1252,6 +1245,8 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
     lang === 'ar' ? 'صافي الربح' : 'Net Profit', lang === 'ar' ? 'صافي الفاتورة' : 'Net Total',
     lang === 'ar' ? 'متوسط الفاتورة' : 'Avg Invoice', lang === 'ar' ? 'متوسط الفاتورة' : 'Avg Order',
     lang === 'ar' ? 'تكلفة الاستهلاك' : 'Consumption Cost', lang === 'ar' ? 'تكلفة المكونات' : 'Component Cost',
+    lang === 'ar' ? 'إجمالي البنود' : 'Line Gross', lang === 'ar' ? 'مرتجع البنود' : 'Line Returned', lang === 'ar' ? 'صافي قيمة البنود' : 'Line Net',
+    lang === 'ar' ? 'تكلفة المباع بسعر وقت الإرسال' : 'Sale-time Ingredient Cost', lang === 'ar' ? 'مجمل الربح بالتكلفة المحفوظة' : 'Gross Profit (Saved Cost)', lang === 'ar' ? 'تكلفة بسعر وقت الإرسال (تقديرية)' : 'Sale-time Cost (Estimated)', lang === 'ar' ? 'تكلفة المكونات المسعرة (تقديرية)' : 'Priced Components Cost (Estimated)',
     lang === 'ar' ? 'سعر البيع' : 'Sale Price', lang === 'ar' ? 'الهامش' : 'Margin',
     lang === 'ar' ? 'تكلفة الوحدة' : 'Unit Cost', lang === 'ar' ? 'التكلفة الإجمالية' : 'Total Cost',
     lang === 'ar' ? 'المبلغ المرتجع' : 'Refunded Amount',
@@ -1281,9 +1276,15 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
     lang === 'ar' ? 'فرق القيمة' : 'Value Difference',
   ];
 
+  const presentation = reportSummaryPresentation(reportType,lang);
+  const purchaseItemsView = reportType === 'purchases' && ['material','category'].includes(snapshot?.purchaseView || 'invoice');
+  if (purchaseItemsView) { presentation.label = lang === 'ar' ? 'صافي قيمة البنود قبل خصم وضريبة الفاتورة' : 'Net line value before invoice discount and tax'; presentation.basis = lang === 'ar' ? 'قيم بنود الشراء والمرتجعات المسجلة، قبل خصم وضريبة الفاتورة؛ تختلف عن صافي الفواتير.' : 'Recorded purchase lines and returns before invoice-level discount and tax; distinct from net invoice totals.'; }
+  const summaryEntries = flattenReportSummaries(snapshot?.branchSummaries || []);
   const showDate = DATE_DRIVEN_REPORTS.has(reportType);
   const allColumns = orderReportColumns(data.length > 0 ? Object.keys(data[0]) : [], columnOrder);
   const columns = visibleColumns ? allColumns.filter((column) => visibleColumns.includes(column)) : allColumns;
+  const primaryColumn = primaryReportColumn(columns);
+  const columnTotals = additiveReportTotals(analysisColumns(reportType,data), data, !snapshot?.serverPaged, snapshot?.metrics);
   const hiddenCount = visibleColumns ? allColumns.length - columns.length : 0;
   const reportMobilePrimaryColumns = columns.slice(0, 4);
   const reportMobileSecondaryColumns = columns.slice(4);
@@ -1292,11 +1293,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
   const paymentMethodLabels: Record<string, string> = { cash: t('cash'), card: t('card'), transfer: t('transfer'), credit: t('credit'), split: lang === 'ar' ? 'دفع مقسم' : 'Split payment' };
   const statusLabels: Record<string, string> = {
     completed: t('statusCompleted'), returned: lang === 'ar' ? 'مرتجع' : 'Returned', refunded: t('refunded'),
-    cancelled: t('statusCancelled'), pending: t('statusPending'),
+    cancelled: t('statusCancelled'), pending: t('statusPending'), draft: lang === 'ar' ? 'مسودة' : 'Draft', submitted: lang === 'ar' ? 'مقدّم' : 'Submitted', approved: lang === 'ar' ? 'معتمد' : 'Approved', partial: lang === 'ar' ? 'استلام جزئي' : 'Partially received',
   };
 
   const filterLabel = (dim: ReportFilterKey): string => {
     const labels: Record<ReportFilterKey, string> = {
+      raw_material: lang === 'ar' ? 'الخامة' : 'Material', material_category: lang === 'ar' ? 'نوع الخامة' : 'Material category',
       warehouse: t('filterByWarehouse'), cashier: t('filterByCashier'), customer: t('filterByCustomer'),
       station: lang === 'ar' ? 'المحطة' : 'Station',
       supplier: t('filterBySupplier'), buyer: t('filterByBuyer'), product: t('filterByProduct'),
@@ -1319,10 +1321,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
   const filterOptions = (dim: ReportFilterKey): { value: string; label: string }[] => {
     const name = (value: string, english: string | null) => (lang === 'ar' ? value : (english || value));
     switch (dim) {
+      case 'raw_material': return (options.rawMaterials || []).map(raw => ({ value: raw.id, label: raw.name }));
+      case 'material_category': return [...new Set((options.rawMaterials || []).map(raw => raw.category).filter((category): category is string => !!category))].sort().map(category => ({value:category,label:category}));
       case 'station': return [...options.stations.map(station => ({ value: station.id, label: lang === 'ar' ? station.name_ar : station.name_en || station.name_ar })), { value: 'unassigned', label: lang === 'ar' ? 'غير محدد' : 'Unassigned' }];
       case 'order_type': return ORDER_TYPE_OPTIONS.map((value) => ({ value, label: orderTypeLabels[value] || value }));
       case 'payment_method': return PAYMENT_METHOD_OPTIONS.map((value) => ({ value, label: paymentMethodLabels[value] || value }));
-      case 'status': return SALE_STATUS_OPTIONS.map((value) => ({ value, label: statusLabels[value] || value }));
+      case 'status': return (reportType === 'purchases' ? ['draft','submitted','approved','completed','partial','returned','cancelled'] : SALE_STATUS_OPTIONS).map((value) => ({ value, label: statusLabels[value] || value }));
       case 'warehouse': return options.warehouses.map((warehouse) => ({ value: warehouse.id, label: warehouse.name }));
       case 'cashier':
       case 'buyer': return options.cashiers.map((user) => ({ value: user.id, label: user.full_name || user.email || '' }));
@@ -1330,21 +1334,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       case 'supplier': return options.suppliers.map((supplier) => ({ value: supplier.id, label: name(supplier.name, supplier.name_en) }));
       case 'product': return options.products.map((product) => ({ value: product.id, label: name(product.name, product.name_en) }));
       case 'category': return reportType === 'expenses'
-        ? options.expenseCategories.map((category) => ({ value: category, label: category }))
+        ? options.expenseCategories.map((category) => ({ value: category, label: expenseCategoryLabel(category, lang) }))
         : options.categories.map((category) => ({ value: category.id, label: name(category.name, category.name_en) }));
       case 'table': return options.tables.map((table) => ({ value: table.id, label: table.name }));
     }
-  };
-
-  const stationTotals = (rows: Record<string, unknown>[]): Record<string, unknown> => {
-    const label = (ar: string, en: string) => lang === 'ar' ? ar : en;
-    const keys = [label('الكمية المباعة', 'Sold Quantity'), label('الكمية المرتجعة', 'Returned Quantity'), label('صافي الكمية', 'Net Quantity'), label('المبيعات قبل الخصم', 'Gross Sales'), label('الخصم الموزع', 'Allocated Discount'), label('الضريبة الموزعة', 'Allocated Tax'), label('الإجمالي الأصلي', 'Original Total'), label('قيمة المرتجع', 'Return Value'), label('صافي الإيراد دون الضريبة', 'Net Revenue Excluding Tax'), label('صافي المبيعات', 'Net Sales')];
-    const totals: Record<string, unknown> = { [label('الفاتورة', 'Invoice')]: label('الإجمالي', 'Total') };
-    for (const key of keys) totals[key] = rows.reduce((sum, row) => sum + Number(row[key] || 0), 0);
-    for (const key of [label('التكلفة المسجلة', 'Recorded Cost'), label('مجمل الربح', 'Gross Profit'), label('تكلفة بسعر وقت الإرسال (تقديرية)', 'Sale-time Cost (Estimated)'), label('تكلفة المكونات المسعرة (تقديرية)', 'Priced Components Cost (Estimated)')]) {
-      if (rows.length && key in rows[0]) totals[key] = rows.every(row => typeof row[key] === 'number') ? rows.reduce((sum, row) => sum + Number(row[key]), 0) : '—';
-    }
-    return totals;
   };
 
   const handlePrint = (complete: ReportSnapshot, reservedWindow?: Window | null) => {
@@ -1355,8 +1348,9 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       if (typeof value === 'number' && moneyKeys.includes(header)) return formatFinancialCurrency(value, currency, lang);
       return String(value ?? '');
     }));
-    if (reportType === 'sales_by_station') { const totals = stationTotals(complete.rows); rows.push(headers.map(header => String(totals[header] ?? ''))); }
-    openPrintWindow({ title: reportLabel, subtitle: `${reportBranchLabel} — ${complete.from ?? from} - ${complete.to ?? to}`, headers, rows, lang: lang as 'ar' | 'en' }, reservedWindow);
+    const totals = additiveReportTotals(analysisColumns(reportType,complete.rows),complete.rows,true,complete.metrics);
+    if (headers.some(header => header in totals)) rows.push(headers.map(header => header in totals ? totals[header]===null ? '—' : String(totals[header]) : header===primaryColumn ? (lang==='ar'?'الإجمالي':'Total') : ''));
+    openPrintWindow({ title: reportLabel, subtitle: `${reportBranchLabel} — ${formatDate(complete.from ?? from, lang)} — ${formatDate(complete.to ?? to, lang)}${complete.receivedAt ? ` · ${lang==='ar'?'استلام النتيجة':'Result received'}: ${formatReportTimestamp(complete.receivedAt, lang)}` : ''}`, headers, rows, summary:flattenReportSummaries(complete.branchSummaries || []), lang: lang as 'ar' | 'en' }, reservedWindow);
   };
 
   const exportComplete = async (kind: 'excel' | 'csv' | 'print') => {
@@ -1388,7 +1382,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
 
   return (
     <div>
-      <PageHeader title={workspaceTitle || t('reports')} actions={
+      <div className={controlledReportType ? 'report-actions-only' : undefined}><PageHeader title={workspaceTitle || t('reports')} actions={
         <div className="flex flex-wrap gap-2">
           <ColumnPicker
             columns={allColumns}
@@ -1404,11 +1398,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
           {can('reports.export') && <Button variant="outline" size="sm" onClick={() => void exportComplete('csv')} disabled={!snapshot || loading || exporting || !!reportError || columns.length === 0}><FileDown className="w-4 h-4" /> {t('exportCsv')}</Button>}
           {can('reports.print') && <Button variant="outline" size="sm" onClick={() => void exportComplete('print')} disabled={!snapshot || loading || exporting || !!reportError || columns.length === 0}><Printer className="w-4 h-4" /> {t('print')}</Button>}
         </div>
-      } />
+      } /></div>
 
       {exporting && <p role="status" className="mb-3 text-sm">{lang === 'ar' ? 'جاري تجهيز التقرير الكامل…' : 'Preparing complete report…'}</p>}
       {data.length > 0 && columns.length === 0 && <p role="status" className="mb-3 text-sm text-ui-muted">{lang === 'ar' ? 'اختر عمودًا واحدًا على الأقل للعرض والتصدير من قائمة الأعمدة.' : 'Choose at least one column to display and export from Columns.'}</p>}
-      {exportError != null && <p role="alert" className="mb-3 text-sm text-ui-danger">{userFacingErrorMessage(exportError, lang)}</p>}
+      {exportError != null && <p role="alert" className="mb-3 text-sm text-ui-danger">{userFacingErrorMessage(exportError, lang, { operation: 'read' })}</p>}
       {!history.unlimited && (
         <div className="mb-3 rounded-xl border border-ui-warning/30 bg-ui-warning-soft px-4 py-3 text-sm text-ui-warning">
           {lang === 'ar'
@@ -1430,7 +1424,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
 
       {!!optionsError && (
         <div role="alert" aria-label={lang === 'ar' ? 'خطأ تحميل الفلاتر' : 'Filter loading error'} className="mb-3 rounded-xl border border-ui-warning/30 bg-ui-warning-soft p-3">
-          <p>{lang === 'ar' ? 'تعذر تحميل خيارات الفلاتر.' : 'Filter options could not be loaded.'} {userFacingErrorMessage(optionsError, lang)}</p>
+          <p>{lang === 'ar' ? 'تعذر تحميل خيارات الفلاتر.' : 'Filter options could not be loaded.'} {userFacingErrorMessage(optionsError, lang, { operation: 'read' })}</p>
           <Button size="sm" variant="outline" onClick={() => { void retryOptions(); }}>{lang === 'ar' ? 'إعادة تحميل الفلاتر' : 'Retry filters'}</Button>
         </div>
       )}
@@ -1457,7 +1451,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         filterLabel={filterLabel}
         allLabel={allLabel}
         filterDimensions={REPORT_FILTER_DIMS[reportType]}
-        showTotal={reportType !== 'raw_material_current_cost'}
+        optionsLoading={optionsLoading}
+        onClearFilters={() => { setFilters(({purchase_view,sales_view}) => ({purchase_view,sales_view})); setFiltersDirty(true); }}
+        viewControl={reportType === 'sales_by_product' ? <label className="text-xs font-medium">{lang==='ar'?'تجميع المبيعات':'Sales grouping'}<select aria-label={lang==='ar'?'تجميع المبيعات':'Sales grouping'} className="mt-1 h-9 w-full rounded border border-ui-border bg-ui-surface px-2" value={filters.sales_view || 'product'} onChange={event=>{setFilters(previous=>({...previous,sales_view:event.target.value}));setFiltersDirty(true);}}><option value="product">{lang==='ar'?'المنتج ووحدة البيع':'Product and sale unit'}</option><option value="options">{lang==='ar'?'المنتج وخيارات الإضافات':'Product and saved options'}</option></select></label> : reportType === 'purchases' ? <label className="text-xs font-medium">{lang === 'ar' ? 'عرض المشتريات حسب' : 'Purchase view'}<select aria-label={lang === 'ar' ? 'عرض المشتريات حسب' : 'Purchase view'} className="mt-1 h-9 w-full rounded border border-ui-border bg-ui-surface px-2" value={filters.purchase_view || 'invoice'} onChange={event => { setFilters(previous => ({...previous,purchase_view:event.target.value})); setFiltersDirty(true); }}><option value="invoice">{lang === 'ar' ? 'الفواتير' : 'Invoices'}</option><option value="material">{lang === 'ar' ? 'الخامات والأصناف' : 'Materials and items'}</option><option value="category">{lang === 'ar' ? 'أنواع الخامات' : 'Material categories'}</option><option value="supplier">{lang === 'ar' ? 'الموردين' : 'Suppliers'}</option></select></label> : undefined}
+        showTotal={presentation.showTotal}
+        totalLabel={presentation.label}
+        countLabel={presentation.countLabel}
         total={summary.total}
         count={summary.count}
         currency={currency}
@@ -1473,6 +1472,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         pendingChanges={filtersDirty}
       />
 
+      {snapshot && <p data-testid="report-result-context" className="my-2 text-xs text-ui-muted">{lang==='ar'?'فترة النتيجة':'Result period'}: {formatDate(snapshot.from || from, lang)} — {formatDate(snapshot.to || to, lang)} · {reportBranchLabel}{snapshot.receivedAt && <> · {lang==='ar'?'استلام النتيجة':'Result received'}: {formatReportTimestamp(snapshot.receivedAt, lang)}</>}{filtersDirty && <> · {lang==='ar'?'الفلاتر الجديدة لم تطبق على هذه النتيجة':'New filters are not applied to this result'}</>}</p>}
+      {reportType==='purchases' && <p className="my-2 text-xs text-ui-muted">{lang==='ar'?'فلتر الخامة أو نوعها في عرض الفواتير والموردين يختار الفواتير التي تحتويها ويعرض قيمتها كاملة. لعرض قيمة الخامة وحدها اختر عرض الخامات أو أنواعها.':'In invoice/supplier views, material filters select whole invoices containing that material. Use material/category views for line values alone.'}</p>}
+      {presentation.basis && <p className="my-2 text-xs text-ui-muted">{presentation.basis}</p>}
+      {Object.keys(summaryEntries).length>0 && <details className="my-2 rounded border border-ui-border p-2"><summary className="cursor-pointer text-sm font-semibold">{lang==='ar'?'ملخص الفترة حسب الفرع — منفصل عن التفاصيل':'Period summary by branch — separate from details'}</summary><dl className="grid gap-2 p-2 sm:grid-cols-2">{Object.entries(summaryEntries).map(([key,value])=><div key={key}><dt className="text-xs text-ui-muted">{key}</dt><dd className="font-semibold tabular-nums">{typeof value==='number'?new Intl.NumberFormat(lang,{maximumFractionDigits:2}).format(value):String(value)}</dd></div>)}</dl></details>}
+
       {(reportType === 'sales_costs' || reportType === 'sales_by_station') && canStationCost && (
         <p className="mb-3 text-sm text-ui-muted" data-testid="station-cost-mode">
           {lang === 'ar'
@@ -1483,9 +1487,10 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       {reportType === 'inventory_as_of' && <p role="note" className="mb-3 text-sm text-ui-muted">{lang === 'ar' ? `أرصدة الخامات من الحركات المسموح لك عرضها حتى نهاية يوم ${snapshot?.to || to} بتوقيت القاهرة. القيمة هي المسجلة في الحركات؛ لا تمثل إعادة تسعير المخزون بأسعار اليوم.` : `Material balances from permitted movements through end of ${snapshot?.to || to} in Cairo. Values are recorded movement costs, not a repricing at today's prices.`}</p>}
       {reportType === 'sales_by_station' && <details className="mb-3 text-xs text-ui-muted"><summary className="cursor-pointer">{lang === 'ar' ? 'تفاصيل حساب المبيعات والتكلفة' : 'Sales and cost calculation details'}</summary><p data-testid="station-sales-source-note">{getReportExcelProfile(reportType, lang).sourceNote}</p></details>}
 
+      {reportType === 'sales_by_product' && <p className="mb-2 text-xs text-ui-muted">{lang==='ar'?'الإضافات داخلة في سعر المنتج ولا تُجمع كإيراد آخر. خيارات البيع محفوظة وقت الفاتورة؛ الكميات المجانية منفصلة. عدد الفواتير المحتوية والكميات بوحدات مختلفة لا تُجمع بين المنتجات.':'Modifiers are included in the product price, not additional revenue. Options are saved at sale time; bonus quantities are separate. Containing invoice counts and quantities in different units must not be summed across products.'}</p>}
       {reportType === 'sales_by_product' && <p data-testid="product-sales-source-note" className="mb-3 text-xs text-ui-muted">{getReportExcelProfile(reportType, lang).sourceNote}</p>}
-      <Button variant="outline" disabled={loading} onClick={() => runReport(true)}>{lang === 'ar' ? 'تحديث التقرير' : 'Refresh report'}</Button>
-      <p className="mb-3 text-xs text-ui-muted">{lang === 'ar' ? 'تتشارك الصفحات النتائج المتطابقة لمدة دقيقة. اضغط تحديث التقرير لطلب أحدث البيانات.' : 'Identical results are shared for up to one minute. Refresh report requests the latest data.'}</p>
+      <div className="flex flex-wrap items-center gap-2 text-xs"><Button size="sm" variant="outline" disabled={loading} onClick={() => runReport(true)}>{lang === 'ar' ? 'تحديث التقرير' : 'Refresh report'}</Button>
+      <details className="text-xs text-ui-muted"><summary className="cursor-pointer">{lang === 'ar' ? 'معلومات التحديث' : 'Refresh details'}</summary><p>{lang === 'ar' ? 'تتشارك الصفحات النتائج المتطابقة لمدة دقيقة. اضغط تحديث التقرير لطلب أحدث البيانات.' : 'Identical results are shared for up to one minute. Refresh report requests the latest data.'}</p></details></div>
       <ReportWorkbench type={reportType} lang={lang} scope={reportReader} userId={user?.id || ''}
         rows={data} complete={!snapshot?.serverPaged} unavailable={!snapshot || loading || !!reportError}
         currency={currency} moneyKeys={moneyKeys} canExport={can('reports.export')} canPrint={can('reports.print')}
@@ -1494,12 +1499,12 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
         loadComparisonMetrics={['sales', 'purchases', 'expenses'].includes(reportType) ? async range => (await metricSource.read(range)).metrics! : undefined}
         loadComparison={async range => (await reportSource.read(range)).rows}
         onOpen={open => setWorkbenchScope(() => open ? reportReader : null)} />
-      {!workbenchActive && (<Card className="p-4 border-ui-border bg-ui-surface shadow-ui">
+      {!workbenchActive && (<Card className="p-0 border-ui-border bg-ui-surface shadow-ui">
         {loading ? (
           <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" /></div>
         ) : reportError ? (
           <div role="alert" className="space-y-3 py-12 text-center">
-            <p>{userFacingErrorMessage(reportError, lang)}</p>
+            <p>{userFacingErrorMessage(reportError, lang, { operation: 'read' })}</p>
             <Button variant="outline" onClick={() => { void retryReport(); }}>{lang === 'ar' ? 'إعادة المحاولة' : 'Retry'}</Button>
           </div>
         ) : data.length === 0 ? (
@@ -1546,11 +1551,11 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
               ))}
             </div>
 
-            <div className="hidden overflow-x-auto sm:block">
-              <table className="w-full text-sm">
+            <div className="report-grid hidden sm:block" data-explicit-primary="true">
+              <table className="w-full text-sm" aria-label={workspaceTitle || t('reports')}>
                 <thead>
                   <tr className="border-b border-ui-border">
-                    {columns.map((key) => <th key={key} className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{key}</th>)}
+                    {columns.map((key) => <th key={key} data-primary={key===primaryColumn} scope="col" className="px-4 py-3 text-start font-semibold text-ui-muted text-xs uppercase tracking-wider">{key}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -1559,7 +1564,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
                       {columns.map((key, columnIndex) => {
                         const value = row[key];
                         return (
-                          <td key={columnIndex} className="px-4 py-3 text-ui-text">
+                          <td key={columnIndex} data-primary={key===primaryColumn} className="px-4 py-3 text-ui-text">
                             {typeof value === 'number' && moneyKeys.includes(key) ? formatFinancialCurrency(value, currency, lang) : String(value ?? '')}
                           </td>
                         );
@@ -1567,7 +1572,7 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
                     </tr>
                   ))}
                 </tbody>
-                {reportType === 'sales_by_station' && <tfoot><tr className="border-t border-ui-border font-bold">{columns.map(key => <td key={key} className="px-4 py-3">{typeof stationTotals(data)[key] === 'number' && moneyKeys.includes(key) ? formatFinancialCurrency(Number(stationTotals(data)[key]), currency, lang) : String(stationTotals(data)[key] ?? '')}</td>)}</tr></tfoot>}
+                <tfoot><tr data-testid="report-grand-total">{columns.map(key => <td key={key} data-primary={key===primaryColumn}>{key in columnTotals ? (columnTotals[key] === null ? '—' : moneyKeys.includes(key) ? formatFinancialCurrency(columnTotals[key]!, currency, lang) : new Intl.NumberFormat(lang,{maximumFractionDigits:6}).format(columnTotals[key]!)) : key===primaryColumn ? (lang === 'ar' ? 'إجمالي التقرير الكامل' : 'Full report total') : ''}</td>)}</tr></tfoot>
               </table>
             </div>
           </div>

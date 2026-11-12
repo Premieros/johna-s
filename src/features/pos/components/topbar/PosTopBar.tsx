@@ -15,6 +15,7 @@ export type PosPanelId = 'orders' | 'tables' | 'kitchen' | null;
 interface PosTopBarProps {
   panel: PosPanelId;
   onPanel: (p: Exclude<PosPanelId, null>) => void;
+  onOpenQuickOrders?: () => void;
   counts: {
     activeOrders: number;
     occupiedTables: number;
@@ -36,6 +37,7 @@ interface PosTopBarProps {
 
 export function PosTopBar({
   onPanel,
+  onOpenQuickOrders,
   counts,
   branchId,
   branches,
@@ -136,19 +138,23 @@ export function PosTopBar({
       aria-label={`${isAr ? labelAr : labelEn}: ${value}`}
     >
       <span className="text-ui-primary">{icon}</span>
+      <span className="text-[11px] font-bold">{isAr ? ({'active-orders': 'الطلبات', delivery: 'توصيل', tables: 'الطاولات', kds: 'المطبخ'}[key] || labelAr) : labelEn}</span>
       <span className="min-w-5 rounded-full bg-ui-primary-soft px-1.5 py-0.5 text-center text-[10px] font-black text-ui-primary">{value}</span>
     </button>
   );
 
+  const branchName = branches.find(branch => branch.id === branchId)?.name;
+
   return (
-    <header data-testid="pos-top-bar" className="sticky top-0 z-50 flex min-h-14 items-center gap-1.5 border-b border-ui-border bg-ui-surface px-2.5 shadow-ui-sm md:px-3">
+    <>
+    <header data-testid="pos-top-bar" className="sticky top-0 z-50 flex flex-wrap min-h-14 items-center gap-1.5 border-b border-ui-border bg-ui-surface px-2.5 shadow-ui-sm md:px-3">
       <div className="flex shrink-0 items-center gap-2">
         <Logo variant="mark" size={32} tone="auto" />
         <div className="hidden leading-tight sm:block">
           <p className="text-sm font-black text-ui-text">Premier</p>
           <p className="text-[9px] font-black uppercase tracking-[.16em] text-ui-accent">{t('pos')}</p>
         </div>
-        {perms.canCreateOrder && (
+        {perms.canCreateAnyOrder && (
           <button
             onClick={onNewOrder}
             data-testid="pos-action-new-order"
@@ -162,7 +168,20 @@ export function PosTopBar({
 
       <div className="flex-1" />
 
-      <div data-testid="pos-top-counters" className="hidden items-center gap-1 lg:flex">
+      {onOpenQuickOrders && (
+        <button
+          type="button"
+          data-testid="pos-open-quick-orders"
+          onClick={onOpenQuickOrders}
+          className="flex min-h-9 shrink-0 items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2 text-[10px] font-black text-ui-text hover:bg-ui-page-alt sm:text-xs"
+          aria-label={`${isAr ? 'الطلبات السريعة المفتوحة' : 'Open quick orders'}: ${counts.takeawayOrders}`}
+        >
+          <span>{isAr ? 'السريعة المفتوحة' : 'Open quick orders'}</span>
+          <span className="rounded-full bg-ui-primary-soft px-1.5 py-0.5 tabular-nums text-ui-primary">{counts.takeawayOrders}</span>
+        </button>
+      )}
+
+      <div data-testid="pos-top-counters" className="order-last hidden w-full items-center justify-end gap-1 pb-1 lg:flex xl:order-none xl:w-auto xl:pb-0">
         {counterButton('active-orders', 'الطلبات النشطة', 'Active orders', counts.activeOrders, <ListOrdered className="h-3.5 w-3.5" />, 'orders')}
         {counterButton('delivery', 'الدليفري', 'Delivery', counts.deliveryOrders, <Truck className="h-3.5 w-3.5" />, 'orders')}
         {counterButton('tables', 'الطاولات المشغولة', 'Occupied tables', counts.occupiedTables, <CalendarCheck className="h-3.5 w-3.5" />, 'tables')}
@@ -326,5 +345,10 @@ export function PosTopBar({
         <LogOut className="h-4 w-4" />
       </button>
     </header>
+    <div data-testid="pos-branch-context" className="flex shrink-0 items-center justify-between gap-2 border-b border-ui-border bg-ui-surface px-3 py-1.5 text-xs font-bold text-ui-text">
+      <span className="min-w-0 truncate" title={branchName}>{isAr ? 'الفرع:' : 'Branch:'} {branchName || (isAr ? 'لم يتم تحديد الفرع' : 'No branch selected')}</span>
+      <span className="max-w-[45%] truncate text-ui-muted">{user?.full_name || user?.username || ''}</span>
+    </div>
+    </>
   );
 }

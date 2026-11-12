@@ -25,7 +25,10 @@ export interface PermissionContract {
 }
 
 const REQUIREMENTS: Partial<Record<Permission, Permission[]>> = {
-  'pos.order.create': ['pos.view'],
+  'pos.order.dine_in': ['pos.view'],
+  'pos.order.takeaway': ['pos.view'],
+  'pos.order.drive_thru': ['pos.view'],
+  'pos.order.delivery': ['pos.view'],
   'pos.order.edit': ['pos.view'],
   'pos.payment.take': ['pos.view'],
   'pos.order.split': ['pos.view'],
@@ -33,7 +36,6 @@ const REQUIREMENTS: Partial<Record<Permission, Permission[]>> = {
   'pos.discount': ['pos.view'],
   'pos.change_price': ['pos.view'],
   'pos.hold': ['pos.view'],
-  'pos.send_kitchen': ['pos.view'],
   'pos.void': ['pos.view'],
   'pos.cancel_order': ['pos.view'],
   'pos.change_branch': ['pos.view'],
@@ -51,6 +53,7 @@ const REQUIREMENTS: Partial<Record<Permission, Permission[]>> = {
   'categories.manage': ['categories.view'],
   'components.manage': ['components.view'],
 
+  'procurement.receive': ['purchases.receiving'],
   'purchases.manage': ['purchases.view'],
   'purchases.print': ['purchases.view'],
   'purchases.delete': ['purchases.view'],
@@ -191,9 +194,35 @@ const SENSITIVE = new Set<Permission>([
 ]);
 
 const EFFECTS: Partial<Record<Permission, { ar: string; en: string; notesAr?: string; notesEn?: string }>> = {
+  'purchases.receiving': { ar: 'عرض شاشة استلام المشتريات وسجل الاستلام؛ التنفيذ له صلاحية مستقلة.', en: 'View purchase receiving and receipt history; execution requires a separate capability.' },
+  'procurement.receive': { ar: 'تنفيذ استلام المشتريات داخل الفروع المسموح بها دون منح إدارة المشتريات.', en: 'Receive purchases inside accessible branches without granting purchase management.', notesAr: 'صلاحية إدارة المشتريات الحالية تستمر في شمول الاستلام للتوافق مع المسارات القائمة.', notesEn: 'Existing purchase-management capability continues to include receiving for established callers.' },
   'pos.view': {
     ar: 'يفتح مساحة نقطة البيع فقط؛ لا يمنح إنشاء أو تعديل أو دفع تلقائيًا.',
     en: 'Opens the POS workspace only; it does not implicitly grant create, edit, or payment.',
+  },
+  'pos.order.dine_in': {
+    ar: 'إنشاء طلبات الطاولات وإرسالها للمطبخ والبار فقط.',
+    en: 'Create and send table orders to kitchen and bar only.',
+    notesAr: 'لا تمنح أنواع الطلبات الأخرى أو التعديل أو الدفع أو الخصم أو طباعة الفاتورة. تذكرة المطبخ والبار جزء من الإرسال.',
+    notesEn: 'No other order types, editing, payment, discount or receipt permission. Kitchen and bar tickets are part of dispatch.',
+  },
+  'pos.order.takeaway': {
+    ar: 'إنشاء الطلبات السريعة وإرسالها للمطبخ والبار فقط.',
+    en: 'Create and send quick orders to kitchen and bar only.',
+    notesAr: 'لا تمنح أنواع الطلبات الأخرى أو التعديل أو الدفع أو الخصم أو طباعة الفاتورة. تذكرة المطبخ والبار جزء من الإرسال.',
+    notesEn: 'No other order types, editing, payment, discount or receipt permission. Kitchen and bar tickets are part of dispatch.',
+  },
+  'pos.order.drive_thru': {
+    ar: 'إنشاء طلبات السيارة وإرسالها للمطبخ والبار فقط.',
+    en: 'Create and send car orders to kitchen and bar only.',
+    notesAr: 'لا تمنح أنواع الطلبات الأخرى أو التعديل أو الدفع أو الخصم أو طباعة الفاتورة. تذكرة المطبخ والبار جزء من الإرسال.',
+    notesEn: 'No other order types, editing, payment, discount or receipt permission. Kitchen and bar tickets are part of dispatch.',
+  },
+  'pos.order.delivery': {
+    ar: 'إنشاء طلبات التوصيل وإرسالها للمطبخ والبار فقط.',
+    en: 'Create and send delivery orders to kitchen and bar only.',
+    notesAr: 'لا تمنح أنواع الطلبات الأخرى أو التعديل أو الدفع أو الخصم أو طباعة الفاتورة. تذكرة المطبخ والبار جزء من الإرسال.',
+    notesEn: 'No other order types, editing, payment, discount or receipt permission. Kitchen and bar tickets are part of dispatch.',
   },
   'pos.payment.take': {
     ar: 'يُظهر وينفذ التحصيل داخل POS. يحتاج شفت فرع مفتوح فعليًا، لكنه لا يمنح صلاحية فتح الشفت.',
@@ -265,6 +294,30 @@ const EFFECTS: Partial<Record<Permission, { ar: string; en: string; notesAr?: st
     notesAr: 'يتطلب صلاحية اعتماد بدء العمل ولا يسمح بإدارة مستخدم خارج نطاق الفروع.',
     notesEn: 'Requires work authorization approval capability and cannot manage users outside accessible branches.',
   },
+  'accounts.view': {
+    ar: 'عرض شجرة الحسابات والقيود والخزائن والتسويات والذمم. العرض وحده لا يسمح بتنفيذ تحصيل أو سداد أو قيد أو تحويل.',
+    en: 'View accounts, journals, treasuries, reconciliations and balances. Viewing alone cannot collect, pay, post or transfer.',
+  },
+  'accounts.manage': {
+    ar: 'إدارة شجرة الحسابات والأرصدة الافتتاحية والإيداع والسحب وفق تحقق الخادم؛ القيد اليدوي والتسوية والتحويل والتحصيل والسداد لها صلاحيات مستقلة.',
+    en: 'Manage the chart of accounts, opening balances, deposits and withdrawals subject to server checks. Manual journals, reconciliation, transfers, collections and supplier payments require separate permissions.',
+  },
+  'accounting.journal.post': {
+    ar: 'إنشاء وترحيل قيد يدوي؛ لا تمنح إدارة الحسابات أو تحويل الأموال.',
+    en: 'Create and post a manual journal; does not grant account management or fund transfers.',
+  },
+  'accounting.reconciliation.manage': {
+    ar: 'إنشاء التسوية البنكية وإضافة بنود الكشف ومطابقتها وإكمال التسوية؛ لا تمنح سدادًا أو تحصيلًا.',
+    en: 'Create bank reconciliations, add and match statement lines, and complete reconciliation; does not grant payment or collection.',
+  },
+  'accounting.treasury.transfer': {
+    ar: 'التحويل بين الخزن المسموح بها؛ لا تمنح الإيداع أو السحب أو تحصيل العميل أو سداد المورد تلقائيًا.',
+    en: 'Transfer between accessible treasuries; does not implicitly grant deposits, withdrawals, customer collection or supplier payment.',
+  },
+  'reports.financial': {
+    ar: 'عرض التقارير والقوائم المالية فقط؛ لا تمنح تنفيذ أي حركة مالية.',
+    en: 'View financial reports and statements only; does not grant financial mutations.',
+  },
   'accounting.treasury.main_cash.pay': {
     ar: 'يسمح باختيار الخزنة الرئيسية كمصدر لسداد المورد فقط، ولا يمنح التحويل بين الخزن.',
     en: 'Allows Main Treasury as a supplier-payment source only; it does not grant treasury transfers.',
@@ -284,7 +337,8 @@ function kindOf(permission: Permission): PermissionContractKind {
   if (APPROVAL.has(permission)) return 'approval';
   if (ADMIN.has(permission)) return 'administration';
   if (
-    permission.endsWith('.view')
+    permission === 'purchases.receiving'
+    || permission.endsWith('.view')
     || permission === 'reports.financial'
     || permission === 'reports.costing'
   ) {
@@ -378,7 +432,10 @@ export function missingPermissionDependencies(input: Iterable<Permission>): Arra
 
 export const POS_INTERACTIVE_PRESET_SCOPE: Permission[] = [
   'pos.view',
-  'pos.order.create',
+  'pos.order.dine_in',
+  'pos.order.takeaway',
+  'pos.order.drive_thru',
+  'pos.order.delivery',
   'pos.order.edit',
   'pos.payment.take',
   'pos.order.split',
@@ -386,7 +443,6 @@ export const POS_INTERACTIVE_PRESET_SCOPE: Permission[] = [
   'pos.discount',
   'pos.change_price',
   'pos.hold',
-  'pos.send_kitchen',
   'pos.void',
   'pos.cancel_order',
   'pos.change_branch',

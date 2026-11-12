@@ -9,9 +9,9 @@ describe('POS hardening: permission-first sent actions', () => {
   it('shows Pay only after at least one kitchen send and keeps print permission-gated', () => {
     expect(header).toContain('const hasSent = kitchenSends.length > 0;');
     expect(header).toContain('const canPrintSentReceipt = hasSent && canPrintReceipt;');
-    expect(header).toContain('{perms.canPay && hasSent && itemsCount > 0 && (');
-    expect(header).toContain('{perms.canPrint && canPrintSentReceipt && (');
-    expect(header).not.toContain('disabled={!canPrintSentReceipt}');
+    expect(header).toContain('{hasSent && itemsCount > 0 && (');
+    expect(header).toContain('{canPrintSentReceipt && (');
+    expect(header).toContain('disabled={!perms.canPrint}');
   });
 
   it('hides active-order Pay and Cancel actions without their permissions', () => {

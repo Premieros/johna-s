@@ -14,7 +14,8 @@ import {
 import { useLanguage } from '@/context/LanguageContext';
 import { formatCurrency } from '@/lib/format';
 import type { CartItem, Customer, DiningTable, OrderItem, OrderType } from '@/lib/types';
-import type { KitchenSendItem } from '../../types';
+import { transferLineIsSaved } from '../../utils/itemTransfer';
+import type { PosItemTransferResult, KitchenSendItem } from '../../types';
 import { computeSentState } from '../../utils/sentState';
 import { cartLineKey, orderItemLineKey } from '../../utils/cart';
 import { formatClockTime, timeAgo } from '../../utils/timeAgo';
@@ -73,6 +74,7 @@ interface CurrentOrderPanelProps {
   onConfigureItem?: (item: CartItem) => void;
   onOpenCustomerModal?: () => void;
   onOpenTableModal?: () => void;
+  onItemsTransferred?: (result: PosItemTransferResult) => void;
   onVoidItem?: (item: CartItem, sentQty: number) => void;
 }
 
@@ -109,6 +111,7 @@ export function CurrentOrderPanel({
   onConfigureItem,
   onOpenTableModal,
   onVoidItem,
+  onItemsTransferred,
 }: CurrentOrderPanelProps) {
   const { t, lang } = useLanguage();
   const isAr = lang === 'ar';
@@ -150,11 +153,11 @@ export function CurrentOrderPanel({
   const selectedTransferLines = useMemo<TransferItemLine[]>(() => selectedItems.flatMap((item) => {
     const lineKey = cartLineKey(item);
     const matches = orderItems.filter((row) => item.order_item_id ? row.id === item.order_item_id : orderItemLineKey(row) === lineKey);
-    if (matches.length !== 1) return [];
-    return [{ item, orderItemId: matches[0].id }];
+    if (matches.length !== 1 || !transferLineIsSaved(item, matches[0])) return [];
+    return [{ item, orderItemId: matches[0].id, saved: matches[0] }];
   }), [selectedItems, orderItems]);
   const selectedCanTransfer =
-    perms.canTransferOrder &&
+    perms.canTransferOrder && !!onItemsTransferred &&
     orderType === 'dine_in' &&
     !!activeOrderId &&
     !!activeTable &&
@@ -191,8 +194,8 @@ export function CurrentOrderPanel({
 
     setSelectedLineKeys(new Set());
   };
-  const handleCompletedMultiTransfer = () => {
-    selectedItems.forEach((item) => onRemove(cartLineKey(item)));
+  const handleCompletedMultiTransfer = (result: PosItemTransferResult) => {
+    onItemsTransferred?.(result);
     setSelectedLineKeys(new Set());
     setTransferItemsOpen(false);
   };

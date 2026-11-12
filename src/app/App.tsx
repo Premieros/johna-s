@@ -8,6 +8,7 @@ import { CloudPrintAgent } from '@/features/pos/components/settings/CloudPrintAg
 import { APP_ROUTES } from '@/core/navigation/routes';
 import { WorkAuthorizationAppBoundary } from '@/features/admin/work-authorization/WorkAuthorizationAppBoundary';
 import { PageLoadProgressProvider } from '@/components/PageProgressLoader';
+import { AgentCustomerSupport } from '@/components/AgentCustomerSupport';
 
 const FinancialVisibilityAdminControl = lazy(() =>
   import('@/features/admin/components/FinancialVisibilityAdminControl').then((module) => ({
@@ -51,6 +52,7 @@ export default function App() {
             <>
               <AppRoutes />
               <RouteScopedExtras />
+              <AgentCustomerSupport />
               <SupportLauncher />
             </>
           </WorkAuthorizationAppBoundary>

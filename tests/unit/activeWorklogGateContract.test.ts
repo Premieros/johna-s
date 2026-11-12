@@ -42,7 +42,12 @@ describe('mandatory active worklog gate', () => {
     const declaredBranch = log.match(/^Branch:\s*`([^`]+)`/m)?.[1];
     const ciHeadBranch = process.env.GITHUB_HEAD_REF;
 
-    if (ciHeadBranch) {
+    // The mandatory log belongs to its declared active PR. Unrelated UI,
+    // security and bugfix PRs must not be forced to rename that owner's log.
+    const declaredPr = log.match(/^Current PR:\s*`?#?(\d+)`?/m)?.[1];
+    const ciPr = process.env.GITHUB_REF?.match(/^refs\/pull\/(\d+)\/merge$/)?.[1];
+
+    if (ciHeadBranch && ciPr && declaredPr === ciPr) {
       expect(declaredBranch).toBe(ciHeadBranch);
     } else {
       expect(declaredBranch).toBeTruthy();

@@ -114,6 +114,7 @@ internal sealed class CloudPrintWorker : IDisposable
     private RealtimeWakeClient? _realtime;
     private string _realtimeToken = "";
     private readonly AgentMetrics _metrics = new();
+    private int _claimRecoveryScheduled;
 
     internal event Action<string>? StatusChanged;
     internal event Action<AgentMetrics>? MetricsChanged;
@@ -271,10 +272,16 @@ internal sealed class CloudPrintWorker : IDisposable
             },
             (connected, status) =>
             {
+                bool previousConnection;
                 lock (_metricsGate)
+                {
+                    previousConnection = _metrics.RealtimeConnected;
                     _metrics.RealtimeConnected = connected;
+                }
                 PublishMetrics();
                 SetStatus(status);
+                // A pending reconciliation wait must react to disconnect/rejoin.
+                if (previousConnection != connected) SignalWake();
             });
         _realtime.Start();
     }
@@ -314,6 +321,7 @@ internal sealed class CloudPrintWorker : IDisposable
                 token).ConfigureAwait(false);
 
             if (jobs.Count == 0) return;
+            ScheduleClaimRecovery(token);
 
             lock (_metricsGate)
                 _metrics.ClaimedJobs += jobs.Count;
@@ -516,6 +524,24 @@ internal sealed class CloudPrintWorker : IDisposable
             return number;
 
         return fallback;
+    }
+
+    // Claimed leases expire after 45s on the compatible queue RPC. A transient
+    // start/callback failure must not leave the next read asleep for 5 minutes.
+    // Coalesce one recovery read per burst; never replay or enqueue a ticket.
+    private void ScheduleClaimRecovery(CancellationToken token)
+    {
+        if (Interlocked.CompareExchange(ref _claimRecoveryScheduled, 1, 0) != 0) return;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(50), token).ConfigureAwait(false);
+                SignalWake();
+            }
+            catch (OperationCanceledException) { }
+            finally { Interlocked.Exchange(ref _claimRecoveryScheduled, 0); }
+        });
     }
 
     private void SignalWake()

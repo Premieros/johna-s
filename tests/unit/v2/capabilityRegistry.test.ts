@@ -35,9 +35,12 @@ describe('V2 canonical workspace registry', () => {
     const actionPermissions = Object.fromEntries(pos.actions.map((action) => [action.key, action.permission]));
 
     expect(pos.viewPermission).toBe('pos.view');
-    expect(actionPermissions.create_order).toBe('pos.order.create');
+    for (const type of ['dine_in', 'takeaway', 'drive_thru', 'delivery']) {
+      expect(actionPermissions[`${type}_orders`]).toBe(`pos.order.${type}`);
+    }
+    expect(actionPermissions.create_order).toBeUndefined();
     expect(actionPermissions.edit_order).toBe('pos.order.edit');
-    expect(actionPermissions.send_kitchen).toBe('pos.send_kitchen');
+    expect(actionPermissions.send_kitchen).toBeUndefined();
     expect(actionPermissions.pay).toBe('pos.payment.take');
     expect(actionPermissions.split_order).toBe('pos.order.split');
     expect(actionPermissions.transfer_order).toBe('pos.order.transfer');

@@ -43,6 +43,19 @@ describe.skipIf(!dbUrl)('order checkout discount authorization', () => {
     expect(await apply(ids.users.cashier,ids.rows.orders.own,20,approvalId)).toMatchObject({success:true,discount_amount:20,total:0});
     expect((await client.query('SELECT status FROM public.approval_requests WHERE id=$1',[approvalId])).rows[0].status).toBe('approved');
   });
+  it('applies the same cashier approval to another operator order without leaking payment authority', async () => {
+    const before=await client.query("SELECT current_setting('app.pos_action_authorized',true) enabled,current_setting('app.pos_action_actor_id',true) actor,current_setting('app.pos_action_order_id',true) target,current_setting('app.pos_action_permission',true) permission");
+    await client.query('UPDATE public.orders SET cashier_id=$2 WHERE id=$1',[ids.rows.orders.own,ids.users.branch_manager]);
+    try {
+      expect(await apply(ids.users.cashier,ids.rows.orders.own,20,approvalId)).toMatchObject({success:true,discount_amount:20,total:0});
+      const after=await client.query("SELECT current_setting('app.pos_action_authorized',true) enabled,current_setting('app.pos_action_actor_id',true) actor,current_setting('app.pos_action_order_id',true) target,current_setting('app.pos_action_permission',true) permission");
+      expect(after.rows.map(row=>Object.fromEntries(Object.entries(row).map(([key,value])=>[key,value??''])))).toEqual(before.rows.map(row=>Object.fromEntries(Object.entries(row).map(([key,value])=>[key,value??'']))));
+      const forbidden=await runAs(client,ids.users.cashier,'UPDATE public.orders SET discount_amount=1 WHERE id=$1',[ids.rows.orders.own]);
+      expect(forbidden.error).toContain('ORDER_OPERATOR_REQUIRED');
+    } finally {
+      await client.query('UPDATE public.orders SET cashier_id=$2 WHERE id=$1',[ids.rows.orders.own,ids.users.cashier]);
+    }
+  });
   it('rejects expiry instead of silently replacing the discount', async () => {
     await client.query("UPDATE public.approval_requests SET expires_at=now()-interval '1 second' WHERE id=$1",[approvalId]);
     expect(await apply(ids.users.cashier,ids.rows.orders.own,20,approvalId)).toMatchObject({success:false,error:'MANAGER_APPROVAL_REQUIRED'});

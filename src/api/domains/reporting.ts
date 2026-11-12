@@ -5,15 +5,59 @@ import { rpc } from '../rpc';
 export type OperationalReportPage = {
   rows: Record<string, unknown>[];
   summary: { total: number; count: number };
+  metrics?: Record<string, number>;
 };
+
+export type PeriodCloseMaterial = {
+  id: string; name: string; code: string; price: number; source: string | null;
+  opening: number | null; closing: number | null; purchase: number; transfer: number; adjustment?: number; other?: number;
+};
+
+export type PeriodCloseRaw = {
+  materials?: PeriodCloseMaterial[];
+  valued_at: string; opening_complete: boolean; closing_complete: boolean;
+  opening: number; closing: number; purchase: number; transfer: number; unpriced: number;
+};
+
+export type PeriodCloseMovement = {
+ id: number; raw_material_id: string; name: string; code: string; created_at: string;
+ entry_type: string; reference_type: string; reference_number: string | null;
+ warehouse_name: string | null; quantity: number; price: number; value: number;
+};
+export type PeriodCloseMovements = { rows: PeriodCloseMovement[]; count: number; total: number };
 
 export type OperationalStockSource = Record<'rawRows' | 'unitRows' | 'rawMasters' | 'rawBalances' | 'unitMasters' | 'unitBatches', Record<string, unknown>[]>;
 
+export interface ConsumptionLatestRow {
+ branch_id: string; branch_name: string; raw_material_id: string; raw_material_name: string; raw_material_code: string;
+ product_id: string | null; product_name: string | null; unit_name: string;
+ consumed_quantity: number; returned_quantity: number; waste_quantity: number; net_quantity: number;
+ unit_price: number; price_source: string; price_date: string | null; price_reference: string | null;
+ consumption_value: number; price_missing: boolean; product_sold_quantity?: number;
+}
+export interface ManufacturedUnitConsumptionRow {
+ branch_id: string; branch_name: string; product_id: string; product_name: string;
+ inventory_unit_id: string; inventory_unit_name: string; inventory_unit_code: string;
+ consumed_quantity: number; returned_quantity: number; net_quantity: number; product_sold_quantity: number;
+}
+export interface ConsumptionLatestResult {
+ manufactured_units?: ManufacturedUnitConsumptionRow[] | null;
+ manufactured_unit_count?: number | null;
+ rows: ConsumptionLatestRow[];
+ summary: { count: number; total: number; unpriced_count: number; unattributed_count: number; complete: boolean; missing_recipe_count?: number; invalid_unit_count?: number };
+ recipe_issues?: Array<{ branch_id: string; product_id: string | null; product_name: string | null; missing_recipe: boolean; invalid_units: number }>;
+ pricing_basis: string; from: string; to: string; generated_at: string;
+}
+
 export const reporting = {
+  getSoldRecipeConsumptionReport(p: { p_branch_id: string | null; p_from_date: string; p_to_date: string; p_group_by: 'material' | 'product' | 'unit'; p_search: string; p_page: number; p_page_size: number }, signal?: AbortSignal): ApiResult<ConsumptionLatestResult> { return rpc('get_sold_recipe_consumption_report', p, signal); },
+  getConsumptionLatestReport(p: { p_branch_id: string | null; p_from_date: string; p_to_date: string; p_group_by: 'material' | 'product'; p_search: string; p_include_waste: boolean; p_page: number; p_page_size: number }, signal?: AbortSignal): ApiResult<ConsumptionLatestResult> { return rpc('get_consumption_latest_report', p, signal); },
   getOperationalStockSource(p: { p_branch_id: string | null; p_warehouse_id: string | null; p_low_stock: boolean }, signal?: AbortSignal): ApiResult<OperationalStockSource> { return rpc('get_operational_stock_source', p, signal); },
+  getPeriodCloseRawMovements(p: { p_branch_id: string; p_from: string; p_to: string; p_kind: 'all' | 'purchase' | 'transfer'; p_material_id: string | null; p_page: number; p_page_size: number }, signal?: AbortSignal): ApiResult<PeriodCloseMovements> { return rpc('get_period_close_raw_movements', p, signal); },
+  getPeriodCloseRaw(p: { p_branch_id: string; p_from: string; p_to: string }, signal?: AbortSignal): ApiResult<PeriodCloseRaw> { return rpc('get_period_close_raw_report', p, signal); },
   getOperationalReportMetrics(p: { p_report_type: 'sales' | 'purchases' | 'expenses'; p_branch_id: string | null; p_from_date: string; p_to_date: string; p_filters: Record<string, string>; p_from_ts: string; p_to_exclusive_ts: string }, signal?: AbortSignal): ApiResult<Record<string, number>> { return rpc('get_operational_report_metrics', p, signal); },
   getOperationalReportDataset(p: { p_report_type: 'sales' | 'purchases' | 'expenses'; p_branch_id: string | null; p_from_date: string; p_to_date: string; p_filters: Record<string, string>; p_from_ts: string; p_to_exclusive_ts: string }, signal?: AbortSignal): ApiResult<OperationalReportPage> { return rpc('get_operational_report_dataset', p, signal); },
-  getOperationalReportPage(p: { p_report_type: 'sales' | 'purchases' | 'expenses'; p_branch_id: string | null; p_from_date: string; p_to_date: string; p_filters: Record<string, string>; p_page: number; p_page_size: number; p_from_ts: string; p_to_exclusive_ts: string }): ApiResult<OperationalReportPage> { return rpc('get_operational_report_page', p); },
+  getOperationalReportPage(p: { p_report_type: 'sales' | 'purchases' | 'expenses'; p_branch_id: string | null; p_from_date: string; p_to_date: string; p_filters: Record<string, string>; p_page: number; p_page_size: number; p_from_ts: string; p_to_exclusive_ts: string }, signal?: AbortSignal): ApiResult<OperationalReportPage> { return rpc('get_operational_report_page', p, signal); },
   getTrialBalance(p: { p_branch_id: string | null; p_to_date: string }, signal?: AbortSignal): ApiResult<TrialBalanceRow[]> { return rpc('get_trial_balance', p, signal); },
   getTrialBalanceSummary(p: { p_branch_id: string | null; p_to_date: string }): ApiResult<TrialBalanceSummary> { return rpc('get_trial_balance_summary', p); },
   getGeneralLedger(p: { p_branch_id: string | null; p_account_id: string | null; p_from_date: string | null; p_to_date: string | null }, signal?: AbortSignal): ApiResult<GeneralLedgerRow[]> { return rpc('get_general_ledger', p, signal); },

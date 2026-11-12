@@ -14,7 +14,7 @@ describe('POS financial safety hardening contract', () => {
     expect(base).toContain('saleMutationLockRef.current = true');
     expect(base).toContain('saleMutationLockRef.current = false');
 
-    expect(wrapper).toContain('const saleMutationLockRef = useRef(false)');
+    expect(wrapper).toContain('const saleMutationLockRef = base.mutationLockRef || fallbackMutationLockRef');
     expect(wrapper).toContain('if (saleMutationLockRef.current || base.cart.length === 0');
     expect(wrapper).toContain('if (saleMutationLockRef.current) return false');
   });
@@ -43,7 +43,7 @@ describe('POS financial safety hardening contract', () => {
     expect(baseConfirmed).toBeGreaterThanOrEqual(0);
     expect(baseAttemptClear).toBeGreaterThan(baseLocalReset);
 
-    const wrapperReceipt = wrapper.indexOf('const receipt = buildSettlementReceipt');
+    const wrapperReceipt = wrapper.indexOf('const receipt: ReceiptData = {...attempt.receipt');
     const wrapperReceiptState = wrapper.indexOf('setSettlementReceipt(receipt)', wrapperReceipt);
     const wrapperAttemptClear = wrapper.indexOf('saleAttemptRef.current = null', wrapperReceipt);
     expect(wrapperReceipt).toBeGreaterThanOrEqual(0);

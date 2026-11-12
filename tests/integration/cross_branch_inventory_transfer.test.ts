@@ -1,14 +1,16 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { randomUUID } from 'node:crypto';
+import { createHash,randomUUID } from 'node:crypto';
+import {readFileSync,readdirSync} from 'node:fs';
 import type pg from 'pg';
 import { getDbUrl, openDb } from './db';
+import { activateApprovedRawFixture, installApprovedRawWriterFixture } from './approvedRawWriterFixture';
 
 const dbUrl = getDbUrl();
 const skip = !dbUrl;
 
 type RpcResult = { success?: boolean; error?: string; transfer_id?: string; status?: string };
 
-describe.skipIf(skip)('cross-branch inventory transfer', () => {
+describe.skipIf(skip).each(['legacy','approved'] as const)('cross-branch inventory transfer (%s)', (engine) => {
   let client: pg.Client;
   const branchA = randomUUID();
   const branchB = randomUUID();
@@ -70,6 +72,7 @@ describe.skipIf(skip)('cross-branch inventory transfer', () => {
     client = openDb(dbUrl!);
     await client.connect();
     await client.query('BEGIN');
+    if (engine==='approved') await installApprovedRawWriterFixture(client,dbUrl!);
     await client.query(
       `INSERT INTO public.branches(id,name) VALUES ($1,'Transfer A'),($2,'Transfer B'),($3,'Transfer C')`,
       [branchA, branchB, branchC],
@@ -131,6 +134,11 @@ describe.skipIf(skip)('cross-branch inventory transfer', () => {
        VALUES ($1,$2,$3,'RAW-TRANSFER-QA',20,4,'opening')`,
       [rawA, branchA, whA1],
     );
+    if (engine==='approved') {
+      await activateApprovedRawFixture(client,branchA,whA1,rawA);
+      await activateApprovedRawFixture(client,branchA,whA2,rawA);
+      await activateApprovedRawFixture(client,branchB,whB,rawB);
+    }
   });
 
   beforeEach(async () => {
@@ -214,6 +222,25 @@ describe.skipIf(skip)('cross-branch inventory transfer', () => {
     expect(Object.fromEntries(balances.rows.map((row) => [row.raw_material_id, Number(row.quantity)]))).toEqual({ [rawA]: 16, [rawB]: 4 });
   });
 
+  it('rejects mismatched raw units before creating a header', async () => {
+    const unit=(await client.query(`SELECT id FROM public.units ORDER BY code LIMIT 1`)).rows[0].id;
+    await client.query('UPDATE public.raw_materials SET unit_id=$1 WHERE id=$2',[unit,rawB]);
+    const before=(await client.query('SELECT count(*) n FROM public.warehouse_transfers WHERE branch_id=$1',[branchA])).rows[0].n;
+    const result=await createTransfer(userMulti,whA1,whB,branchA,[{item_type:'raw_material',item_id:rawA,destination_item_id:rawB,quantity:4,unit_cost:4}]);
+    expect(result).toMatchObject({success:false,error:'TRANSFER_UNIT_MISMATCH'});
+    expect((await client.query('SELECT count(*) n FROM public.warehouse_transfers WHERE branch_id=$1',[branchA])).rows[0].n).toBe(before);
+  });
+
+  it('rechecks pending raw units before any stock movement', async () => {
+    const created=await createTransfer(userMulti,whA1,whB,branchA,[{item_type:'raw_material',item_id:rawA,destination_item_id:rawB,quantity:4,unit_cost:4}]);
+    expect(created.success).toBe(true);
+    const unit=(await client.query(`SELECT id FROM public.units ORDER BY code LIMIT 1`)).rows[0].id;
+    await client.query('UPDATE public.raw_materials SET unit_id=$1 WHERE id=$2',[unit,rawB]);
+    expect(await approve(userMulti,created.transfer_id!)).toMatchObject({success:false,error:'TRANSFER_UNIT_MISMATCH'});
+    expect(Number((await client.query('SELECT quantity FROM public.raw_material_inventory WHERE raw_material_id=$1 AND branch_id=$2',[rawA,branchA])).rows[0].quantity)).toBe(20);
+    expect((await client.query('SELECT status FROM public.warehouse_transfers WHERE id=$1',[created.transfer_id])).rows[0].status).toBe('pending');
+  });
+
   it('keeps direct table writes closed so approval cannot bypass stock movement', async () => {
     const created = await createTransfer(userMulti, whA1, whB, branchA, [
       { item_type: 'product', item_id: productA, destination_item_id: productB, quantity: 1, unit_cost: 5 },
@@ -236,4 +263,83 @@ describe.skipIf(skip)('cross-branch inventory transfer', () => {
     expect(sourceSide.rowCount).toBe(1);
     expect(unrelated.rowCount).toBe(0);
   });
+  async function publishReceiverPrice(value:number) {
+    await client.query(`INSERT INTO public.raw_material_price_events(raw_material_id,branch_id,unit_cost,source,priced_at,reference_number) VALUES($1,$2,$3,'pricing',clock_timestamp()+interval '1 second','TRANSFER-RECEIVER-PRICE')`,[rawB,branchB,value]);
+  }
+  async function rawTransfer() {
+    return createTransfer(userMulti,whA1,whB,branchA,[{item_type:'raw_material',item_id:rawA,destination_item_id:rawB,quantity:4,unit_cost:999}]);
+  }
+  it('quotes the receiver price and refreshes it at approval without source-price contamination',async()=>{
+    await publishReceiverPrice(7.123456);
+    const created=await rawTransfer();expect(created.success).toBe(true);
+    const readLine=()=>client.query('SELECT unit_cost FROM public.warehouse_transfer_items WHERE transfer_id=$1',[created.transfer_id]);
+    expect(Number((await readLine()).rows[0].unit_cost)).toBe(7.123456);
+    await publishReceiverPrice(9.654321);
+    expect(await approve(userMulti,created.transfer_id!)).toMatchObject({success:true});
+    expect(Number((await readLine()).rows[0].unit_cost)).toBe(9.654321);
+    const ledgers=await client.query(`SELECT branch_id,quantity,unit_cost FROM public.inventory_ledger WHERE reference_type='warehouse_transfer' AND reference_id=$1 ORDER BY quantity`,[created.transfer_id]);
+    expect(ledgers.rows).toHaveLength(2);expect(Number(ledgers.rows[0].unit_cost)).toBe(4);expect(Number(ledgers.rows[1].unit_cost)).toBe(9.654321);
+    const snapshot=await client.query('SELECT unit_cost,destination_branch_id FROM private.raw_transfer_receipt_prices WHERE transfer_id=$1',[created.transfer_id]);
+    expect(Number(snapshot.rows[0].unit_cost)).toBe(9.654321);expect(snapshot.rows[0].destination_branch_id).toBe(branchB);
+    const current=await client.query('SELECT unit_cost FROM public.get_raw_material_current_prices($1,$2)',[branchB,[rawB]]);
+    expect(Number(current.rows[0].unit_cost)).toBe(9.654321);
+    expect(await approve(userMulti,created.transfer_id!)).toMatchObject({success:false,error:'INVALID_STATUS'});
+  });
+  it('uses zero for a receiver with no price and never falls back to the source or client price',async()=>{
+    await client.query('UPDATE public.raw_materials SET default_cost=0 WHERE id=$1',[rawB]);
+    await client.query('DELETE FROM private.raw_approved_price_read_model WHERE raw_material_id=$1',[rawB]);
+    const created=await rawTransfer();expect(created.success).toBe(true);expect((await approve(userMulti,created.transfer_id!)).success).toBe(true);
+    const result=await client.query(`SELECT unit_cost FROM public.inventory_ledger WHERE reference_id=$1 AND raw_material_id=$2 AND quantity>0`,[created.transfer_id,rawB]);
+    expect(Number(result.rows[0].unit_cost)).toBe(0);
+  });
+  it('uses the receiver last purchase price without requiring the transfer operator to browse invoice history',async()=>{
+    if (engine!=='approved') return;
+    let purchase:string;
+    do {purchase=randomUUID();} while(parseInt(createHash('md5').update(branchB+':'+purchase).digest('hex').slice(0,8),16)%100<99);
+    await client.query('DELETE FROM public.raw_material_price_events WHERE raw_material_id=$1',[rawB]);
+    await client.query("INSERT INTO public.purchases(id,invoice_number,branch_id,warehouse_id,subtotal,total,paid_amount,status,created_at) VALUES($1,$2,$3,$4,123,123,123,'completed','2020-01-01')",[purchase,'QA-TRANSFER-OLD-'+purchase,branchB,whB]);
+    await client.query("INSERT INTO public.inventory_ledger(raw_material_id,branch_id,warehouse_id,quantity,unit_cost,total_cost,before_qty,after_qty,entry_type,reference_type,reference_id,created_at) VALUES($1,$2,$3,1,123,123,0,1,'purchase','purchase',$4,'2020-01-01')",[rawB,branchB,whB,purchase]);
+    const visible=await asUser(userMulti,()=>client.query("SELECT private.financial_row_visible($1,$2,'2020-01-01') allowed",[purchase,branchB]));
+    expect(visible.rows[0].allowed).toBe(false);
+    const created=await rawTransfer();expect(created.success).toBe(true);
+    expect(Number((await client.query('SELECT unit_cost FROM public.warehouse_transfer_items WHERE transfer_id=$1',[created.transfer_id])).rows[0].unit_cost)).toBe(123);
+    expect((await approve(userMulti,created.transfer_id!)).success).toBe(true);
+    expect(Number((await client.query('SELECT unit_cost FROM private.raw_transfer_receipt_prices WHERE transfer_id=$1',[created.transfer_id])).rows[0].unit_cost)).toBe(123);
+  });
+  it('does not reprice a frozen receiver receipt during a source valuation repair',async()=>{
+    await publishReceiverPrice(8);const created=await rawTransfer();expect((await approve(userMulti,created.transfer_id!)).success).toBe(true);
+    const repaired=await client.query(`SELECT public._fifo_adjust_warehouse_transfer_delta($1,$2,$3,'raw_material',$4,10) result`,[created.transfer_id,branchA,whA1,rawA]);
+    expect(repaired.rows[0].result).toMatchObject({success:true,delta:0,destination_price_frozen:true});
+    expect(Number((await client.query('SELECT unit_cost FROM public.warehouse_transfer_items WHERE transfer_id=$1',[created.transfer_id])).rows[0].unit_cost)).toBe(8);
+  });
+  it('keeps snapshot state private and rolls it back when destination receipt fails',async()=>{
+    const created=await rawTransfer();await client.query('UPDATE public.raw_materials SET is_active=false WHERE id=$1',[rawB]);
+    expect(await approve(userMulti,created.transfer_id!)).toMatchObject({success:false,error:'TRANSACTION_FAILED'});
+    expect((await client.query('SELECT 1 FROM private.raw_transfer_receipt_prices WHERE transfer_id=$1',[created.transfer_id])).rowCount).toBe(0);
+    expect(Number((await client.query('SELECT quantity FROM public.raw_material_inventory WHERE raw_material_id=$1',[rawA])).rows[0].quantity)).toBe(20);
+    expect((await client.query("SELECT has_table_privilege('authenticated','private.raw_transfer_receipt_prices','SELECT,INSERT,UPDATE,DELETE') allowed")).rows[0].allowed).toBe(false);
+  });
+
+  it('restores exact function bodies and security on rollback/reapply without losing receipt prices',async()=>{
+    await publishReceiverPrice(7.123456);const created=await rawTransfer();expect((await approve(userMulti,created.transfer_id!)).success).toBe(true);
+    const read=()=>client.query("SELECT p.proname,pg_get_functiondef(p.oid) definition,p.prosecdef,p.proowner,p.proacl,p.proconfig FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN ('create_warehouse_transfer','approve_warehouse_transfer','_fifo_adjust_warehouse_transfer_delta') ORDER BY p.proname");
+    const before=(await read()).rows;expect(before).toHaveLength(3);
+    await client.query('SAVEPOINT destination_price_rollback');
+    try {
+      // Reconstruct only the older price-reader call before its immutable
+      // rollback rehearsal, retaining current transfer authority and stock code.
+      const operational=before.some(r=>r.definition.includes('private.stock_count_raw_price('));
+      if (operational) for (const row of before.filter(r=>r.proname!=='_fifo_adjust_warehouse_transfer_delta')) {
+        await client.query(row.definition.replace('private.stock_count_raw_price(','private.latest_approved_raw_prices('));
+      }
+      await client.query(readFileSync('scripts/rollback/destination_raw_transfer_price_20261029.sql','utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
+      expect(Number((await client.query('SELECT unit_cost FROM private.raw_transfer_receipt_prices WHERE transfer_id=$1',[created.transfer_id])).rows[0].unit_cost)).toBe(7.123456);
+      const migration=readdirSync('supabase/migrations').find(p=>p.endsWith('_destination_raw_transfer_price.sql'))!;
+      await client.query(readFileSync(`supabase/migrations/${migration}`,'utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
+      if (operational) await client.query(readFileSync('scripts/db/candidates/raw_last_price_transfer_context_20261104.sql','utf8'));
+      expect((await read()).rows).toEqual(before);
+      expect(Number((await client.query('SELECT unit_cost FROM public.warehouse_transfer_items WHERE transfer_id=$1',[created.transfer_id])).rows[0].unit_cost)).toBe(7.123456);
+    } finally {await client.query('ROLLBACK TO SAVEPOINT destination_price_rollback');}
+  });
+
 });

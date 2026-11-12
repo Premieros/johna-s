@@ -37,3 +37,22 @@ using (var image = (Bitmap)render.Invoke(null, new object[] { "Z-REPORT\nالن�
     Require(image.Height < 250, "Compact report font and line spacing");
 }
 Console.WriteLine("PASS: long Arabic 58/80mm reports, last-row ink, exact page coverage, compact rendering. No physical printing.");
+
+// Protocol-only recovery tests: never Start(), connect, claim or print.
+var states = new List<bool>();
+using (var realtime = new RealtimeWakeClient("synthetic", () => { }, (connected, _) => states.Add(connected)))
+{
+    var type = typeof(RealtimeWakeClient);
+    var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+    type.GetField("_joinRef", flags)!.SetValue(realtime, "join-test");
+    var message = type.GetMethod("HandleMessage", flags)!;
+    message.Invoke(realtime, new object[] { "{\"event\":\"phx_reply\",\"ref\":\"heartbeat\",\"payload\":{\"status\":\"ok\"}}" });
+    Require(!realtime.Connected, "Heartbeat cannot confirm a subscription");
+    message.Invoke(realtime, new object[] { "{\"event\":\"phx_reply\",\"ref\":\"join-test\",\"payload\":{\"status\":\"ok\",\"response\":{\"postgres_changes\":[{\"id\":1}]}}}" });
+    Require(realtime.Connected, "Exact confirmed join connects");
+    type.GetField("_lastInboundUtc", flags)!.SetValue(realtime, DateTime.UtcNow.AddSeconds(-61));
+    Require(realtime.ConnectionStale(DateTime.UtcNow), "Half-open socket expires despite Connected=true");
+    message.Invoke(realtime, new object[] { "{\"event\":\"phx_reply\",\"ref\":\"heartbeat\",\"payload\":{\"status\":\"ok\"}}" });
+    Require(!realtime.ConnectionStale(DateTime.UtcNow), "Inbound heartbeat restores liveness");
+}
+Console.WriteLine("Realtime recovery protocol checks passed without network or printing.");

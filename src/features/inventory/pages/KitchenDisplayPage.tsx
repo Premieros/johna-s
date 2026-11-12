@@ -14,7 +14,7 @@ import { catalog } from '@/api/domains/catalog';
 import { subscribePosRealtime } from '@/features/pos/services/posRealtime';
 import type { KitchenQueueItem, KitchenStation } from '@/lib/types';
 import { KitchenCompletedHistory } from '../components/KitchenCompletedHistory';
-import { isKitchenQueueExpired, kitchenElapsedSeconds } from '../services/kitchenQueueAge';
+import { isKitchenQueueAutoClosed, isKitchenQueueOverdue, kitchenElapsedSeconds } from '../services/kitchenQueueAge';
 
 function elapsedColor(seconds: number): string {
   if (seconds > 600) return 'text-ui-danger font-bold';
@@ -70,21 +70,26 @@ export function KitchenDisplayPage() {
   const prevCountRef = useRef(0);
   const scopeKey = `${branchFilter || ''}:${user?.id || ''}:${canViewKds}`;
   const scopeRef = useRef(scopeKey);
+  const statusWrites = useRef(new Set<string>());
+  const [pendingStatusWrites, setPendingStatusWrites] = useState<ReadonlySet<string>>(new Set());
+  const watchedKitchenOrders = useRef<ReadonlySet<string>>(new Set());
   const queueRead = useRef(0);
   const stationRead = useRef(0);
   const coalesceQueue = useRef(createRefreshCoalescer());
   useLayoutEffect(() => {
     scopeRef.current = scopeKey;
+    watchedKitchenOrders.current = new Set();
     ++queueRead.current;
     ++stationRead.current;
     setItems([]); setOrderContext({}); setStations([]); setStation(''); setLoadError('');
     prevCountRef.current = 0;
     return () => { scopeRef.current = ''; };
   }, [scopeKey]);
-  const expiredItems = items.filter(item => isKitchenQueueExpired(item, now));
-  // Age is an overdue filter, never a reason to hide unfinished kitchen work.
-  // The server timestamp can predate newly sent additions to the same order.
-  const activeItems = items;
+  // One-hour auto-close is local to this display. It never writes kitchen_status
+  // or the POS order status. The queue RPC timestamps each card from its latest send.
+  const autoClosedItems = items.filter(item => isKitchenQueueAutoClosed(item, now));
+  const activeItems = items.filter(item => !isKitchenQueueAutoClosed(item, now));
+  const expiredItems = activeItems.filter(item => isKitchenQueueOverdue(item, now));
   const visibleItems = view === 'expired' ? expiredItems : activeItems;
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -136,8 +141,12 @@ export function KitchenDisplayPage() {
       prevCountRef.current = newItems.length;
       setNow(Date.now());
       setItems(newItems);
+      watchedKitchenOrders.current = new Set(newItems.map((item) => item.order_id));
 
-      const orderIds = [...new Set(newItems.map((item) => item.order_id).filter(Boolean))];
+      const orderIds = [...new Set(newItems
+        .filter((item) => !isKitchenQueueAutoClosed(item, Date.now()))
+        .map((item) => item.order_id)
+        .filter(Boolean))];
       if (orderIds.length === 0) {
         setOrderContext({});
         setLoadError('');
@@ -196,12 +205,24 @@ export function KitchenDisplayPage() {
 
   useEffect(() => {
     if (!branchFilter || !canViewKds) return;
-    const unsubscribe = subscribePosRealtime({ branchId: branchFilter, onEvent: () => { void load(); }, debounceMs: 500 });
+    const unsubscribe = subscribePosRealtime({
+      branchId: branchFilter,
+      onEvent: () => { void load(); },
+      shouldRefresh: (event) => {
+        if (event.table !== 'order_items') return true;
+        const orderId = event.newRow.order_id ?? event.oldRow.order_id;
+        // New sends have their own branch-scoped event. Unknown payloads
+        // (including deletes with only a primary key) still reconcile.
+        return typeof orderId !== 'string' || !orderId || watchedKitchenOrders.current.has(orderId);
+      },
+      debounceMs: 500,
+    });
     return unsubscribe;
   }, [branchFilter, canViewKds, load]);
 
   useEffect(() => {
-    const id = setInterval(() => { void load(); }, 30000);
+    // Realtime is the primary wake; this is a slow reconciliation fallback only.
+    const id = setInterval(() => { void load(); }, 60000);
     return () => clearInterval(id);
   }, [load]);
 
@@ -210,16 +231,23 @@ export function KitchenDisplayPage() {
       setLoadError(userFacingErrorMessage('POS_KDS_UPDATE_REQUIRED', ar ? 'ar' : 'en'));
       return;
     }
+    const key = `${scopeKey}:${orderId}`;
+    if (statusWrites.current.has(key)) return;
+    statusWrites.current.add(key);
+    setPendingStatusWrites(new Set(statusWrites.current));
     try {
       await catalog.setKitchenStatus(orderId, status);
       if (scopeRef.current !== scopeKey) return;
       setLoadError('');
-      void load();
+      await load();
     } catch (error) {
       // Keep the last known KDS cards visible, but never make a failed action
       // look successful or silent.
       if (scopeRef.current !== scopeKey) return;
       setLoadError(userFacingErrorMessage(error, ar ? 'ar' : 'en'));
+    } finally {
+      statusWrites.current.delete(key);
+      setPendingStatusWrites(new Set(statusWrites.current));
     }
   };
 
@@ -263,12 +291,30 @@ export function KitchenDisplayPage() {
 
         <div role="tablist" aria-label={ar ? 'عرض طلبات المطبخ' : 'Kitchen order views'} className="flex flex-wrap gap-2">
           <button role="tab" aria-selected={view === 'active'} onClick={() => setView('active')} className="rounded-lg border border-ui-border px-4 py-2 aria-selected:bg-ui-primary aria-selected:text-white">{ar ? 'كل غير المنتهية' : 'All unfinished'} ({activeItems.length})</button>
-          <button role="tab" aria-selected={view === 'expired'} onClick={() => setView('expired')} className="rounded-lg border border-ui-border px-4 py-2 aria-selected:bg-ui-primary aria-selected:text-white">{ar ? 'تجاوزت 40 دقيقة' : 'Over 40 minutes'} ({expiredItems.length})</button>
+          <button role="tab" aria-selected={view === 'expired'} onClick={() => setView('expired')} className="rounded-lg border border-ui-border px-4 py-2 aria-selected:bg-ui-primary aria-selected:text-white">{ar ? 'تأخير 40–60 دقيقة' : 'Overdue 40–60 min'} ({expiredItems.length})</button>
           <button role="tab" aria-selected={view === 'completed'} onClick={() => setView('completed')} className="rounded-lg border border-ui-border px-4 py-2 aria-selected:bg-ui-primary aria-selected:text-white">{ar ? 'منتهية' : 'Completed'}</button>
         </div>
-        {view === 'active' && <p className="text-xs text-ui-muted">{ar ? 'تبقى جميع الطلبات غير المنتهية ظاهرة هنا، بما فيها الإضافات الجديدة للطلبات القديمة. تبويب «تجاوزت 40 دقيقة» للفرز فقط.' : 'All unfinished orders stay visible here, including new additions to older orders. Over 40 minutes is an additional filter only.'}</p>}
-        {view === 'active' && expiredItems.length > 0 && <p className="rounded-xl border border-ui-warning/30 bg-ui-warning-soft p-3 text-sm text-ui-warning" role="status">{ar ? `${expiredItems.length} بطاقة تجاوزت 40 دقيقة دون تسجيل التقديم. قد تشمل طلبات مدفوعة؛ راجع تبويب التأخير قبل تحديث الحالة.` : `${expiredItems.length} cards exceeded 40 minutes without being marked served. They may include paid orders; review the overdue tab before updating their state.`}</p>}
-        {view === 'expired' && <p className="text-sm text-ui-warning">{ar ? 'هذه الطلبات تجاوزت 40 دقيقة دون تسجيل التقديم. راجع حالتها الفعلية قبل تحديثها؛ اكتمال الدفع لا يعني اكتمال التحضير.' : 'These orders exceeded 40 minutes without being marked served. Check their actual preparation state before updating them; payment does not confirm preparation.'}</p>}
+        {view === 'active' && <p className="text-xs text-ui-muted">{ar ? 'تظل الطلبات ظاهرة حتى مرور ساعة من آخر إرسال للمطبخ. بعدها تُغلق في شاشة المطبخ فقط وتظهر في «منتهية».' : 'Orders remain visible until one hour after their latest kitchen send. They then close in this display only and appear under Completed.'}</p>}
+        {view === 'active' && expiredItems.length > 0 && <p className="rounded-xl border border-ui-warning/30 bg-ui-warning-soft p-3 text-sm text-ui-warning" role="status">{ar ? `${expiredItems.length} بطاقة تجاوزت 40 دقيقة. ستظل متاحة حتى مرور 60 دقيقة من آخر إرسال.` : `${expiredItems.length} cards exceeded 40 minutes. They remain available until 60 minutes after the latest send.`}</p>}
+        {view === 'expired' && <p className="text-sm text-ui-warning">{ar ? 'هذه الطلبات بين 40 و60 دقيقة من آخر إرسال. بعد الساعة تختفي من قائمة العمل وتظهر في «منتهية» دون تغيير حالة الطلب في نقاط البيع.' : 'These orders are 40–60 minutes from their latest send. At one hour they leave the active list and appear under Completed without changing POS order status.'}</p>}
+        {view === 'completed' && autoClosedItems.length > 0 && (
+          <section data-testid="kds-auto-closed" className="space-y-3">
+            <h3 className="font-bold text-ui-text">{ar ? 'أُغلقت تلقائيًا في شاشة المطبخ بعد ساعة' : 'Auto-closed in the kitchen display after one hour'}</h3>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {autoClosedItems.map(item => (
+                <article key={`${item.order_id}-${item.station}`} className="rounded-xl border border-ui-border bg-ui-surface p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-lg font-bold">#{item.order_number}</p>
+                    <span className="text-xs text-ui-muted">{stationName(item.station)}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-ui-muted">{ar ? 'أُخفي من قائمة العمل بعد مرور 60 دقيقة من آخر إرسال للمطبخ.' : 'Removed from the active kitchen list 60 minutes after the latest kitchen send.'}</p>
+                  {item.items.length > 0 && <p className="mt-2 text-sm">{item.items.map(line => `${line.product_name} ×${line.quantity}`).join('، ')}</p>}
+                  <p className="mt-2 text-xs text-ui-subtle">{ar ? 'لم تتغير حالة الطلب أو الفاتورة في نقاط البيع.' : 'POS order status and the sale were not changed.'}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
         {view === 'completed' && branchFilter && canViewKds && <KitchenCompletedHistory key={`${branchFilter}:${station}`} branchId={branchFilter} station={station} ar={ar} />}
 
         {loadError && (
@@ -335,9 +381,9 @@ export function KitchenDisplayPage() {
               {!item.items.length && <p className="mb-3 text-xs text-ui-muted">{ar ? 'لا توجد أصناف مطبخ متبقية في هذا الطلب' : 'No kitchen items remain in this order'}</p>}
               {isVoidedEmpty && canFinishEmpty && <button disabled={finishingOrder != null} onClick={() => void finishEmpty(item.order_id)} className="w-full rounded-xl bg-ui-muted px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50">{finishingOrder === item.order_id ? (ar ? 'جاري الإنهاء...' : 'Finishing...') : (ar ? 'إنهاء الطلب الملغي الخالي من الأصناف' : 'Finish empty voided order')}</button>}
               {canUpdateKds && !isVoidedEmpty && <div className="flex gap-2 border-t border-ui-border pt-3">
-                {item.kitchen_status === 'sent' && <button onClick={() => void handleKitchenStatus(item.order_id, 'cooking')} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-ui-warning text-white py-2.5 px-3 text-sm font-bold active:scale-95 transition-all min-h-11"><ChefHat className="h-5 w-5" /> {ar ? 'بدء التحضير' : 'Start Cooking'}</button>}
-                {item.kitchen_status === 'cooking' && <button onClick={() => void handleKitchenStatus(item.order_id, 'ready')} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-ui-success text-white py-2.5 px-3 text-sm font-bold active:scale-95 transition-all min-h-11"><CheckCircle2 className="h-5 w-5" /> {ar ? 'جاهز للتقديم' : 'Mark Ready'}</button>}
-                {item.kitchen_status === 'ready' && <button onClick={() => void handleKitchenStatus(item.order_id, 'served')} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-ui-info text-white py-2.5 px-3 text-sm font-bold active:scale-95 transition-all min-h-11"><UtensilsCrossed className="h-5 w-5" /> {ar ? 'تم التقديم' : 'Served'}</button>}
+                {item.kitchen_status === 'sent' && <button disabled={pendingStatusWrites.has(`${scopeKey}:${item.order_id}`)} onClick={() => void handleKitchenStatus(item.order_id, 'cooking')} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-ui-warning text-white py-2.5 px-3 text-sm font-bold active:scale-95 transition-all min-h-11"><ChefHat className="h-5 w-5" /> {ar ? 'بدء التحضير' : 'Start Cooking'}</button>}
+                {item.kitchen_status === 'cooking' && <button disabled={pendingStatusWrites.has(`${scopeKey}:${item.order_id}`)} onClick={() => void handleKitchenStatus(item.order_id, 'ready')} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-ui-success text-white py-2.5 px-3 text-sm font-bold active:scale-95 transition-all min-h-11"><CheckCircle2 className="h-5 w-5" /> {ar ? 'جاهز للتقديم' : 'Mark Ready'}</button>}
+                {item.kitchen_status === 'ready' && <button disabled={pendingStatusWrites.has(`${scopeKey}:${item.order_id}`)} onClick={() => void handleKitchenStatus(item.order_id, 'served')} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-ui-info text-white py-2.5 px-3 text-sm font-bold active:scale-95 transition-all min-h-11"><UtensilsCrossed className="h-5 w-5" /> {ar ? 'تم التقديم' : 'Served'}</button>}
               </div>}
             </div>
             );

@@ -95,6 +95,29 @@ test.describe('public application smoke', () => {
     }
   });
 
+  test('enabled organization signup opens from login without touching live Auth', async ({page})=>{
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_public_tenant_registration_status`,route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({enabled:true})}));
+    await page.goto('/#/login');
+    await page.getByRole('link',{name:/إنشاء مؤسسة جديدة|Create an organization/}).click();
+    await expect(page).toHaveURL(/#\/register$/);
+    await expect(page.getByTestId('organization-signup-form')).toBeVisible();
+    await expect(page.locator('#signup-organization')).toBeVisible();
+    await expect(page.locator('#signup-email')).toBeVisible();
+    await page.setViewportSize({width:390,height:844});
+    await expect(page.locator('#signup-confirm')).toBeVisible();
+    await page.getByRole('button',{name:/العودة لتسجيل الدخول|Back to sign in/}).click();
+    await expect(page).toHaveURL(/#\/login$/);
+  });
+
+  test('paused organization signup hides registration and blocks direct entry',async({page})=>{
+    await page.route(`${SUPABASE_ORIGIN}/rest/v1/rpc/get_public_tenant_registration_status`,route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({enabled:false})}));
+    await page.goto('/#/register');
+    await expect(page.getByText(/إنشاء المؤسسات الجديدة متوقف حاليًا|New organization registration is currently paused/)).toBeVisible();
+    await expect(page.getByTestId('organization-signup-form')).toHaveCount(0);
+    await page.getByRole('link',{name:/تسجيل الدخول|Sign in/}).click();
+    await expect(page.getByRole('link',{name:/إنشاء مؤسسة جديدة|Create an organization/})).toHaveCount(0);
+  });
+
   test('login validation blocks invalid PIN without leaving login', async ({ page }) => {
     await page.goto('/#/login');
     await page.locator('#login-username').fill('smoke-test');

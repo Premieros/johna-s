@@ -44,7 +44,7 @@ describe('UI consolidation contracts', () => {
     expect(reports).toContain('reportMobileSecondaryColumns');
     expect(reports).toContain('data-testid="reports-mobile-results"');
     expect(reports).toContain('sm:hidden');
-    expect(reports).toContain('hidden overflow-x-auto sm:block');
+    expect(reports).toMatch(/className="(?:report-grid hidden sm:block|hidden overflow-x-auto sm:block)"/);
   });
 
   it('collapses floating phone utilities behind one control while preserving desktop utilities', () => {

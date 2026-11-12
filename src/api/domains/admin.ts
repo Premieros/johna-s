@@ -3,6 +3,9 @@ import type { RpcResult } from '@/lib/types';
 import { rpc } from '../rpc';
 
 export const admin = {
+  getPublicTenantRegistrationStatus(): ApiResult<{ enabled: boolean }> { return rpc('get_public_tenant_registration_status', {}); },
+  setPublicTenantRegistrationEnabled(p: { p_enabled: boolean }): ApiResult<{ success: boolean; enabled: boolean }> { return rpc('set_public_tenant_registration_enabled', p); },
+  completeOwnOrganizationSignup(p: { p_organization_name: string; p_owner_name: string; p_phone: string | null }): ApiResult<{ success: boolean; organization_id: string; branch_id: string; already_completed?: boolean }> { return rpc('complete_own_organization_signup', p); },
   createUser(p: { p_email: string; p_password: string; p_full_name: string; p_role: string; p_branch_id: string | null; p_is_active: boolean; p_username: string }): ApiResult<RpcResult> { return rpc('create_user', p); },
   updateUserPassword(p: { p_user_id: string; p_new_password: string }): ApiResult<null> { return rpc('update_user_password', p); },
   deleteUser(p: { p_user_id: string }): ApiResult<null> { return rpc('delete_user', p); },

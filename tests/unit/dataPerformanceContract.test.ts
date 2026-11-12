@@ -38,7 +38,7 @@ describe('data performance contracts', () => {
     expect(reports).toContain("supplier: dims.has('supplier')");
     expect(reports).toContain("product: dims.has('product')");
     expect(reports).toContain("table: dims.has('table')");
-    expect(reports).toContain('[reportType, branchId, userId]');
+    expect(reports).toContain('[reportType, branchId, userId, branchKey]');
   });
 
   it('keeps DataTable full export pluggable from an authoritative provider', () => {

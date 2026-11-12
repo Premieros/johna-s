@@ -31,10 +31,23 @@ runs:
               owner, repo,
               per_page: 100, page,
             });
-            previous = data.workflow_runs.find(run =>
-              run.id !== context.runId && run.path === '.github/workflows/deploy.yml' &&
-              run.head_branch === process.env.DEPLOYMENT_BRANCH &&
-              run.status === 'completed' && run.conclusion === 'success');
+            for (const run of data.workflow_runs) {
+              if (!(run.id !== context.runId && run.path === '.github/workflows/deploy.yml' &&
+                run.head_branch === process.env.DEPLOYMENT_BRANCH &&
+                run.status === 'completed' && run.conclusion === 'success')) continue;
+              const jobs = await github.rest.actions.listJobsForWorkflowRun({
+                owner, repo, run_id: run.id, filter: 'latest', per_page: 100,
+              });
+              const deployed = jobs.data.jobs.find(job => job.name === 'deploy');
+              // A verified docs-only run deliberately publishes nothing. It is
+              // not a previous deployment and has no Pages archive to retain.
+              if (deployed?.conclusion === 'skipped') continue;
+              if (deployed?.status !== 'completed' || deployed.conclusion !== 'success') {
+                throw new Error('Previous publication cannot be confirmed; stop deployment to preserve active sessions');
+              }
+              previous = run;
+              break;
+            }
             if (previous) break;
             if (data.workflow_runs.length < 100) { exhausted = true; break; }
           }

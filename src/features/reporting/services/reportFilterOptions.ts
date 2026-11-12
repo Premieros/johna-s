@@ -1,6 +1,8 @@
 import { supabase } from '@/api';
 
 type ReportFilterOptionFlags = {
+  raw_material?: boolean;
+  material_category?: boolean;
   station?: boolean;
   warehouse: boolean;
   cashier: boolean;
@@ -12,6 +14,7 @@ type ReportFilterOptionFlags = {
 };
 
 export type ReportFilterOptions = {
+  rawMaterials?: { id: string; name: string; category: string | null }[];
   stations: { id: string; name_ar: string; name_en: string | null }[];
   warehouses: { id: string; name: string }[];
   cashiers: { id: string; full_name: string | null; email: string | null }[];
@@ -22,39 +25,43 @@ export type ReportFilterOptions = {
   tables: { id: string; name: string }[];
 };
 
-export async function loadReportFilterOptions(branchId: string, flags: ReportFilterOptionFlags): Promise<ReportFilterOptions> {
-  const [warehouses, cashiers, customers, suppliers, products, categories, tables, stations] = await Promise.all([
+export async function loadReportFilterOptions(branchId: string | string[], flags: ReportFilterOptionFlags): Promise<ReportFilterOptions> {
+  const [warehouses, cashiers, customers, suppliers, products, categories, tables, stations, rawMaterials] = await Promise.all([
     flags.warehouse
-      ? supabase.from('warehouses').select('id, name').eq('branch_id', branchId)
+      ? supabase.from('warehouses').select('id, name').in('branch_id', typeof branchId === 'string' ? [branchId] : branchId)
       : Promise.resolve({ data: [], error: null }),
     flags.cashier
-      ? supabase.from('users').select('id, full_name, email').eq('branch_id', branchId)
+      ? supabase.from('users').select('id, full_name, email').in('branch_id', typeof branchId === 'string' ? [branchId] : branchId)
       : Promise.resolve({ data: [], error: null }),
     flags.customer
-      ? supabase.from('customers').select('id, name, name_en').eq('branch_id', branchId)
+      ? supabase.from('customers').select('id, name, name_en').in('branch_id', typeof branchId === 'string' ? [branchId] : branchId)
       : Promise.resolve({ data: [], error: null }),
     flags.supplier
-      ? supabase.from('suppliers').select('id, name, name_en').eq('branch_id', branchId)
+      ? supabase.from('suppliers').select('id, name, name_en').in('branch_id', typeof branchId === 'string' ? [branchId] : branchId)
       : Promise.resolve({ data: [], error: null }),
     flags.product
-      ? supabase.from('products').select('id, name, name_en').eq('branch_id', branchId)
+      ? supabase.from('products').select('id, name, name_en').in('branch_id', typeof branchId === 'string' ? [branchId] : branchId)
       : Promise.resolve({ data: [], error: null }),
     flags.category
-      ? supabase.from('categories').select('id, name, name_en').eq('branch_id', branchId)
+      ? supabase.from('categories').select('id, name, name_en').in('branch_id', typeof branchId === 'string' ? [branchId] : branchId)
       : Promise.resolve({ data: [], error: null }),
     flags.table
-      ? supabase.from('dining_tables').select('id, name').eq('branch_id', branchId)
+      ? supabase.from('dining_tables').select('id, name').in('branch_id', typeof branchId === 'string' ? [branchId] : branchId)
       : Promise.resolve({ data: [], error: null }),
     flags.station
-      ? supabase.from('kitchen_stations').select('id,name_ar,name_en').eq('branch_id', branchId).order('sort_order')
+      ? supabase.from('kitchen_stations').select('id,name_ar,name_en').in('branch_id', typeof branchId === 'string' ? [branchId] : branchId).order('sort_order')
+      : Promise.resolve({ data: [], error: null }),
+    flags.raw_material || flags.material_category
+      ? supabase.from('raw_materials').select('id,name,category').in('branch_id', typeof branchId === 'string' ? [branchId] : branchId)
       : Promise.resolve({ data: [], error: null }),
   ]);
 
-  for (const result of [warehouses, cashiers, customers, suppliers, products, categories, tables, stations]) {
+  for (const result of [warehouses, cashiers, customers, suppliers, products, categories, tables, stations, rawMaterials]) {
     if (result.error) throw result.error;
   }
 
   return {
+    rawMaterials: (rawMaterials.data || []) as NonNullable<ReportFilterOptions['rawMaterials']>,
     stations: (stations.data || []) as ReportFilterOptions['stations'],
     warehouses: (warehouses.data || []) as ReportFilterOptions['warehouses'],
     cashiers: (cashiers.data || []) as ReportFilterOptions['cashiers'],
@@ -66,8 +73,8 @@ export async function loadReportFilterOptions(branchId: string, flags: ReportFil
   };
 }
 
-export async function loadExpenseCategoryOptions(branchId: string): Promise<string[]> {
-  const { data, error } = await supabase.from('expenses').select('category').eq('branch_id', branchId);
+export async function loadExpenseCategoryOptions(branchId: string | string[]): Promise<string[]> {
+  const { data, error } = await supabase.from('expenses').select('category').in('branch_id', typeof branchId === 'string' ? [branchId] : branchId);
   if (error) throw error;
   return Array.from(
     new Set((data || []).map((row) => String((row as Record<string, unknown>).category || '')).filter(Boolean)),

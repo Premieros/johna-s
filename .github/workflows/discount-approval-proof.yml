@@ -1,0 +1,27 @@
+name: Discount approval isolated SQL proof
+on:
+  pull_request:
+    paths:
+      - 'scripts/db/candidates/discount-approval-proof.mjs'
+      - 'scripts/db/candidates/discount_approval_baseline.json'
+      - 'scripts/db/candidates/discount_approval_guard_fixture.json'
+      - 'scripts/rollback/checkout_discount_approval_context_20261024.sql'
+      - 'supabase/migrations/*_checkout_discount_approval_context.sql'
+      - '.github/workflows/discount-approval-proof.yml'
+permissions:
+  contents: read
+jobs:
+  isolated-sql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install pinned disposable Postgres engine
+        run: npm install --prefix /tmp/discount-approval-proof --no-save --ignore-scripts @electric-sql/pglite@0.3.14
+      - name: Verify existing checkout authorization, unchanged math and rollback
+        env:
+          DISCOUNT_PGLITE_MODULE: /tmp/discount-approval-proof/node_modules/@electric-sql/pglite
+        run: node scripts/db/candidates/discount-approval-proof.mjs

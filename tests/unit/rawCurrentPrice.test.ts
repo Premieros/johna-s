@@ -8,8 +8,10 @@ describe('latest known price and purchase unit scaling', () => {
     expect(rawCurrentPrice(row('0.035'))).toBe(0.035);
     expect(rawCurrentPriceMap([row(270)])).toEqual({ raw: 270 });
   });
-  it('keeps missing and invalid prices unavailable', () => {
-    for (const value of [0, -1, null, 'NaN', 'Infinity']) expect(rawCurrentPrice(row(value))).toBeNull();
+  it('preserves explicit default zero and rejects missing or invalid responses', () => {
+    expect(rawCurrentPrice(row(0))).toBe(0);
+    expect(rawCurrentPrice(row('0'))).toBe(0);
+    for (const value of [-1, null, 'NaN', 'Infinity']) expect(rawCurrentPrice(row(value))).toBeNull();
     expect(rawCurrentPrice(undefined)).toBeNull();
   });
   it('scales last price and manually entered price when changing kg/g or liter/ml', () => {

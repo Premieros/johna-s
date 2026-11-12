@@ -1,14 +1,15 @@
 import { fireEvent, render, screen, waitFor, act } from '@testing-library/react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import type { PosRealtimeEvent } from '@/features/pos/services/posRealtime';
 import { KitchenDisplayPage } from '@/features/inventory/pages/KitchenDisplayPage';
-const mocks=vi.hoisted(()=>({ rpc:vi.fn(), history:vi.fn(), setStatus:vi.fn(), context:vi.fn(), finishEmpty:vi.fn(), branch:'a',user:{id:'u'},can:vi.fn(()=>true), refresh:()=>{} }));
+const mocks=vi.hoisted(()=>({ rpc:vi.fn(), history:vi.fn(), setStatus:vi.fn(), context:vi.fn(), finishEmpty:vi.fn(), branch:'a',user:{id:'u'},can:vi.fn(()=>true), refresh:()=>{}, shouldRefresh:undefined as ((event:PosRealtimeEvent)=>boolean)|undefined }));
 vi.mock('@/api',()=>({supabase:{rpc:mocks.rpc}}));
 vi.mock('@/api/domains/catalog',()=>({catalog:{getKitchenOrderContext:mocks.context,getKitchenCompletedHistory:mocks.history,setKitchenStatus:mocks.setStatus,finishEmptyKitchenOrder:mocks.finishEmpty}}));
 vi.mock('@/context/AuthContext',()=>({useAuth:()=>({user:mocks.user})}));
 vi.mock('@/context/LanguageContext',()=>({useLanguage:()=>({lang:'en'})}));
 vi.mock('@/lib/useBranchFilter',()=>({useBranchFilter:()=>mocks.branch}));
 vi.mock('@/lib/permissions',()=>({useCan:()=>mocks.can}));
-vi.mock('@/features/pos/services/posRealtime',()=>({subscribePosRealtime:({onEvent}:{onEvent:()=>void})=>{mocks.refresh=onEvent;return ()=>{};}}));
+vi.mock('@/features/pos/services/posRealtime',()=>({subscribePosRealtime:({onEvent,shouldRefresh}:{onEvent:()=>void;shouldRefresh?:(event:PosRealtimeEvent)=>boolean})=>{mocks.refresh=onEvent;mocks.shouldRefresh=shouldRefresh;return ()=>{};}}));
 vi.mock('@/components/design/DesignSurface',()=>({DesignSurface:({children}:{children:React.ReactNode})=><div>{children}</div>,DesignPageHeader:()=>null}));
 const queueRow=(id:string, seconds:number)=>({order_id:id,order_number:id,station:'main',kitchen_status:'sent',created_at:new Date(Date.now()-seconds*1000).toISOString(),elapsed_seconds:seconds,items:[]});
 beforeEach(()=>{
@@ -21,6 +22,28 @@ beforeEach(()=>{
 });
 afterEach(()=>{delete (document as unknown as {hidden?:boolean}).hidden;vi.useRealTimers();});
 describe('KDS unfinished queue visibility',()=>{
+ it('ignores item updates for orders outside the kitchen queue while accepting sends and unknown deletes',async()=>{
+  render(<KitchenDisplayPage/>);
+  await screen.findByText('#RECENT');
+  const itemEvent=(orderId:string):PosRealtimeEvent=>({table:'order_items',eventType:'UPDATE',newRow:{order_id:orderId},oldRow:{}});
+  expect(mocks.shouldRefresh?.(itemEvent('OTHER'))).toBe(false);
+  expect(mocks.shouldRefresh?.(itemEvent('RECENT'))).toBe(true);
+  expect(mocks.shouldRefresh?.({...itemEvent('OTHER'),table:'order_kitchen_sends'})).toBe(true);
+  expect(mocks.shouldRefresh?.({table:'order_items',eventType:'DELETE',newRow:{},oldRow:{id:'unknown'}})).toBe(true);
+ });
+ it('submits one status change per order while its response is pending',async()=>{
+  let resolve!: () => void;
+  mocks.setStatus.mockImplementationOnce(()=>new Promise<void>(done=>{resolve=done;}));
+  render(<KitchenDisplayPage/>);
+  const [first, other]=await screen.findAllByRole('button',{name:'Start Cooking'});
+  fireEvent.click(first);
+  fireEvent.click(first);
+  expect(first).toBeDisabled();
+  expect(other).toBeEnabled();
+  expect(mocks.setStatus).toHaveBeenCalledExactlyOnceWith('RECENT','cooking');
+  await act(async()=>{resolve();});
+  await waitFor(()=>expect(screen.getAllByRole('button',{name:'Start Cooking'})[0]).toBeEnabled());
+ });
  it('stops ten background polls and refreshes current state on return',async()=>{
   vi.useFakeTimers();let hidden=false;Object.defineProperty(document,'hidden',{configurable:true,get:()=>hidden});
   render(<KitchenDisplayPage/>);await act(async()=>{await Promise.resolve();await Promise.resolve();});
@@ -31,12 +54,12 @@ describe('KDS unfinished queue visibility',()=>{
   expect(mocks.rpc.mock.calls.filter(([name])=>name==='get_kitchen_queue')).toHaveLength(calls+1);
   expect(mocks.setStatus).not.toHaveBeenCalled();
  });
- it('keeps overdue work visible by default, filters overdue cards, and reads completed history lazily',async()=>{
+ it('keeps overdue work visible, filters the 40–60 minute window, and reads history lazily',async()=>{
   render(<KitchenDisplayPage/>);
   expect(await screen.findByText('#RECENT')).toBeVisible();
   expect(screen.getByText('#OLDER')).toBeVisible();
   expect(mocks.history).not.toHaveBeenCalled(); expect(mocks.setStatus).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('tab',{name:/Over 40 minutes/}));
+  fireEvent.click(screen.getByRole('tab',{name:/Overdue 40–60 min/}));
   expect(screen.getByText('#OLDER')).toBeVisible(); expect(screen.queryByText('#RECENT')).not.toBeInTheDocument();
   expect(screen.getByRole('button',{name:'Start Cooking'})).toBeVisible();
   fireEvent.click(screen.getByRole('tab',{name:'Completed'}));
@@ -48,8 +71,8 @@ describe('KDS unfinished queue visibility',()=>{
   let finished=false;
   mocks.rpc.mockImplementation(async(name:string)=>({data:name==='get_kitchen_queue'?(finished?[]:[{...queueRow('VOIDED',2500),notes:'- Kitchen void: 1x Product'}]):[],error:null}));
   mocks.finishEmpty.mockImplementation(async()=>{finished=true;return {data:{success:true,changed:true},error:null};});
-  render(<KitchenDisplayPage/>);await waitFor(()=>expect(screen.getByRole('tab',{name:/Over 40 minutes/})).toHaveTextContent('(1)'));
-  fireEvent.click(screen.getByRole('tab',{name:/Over 40 minutes/}));fireEvent.click(screen.getByRole('button',{name:'Finish empty voided order'}));
+  render(<KitchenDisplayPage/>);await waitFor(()=>expect(screen.getByRole('tab',{name:/Overdue 40–60 min/})).toHaveTextContent('(1)'));
+  fireEvent.click(screen.getByRole('tab',{name:/Overdue 40–60 min/}));fireEvent.click(screen.getByRole('button',{name:'Finish empty voided order'}));
   await waitFor(()=>expect(screen.queryByText('#VOIDED')).not.toBeInTheDocument());
   expect(mocks.finishEmpty).toHaveBeenCalledWith({p_order_id:'VOIDED',p_branch_id:'a'});expect(mocks.setStatus).not.toHaveBeenCalled();
  });
@@ -59,19 +82,41 @@ describe('KDS unfinished queue visibility',()=>{
   expect(screen.getByText('#BOUNDARY')).toBeVisible();const count=mocks.rpc.mock.calls.length;
   await act(async()=>{vi.advanceTimersByTime(1000);});
   expect(screen.getByText('#BOUNDARY')).toBeVisible();expect(mocks.rpc).toHaveBeenCalledTimes(count);expect(mocks.setStatus).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('tab',{name:/Over 40 minutes/}));expect(screen.getByText('#BOUNDARY')).toBeVisible();
+  fireEvent.click(screen.getByRole('tab',{name:/Overdue 40–60 min/}));expect(screen.getByText('#BOUNDARY')).toBeVisible();
  });
- it('shows newly sent items on an hours-old order after refresh without changing or resending it',async()=>{
-  const oldRow={...queueRow('TABLE45',4*3600),items:[{product_name:'Existing item',quantity:1}]};
+ it('keeps newly sent items on an older order visible when the latest send timestamp resets',async()=>{
+  const oldRow={...queueRow('TABLE45',3599),items:[{product_name:'Existing item',quantity:1}]};
   mocks.rpc.mockImplementation(async(name:string)=>({data:name==='get_kitchen_queue'?[oldRow]:[],error:null}));
   render(<KitchenDisplayPage/>);
   expect(await screen.findByText('Existing item')).toBeVisible();
   oldRow.items.push({product_name:'New kitchen addition',quantity:2});
+  oldRow.created_at=new Date().toISOString(); oldRow.elapsed_seconds=0;
   await act(async()=>{mocks.refresh();});
   expect(await screen.findByText('New kitchen addition')).toBeVisible();
   expect(screen.getByRole('tab',{name:/All unfinished/})).toHaveAttribute('aria-selected','true');
   expect(mocks.setStatus).not.toHaveBeenCalled();
   expect(mocks.rpc.mock.calls.every(([name])=>['get_kitchen_queue','get_my_kitchen_stations'].includes(name))).toBe(true);
+ });
+ it('auto-closes a card at 60 minutes in the kitchen display only',async()=>{
+  vi.useFakeTimers();
+  mocks.rpc.mockImplementation(async(name:string)=>({
+    data:name==='get_kitchen_queue'?[queueRow('ALMOST',3599),queueRow('AUTO-CLOSED',3600)]:[],
+    error:null
+  }));
+  render(<KitchenDisplayPage/>);
+  await act(async()=>{await Promise.resolve();await Promise.resolve();});
+  expect(screen.getByText('#ALMOST')).toBeVisible();
+  expect(screen.queryByText('#AUTO-CLOSED')).not.toBeInTheDocument();
+  expect(mocks.setStatus).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('tab',{name:'Completed'}));
+  expect(screen.getByTestId('kds-auto-closed')).toHaveTextContent('#AUTO-CLOSED');
+  expect(screen.getByTestId('kds-auto-closed')).toHaveTextContent('Auto-closed in the kitchen display after one hour');
+  expect(screen.queryByText('#ALMOST')).not.toBeInTheDocument();
+  const calls=mocks.rpc.mock.calls.length;
+  await act(async()=>{vi.advanceTimersByTime(1000);});
+  expect(screen.getByTestId('kds-auto-closed')).toHaveTextContent('#ALMOST');
+  expect(mocks.rpc).toHaveBeenCalledTimes(calls);
+  expect(mocks.setStatus).not.toHaveBeenCalled();
  });
  it('shows completed read errors and retry, with no misleading successful empty history',async()=>{
   mocks.history.mockResolvedValueOnce({data:null,error:{message:'NETWORK_ERROR'}});

@@ -148,6 +148,7 @@ export interface InventoryItemStatementResult {
 }
 
 export interface IncomeStatementResult {
+  other_income?: number;
   revenue: number;
   discount: number;
   net_revenue: number;
@@ -438,4 +439,14 @@ export interface TrialBalanceSummary {
   total_debit: number;
   total_credit: number;
   balanced: boolean;
+}
+
+export interface EmployeeReceivablePeriodRow {
+  customer_id: string;
+  employee_name: string;
+  phone: string | null;
+  period_opening_balance: number;
+  period_debit: number;
+  period_credit: number;
+  period_closing_balance: number;
 }

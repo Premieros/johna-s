@@ -31,6 +31,7 @@ export function ReconciliationPage() {
   const branchFilter = useBranchFilter();
   const history = useHistoryAccess();
   const can = useCan();
+  const canManageReconciliation = can('accounting.reconciliation.manage');
   const { effectiveSettings } = useSettings();
   const { branches } = useBranches();
   const isAr = lang === 'ar';
@@ -78,6 +79,7 @@ export function ReconciliationPage() {
   };
 
   const createRecon = async () => {
+    if (!canManageReconciliation) return;
     if (!createForm.treasury_account_id || !createForm.statement_balance) { show(t('required'), 'error'); return; }
     setSaving(true);
     const { data, error } = await api.accounting.createBankReconciliation( {
@@ -98,6 +100,7 @@ export function ReconciliationPage() {
   };
 
   const addLine = async () => {
+    if (!canManageReconciliation) return;
     if (!detail?.header || !lineForm.amount) { show(t('required'), 'error'); return; }
     setSaving(true);
     const { data, error } = await api.accounting.addStatementLine( {
@@ -117,6 +120,7 @@ export function ReconciliationPage() {
   };
 
   const matchLine = async (lineId: string) => {
+    if (!canManageReconciliation) return;
     const candidateId = matchSelections[lineId];
     if (!candidateId) { show(t('required'), 'error'); return; }
     setSaving(true);
@@ -133,6 +137,7 @@ export function ReconciliationPage() {
   };
 
   const complete = async () => {
+    if (!canManageReconciliation) return;
     if (!detail?.header) return;
     setSaving(true);
     const { data, error } = await api.accounting.completeBankReconciliation( { p_reconciliation_id: detail.header.id });
@@ -173,7 +178,7 @@ export function ReconciliationPage() {
       <DesignPageHeader
         title={t('bankReconciliation')}
         subtitle={t('reconciliation')}
-        actions={can('accounts.manage') && (
+        actions={canManageReconciliation && (
           <Button size="sm" onClick={() => { setCreateForm({ treasury_account_id: '', statement_date: todayISO(), statement_balance: '' }); setCreateOpen(true); }}><Plus className="w-4 h-4" /> {t('reconciliation')}</Button>
         )}
       />
@@ -196,7 +201,7 @@ export function ReconciliationPage() {
         <DesignPagination loaded={items.length} total={total} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadMore} />
       </DesignPanel>
 
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t('reconciliation')}>
+      <Modal open={createOpen && canManageReconciliation} onClose={() => setCreateOpen(false)} title={t('reconciliation')}>
         <div className="space-y-4">
           <Select label={t('accountName')} value={createForm.treasury_account_id} onChange={(e) => setCreateForm({ ...createForm, treasury_account_id: e.target.value })}>
             <option value="">{t('selectAccount')}</option>
@@ -237,7 +242,7 @@ export function ReconciliationPage() {
 
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-ui-text">{t('statementLines')}</h3>
-              {detail.header.status === 'open' && (
+              {canManageReconciliation && detail.header.status === 'open' && (
                 <Button size="sm" variant="outline" onClick={() => { setLineForm({ statement_date: todayISO(), description: '', amount: '', reference: '' }); setAddLineOpen(true); }}><Plus className="w-4 h-4" /> {t('addStatementLine')}</Button>
               )}
             </div>
@@ -270,7 +275,7 @@ export function ReconciliationPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        {detail?.header?.status === 'open' && !l.matched_journal_entry_id && (
+                        {canManageReconciliation && detail?.header?.status === 'open' && !l.matched_journal_entry_id && (
                           <div className="flex items-center gap-2">
                             <select
                               value={matchSelections[l.id] || ''}
@@ -319,7 +324,7 @@ export function ReconciliationPage() {
 
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="secondary" onClick={() => setDetail(null)}>{t('close')}</Button>
-              {detail.header.status === 'open' && (
+              {canManageReconciliation && detail.header.status === 'open' && (
                 <Button onClick={complete} disabled={saving}><CheckCircle2 className="w-4 h-4" /> {saving ? t('loading') : t('complete')}</Button>
               )}
             </div>
@@ -329,7 +334,7 @@ export function ReconciliationPage() {
         )}
       </Modal>
 
-      <Modal open={addLineOpen} onClose={() => setAddLineOpen(false)} title={t('addStatementLine')}>
+      <Modal open={addLineOpen && canManageReconciliation} onClose={() => setAddLineOpen(false)} title={t('addStatementLine')}>
         <div className="space-y-4">
           <Input label={t('statementDate')} type="date" value={lineForm.statement_date} onChange={(e) => setLineForm({ ...lineForm, statement_date: e.target.value })} />
           <Input label={t('statementDescription')} value={lineForm.description} onChange={(e) => setLineForm({ ...lineForm, description: e.target.value })} />

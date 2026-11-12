@@ -52,10 +52,10 @@ describe.skipIf(!dbUrl)('captain send + operator transfer + sale attribution + c
       `INSERT INTO public.roles(role,name_ar,name_en,permissions,scope,branch_id,is_active)
        VALUES
          ('qa_captain_a','كابتن اوردر QA A','cap-qa-a',
-          '["pos.view","pos.order.create","pos.order.edit","pos.send_kitchen"]'::jsonb,
+          '["pos.view","pos.order.dine_in","pos.order.edit","pos.order.dine_in"]'::jsonb,
           'branch',$1::uuid,true),
          ('qa_captain_b','كابتن اوردر QA B','cap-qa-b',
-          '["pos.view","pos.order.create","pos.order.edit","pos.send_kitchen"]'::jsonb,
+          '["pos.view","pos.order.dine_in","pos.order.edit","pos.order.dine_in"]'::jsonb,
           'branch',$2::uuid,true)`,
       [ids.branchA, ids.branchB],
     );
@@ -77,7 +77,7 @@ describe.skipIf(!dbUrl)('captain send + operator transfer + sale attribution + c
       UPDATE public.roles
       SET permissions = (
         permissions
-        || '["pos.view","pos.order.create","pos.order.edit","pos.send_kitchen","pos.receipt.print"]'::jsonb
+        || '["pos.view","pos.order.dine_in","pos.order.edit","pos.order.dine_in","pos.receipt.print"]'::jsonb
       ) - 'pos.order.transfer' - 'users.manage'
       WHERE role='cashier'
     `);
@@ -98,7 +98,7 @@ describe.skipIf(!dbUrl)('captain send + operator transfer + sale attribution + c
       UPDATE public.roles
       SET permissions = (
         permissions || '["pos.view","pos.order.edit"]'::jsonb
-      ) - 'users.manage' - 'pos.send_kitchen'
+      ) - 'users.manage' - 'pos.order.dine_in'
       WHERE role='warehouse_manager'
     `);
 

@@ -10,7 +10,18 @@ describe('complete historical cost response', () => {
     const result = await costing.getHistoricalSaleCostEstimates({ p_branch_id: 'branch', p_from: '2026-09-01', p_to: '2026-10-08' });
     expect(result.data).toHaveLength(1200);
     expect(mocks.rpc).toHaveBeenCalledTimes(1);
-    expect(mocks.rpc).toHaveBeenCalledWith('get_historical_sale_cost_estimates', { p_branch_id: 'branch', p_from: '2026-09-01', p_to: '2026-10-08' });
+    expect(mocks.rpc).toHaveBeenCalledWith('get_historical_sale_cost_estimates', { p_branch_id: 'branch', p_from: '2026-09-01', p_to: '2026-10-08' }, undefined);
+  });
+  it.each([
+    ['getOverview', 'get_costing_overview'],
+    ['getOrderMargin', 'get_order_margin'],
+    ['getSalesSummary', 'get_costing_sales_summary'],
+    ['getHistoricalSaleCostEstimates', 'get_historical_sale_cost_estimates'],
+  ] as const)('forwards cancellation for %s without changing RPC parameters', async (method, name) => {
+    mocks.rpc.mockResolvedValue({ data: [], error: null });
+    const controller = new AbortController(); const params = { p_branch_id: 'branch' };
+    await costing[method](params, controller.signal);
+    expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith(name, params, controller.signal);
   });
   it('keeps a failed historical read as an error rather than a zero supplement', async () => {
     mocks.rpc.mockResolvedValue({ data: null, error: { message: 'Read failed' } });

@@ -7,10 +7,9 @@ const floorPlan = fs.readFileSync('src/features/pos/components/floor/TableFloorP
 const tablesPanel = fs.readFileSync('src/features/pos/components/tables/TablesPanel.tsx', 'utf8');
 const currentOrder = fs.readFileSync('src/features/pos/components/order/CurrentOrderPanel.tsx', 'utf8');
 const statusStyles = fs.readFileSync('src/features/pos/utils/orderTypes.ts', 'utf8');
-const standby = fs.readFileSync('src/features/dashboard/components/DashboardStandbyBar.tsx', 'utf8');
 
 describe('dark POS contrast contract', () => {
-  it('uses charcoal page hierarchy while reserving true black for StandBy', () => {
+  it('uses charcoal page hierarchy without pure-black page surfaces', () => {
     expect(css).toContain('--ui-page: 18 19 24;');
     expect(css).toContain('--ui-surface: 25 27 33;');
     expect(css).toContain('--ui-surface-raised: 33 36 44;');
@@ -18,7 +17,6 @@ describe('dark POS contrast contract', () => {
     expect(css).toContain('--ui-muted: 203 213 225;');
     expect(css).toContain('--ui-accent: var(--brand-400);');
     expect(css).not.toContain('--ui-page: 0 0 0;');
-    expect(standby).toContain('bg-black');
   });
 
   it('also strengthens light-mode secondary text contrast', () => {

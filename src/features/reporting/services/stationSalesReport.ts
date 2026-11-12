@@ -4,8 +4,13 @@ import { type ReportFilters } from '../reportFilters';
 import { loadSalesReportRows } from './reportCoreLoaders';
 import { MAX_REPORT_SOURCE_ROWS } from '../reportReadLimits';
 
+export interface SoldModifierSnapshot {
+  group_id: string; group_name: string; group_name_en?: string;
+  option_id: string; option_name: string; option_name_en?: string; price_delta: number;
+}
 export interface StationSaleItem {
   id: string; product_id: string | null; unit_name: string; quantity: number;
+  modifier_option_ids?: string[]; bonus_quantity?: number; modifiers_snapshot?: SoldModifierSnapshot[] | null;
   unit_price: number; discount_amount: number; total: number;
   refunded_quantity: number; refunded_amount: number; source_order_item_id: string | null;
   product: { name: string; category_id: string | null; category: { name: string; kitchen_station_id: string | null; station: { id: string; name_ar: string; name_en: string | null } | null } | null } | null;

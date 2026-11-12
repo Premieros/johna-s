@@ -25,6 +25,11 @@ export function CashierDiscountApprovalCard({
   const [status, setStatus] = useState<'idle' | 'pending' | 'approved' | 'rejected' | 'failed'>('idle');
   const [busy, setBusy] = useState(false);
   const appliedRequestRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+  const activeRequestRef = useRef(requestId);
+  activeRequestRef.current = requestId;
+  const requestingRef = useRef(false);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
   useEffect(() => setType(currentType), [currentType]);
   useEffect(() => { onPendingChange?.(busy || status === 'pending' || status === 'failed'); }, [busy, status, onPendingChange]);
@@ -36,7 +41,7 @@ export function CashierDiscountApprovalCard({
     expires_at?: string;
     payload?: Record<string, unknown> | null;
   } | null) => {
-    if (!row || !requestId) return;
+    if (!mountedRef.current || !row || !requestId || activeRequestRef.current !== requestId) return;
     if (row.expires_at && Date.parse(row.expires_at) <= Date.now()) {
       setStatus('rejected');
       setError(ar ? 'انتهت صلاحية الموافقة؛ أرسل طلبًا جديدًا' : 'Approval expired; request a new approval');
@@ -71,13 +76,26 @@ export function CashierDiscountApprovalCard({
 
   const refreshDecision = useCallback(async () => {
     if (!requestId) return;
-    const { data } = await supabase
-      .from('approval_requests')
-      .select('id,status,payload,expires_at')
-      .eq('id', requestId)
-      .maybeSingle();
-    applyDecision(data as { id?: string; status?: string; expires_at?: string; payload?: Record<string, unknown> | null } | null);
-  }, [applyDecision, requestId]);
+    try {
+      const { data, error: readError } = await supabase
+        .from('approval_requests')
+        .select('id,status,payload,expires_at')
+        .eq('id', requestId)
+        .maybeSingle();
+      if (!mountedRef.current || activeRequestRef.current !== requestId) return;
+      if (readError || !data) {
+        if (appliedRequestRef.current === requestId) return;
+        setStatus('failed');
+        setError(ar ? 'تعذر التحقق من الموافقة؛ أعد التحقق من الطلب نفسه.' : 'Could not verify approval; retry the same request.');
+        return;
+      }
+      applyDecision(data as { id?: string; status?: string; expires_at?: string; payload?: Record<string, unknown> | null });
+    } catch {
+      if (!mountedRef.current || activeRequestRef.current !== requestId || appliedRequestRef.current === requestId) return;
+      setStatus('failed');
+      setError(ar ? 'تعذر التحقق من الموافقة؛ أعد التحقق من الطلب نفسه.' : 'Could not verify approval; retry the same request.');
+    }
+  }, [applyDecision, ar, requestId]);
 
   useEffect(() => {
     if (!requestId || status !== 'pending') return;
@@ -121,7 +139,7 @@ export function CashierDiscountApprovalCard({
   if (canDirectDiscount) return null;
 
   const request = async () => {
-    if (amount <= 0 || reason.trim().length < 3) return;
+    if (requestingRef.current || amount <= 0 || reason.trim().length < 3) return;
 
     const normalizedInput = type === 'percent'
       ? Math.min(amount, 100)
@@ -131,6 +149,7 @@ export function CashierDiscountApprovalCard({
       : Math.round(normalizedInput * 100) / 100;
     if (monetaryDiscount <= 0) return;
 
+    requestingRef.current = true;
     setBusy(true);
 
     try {
@@ -163,6 +182,7 @@ export function CashierDiscountApprovalCard({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'APPROVAL_REQUEST_FAILED');
     } finally {
+      requestingRef.current = false;
       setBusy(false);
     }
   };
@@ -174,6 +194,12 @@ export function CashierDiscountApprovalCard({
       </p>
 
       {error && <p role="alert" className="mb-2 text-sm text-ui-danger">{error}</p>}
+      {status === 'failed' && requestId && <button type="button" disabled={busy} className="mb-3 rounded-xl border border-ui-border px-4 py-2 text-sm font-bold disabled:opacity-50" onClick={() => {
+        // Retry only this idempotent discount preparation, never a payment.
+        appliedRequestRef.current = null;
+        setError('');
+        setStatus('pending');
+      }}>{ar ? 'إعادة التحقق وتطبيق الموافقة نفسها' : 'Retry the same approval'}</button>}
       <div className="grid grid-cols-2 gap-2">
         <select
           value={type}

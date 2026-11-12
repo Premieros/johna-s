@@ -5,6 +5,9 @@ import { ALL_PERMISSIONS } from '@/lib/permissionDefs';
 
 const LEGACY_PERMISSIONS = [
   'pos.sell',
+  'pos.order.create',
+  'pos.order.quick_create',
+  'pos.send_kitchen',
   'pos.pay',
   'pos.transfer_order',
   'pos.split_order',
@@ -20,7 +23,10 @@ const LEGACY_PERMISSIONS = [
 
 const CANONICAL_PERMISSIONS = [
   'pos.view',
-  'pos.order.create',
+  'pos.order.dine_in',
+  'pos.order.takeaway',
+  'pos.order.drive_thru',
+  'pos.order.delivery',
   'pos.order.edit',
   'pos.payment.take',
   'pos.order.split',

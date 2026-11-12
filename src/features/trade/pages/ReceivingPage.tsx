@@ -34,6 +34,8 @@ export function ReceivingPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { show } = useToast();
   const can = useCan();
+  const canReceive = can('procurement.receive') || can('purchases.manage');
+  const receivePermissionHint = lang === 'ar' ? 'تحتاج صلاحية تنفيذ استلام المشتريات.' : 'Purchase receiving permission is required.';
   const { branches } = useBranches();
   const { effectiveSettings } = useSettings();
   const currency = effectiveSettings(branchFilter)?.currency || 'EGP';
@@ -86,6 +88,7 @@ export function ReceivingPage() {
   };
 
   const openReceive = useCallback((row: PurchaseBackorderRow) => {
+    if (!canReceive) return;
     const purchaseRows = backorders.filter((candidate) => candidate.purchase_id === row.purchase_id);
     const rows = purchaseRows.length > 0 ? purchaseRows : [row];
     setReceiveModal(row);
@@ -98,7 +101,7 @@ export function ReceivingPage() {
       unit_cost: line.unit_cost,
       qty: '',
     })));
-  }, [backorders]);
+  }, [backorders, canReceive]);
 
   useEffect(() => {
     const purchaseId = searchParams.get('purchaseId');
@@ -137,7 +140,7 @@ export function ReceivingPage() {
   };
 
   const saveReceipt = async () => {
-    if (!receiveModal) return;
+    if (!receiveModal || !canReceive || saving) return;
 
     const overRemaining = lines.find((l) => {
       const qty = parseFloat(l.qty);
@@ -184,9 +187,9 @@ export function ReceivingPage() {
     { key: 'remaining', header: t('remainingQty'), render: (r) => <span className="font-semibold text-ui-danger">{r.remaining}</span> },
     { key: 'unit_cost', header: t('unitCost'), render: (r) => formatCurrency(r.unit_cost, currency, lang) },
     { key: 'remaining_value', header: lang === 'ar' ? 'قيمة المتبقي' : 'Remaining Value', render: (r) => formatCurrency(Number(r.remaining || 0) * Number(r.unit_cost || 0), currency, lang) },
-    { key: 'actions', header: t('actions'), render: (r) => can('purchases.receiving') ? (
-      <Button size="sm" onClick={() => openReceive(r)}><PackageOpen className="w-4 h-4" /> {t('receive')}</Button>
-    ) : null },
+    { key: 'actions', header: t('actions'), render: (r) => (
+      <Button size="sm" disabled={!canReceive} title={!canReceive ? receivePermissionHint : undefined} onClick={() => openReceive(r)}><PackageOpen className="w-4 h-4" /> {t('receive')}</Button>
+    ) },
   ];
 
   const rColumns: Column<PurchaseReceiptRow>[] = [
@@ -266,7 +269,7 @@ export function ReceivingPage() {
                       <td className="py-2 text-center font-semibold text-ui-danger">{l.ordered - l.received}</td>
                       <td className="py-2 text-center text-ui-text">{formatCurrency(l.unit_cost, currency, lang)}</td>
                       <td className="py-2 text-center">
-                        <input type="number" min="0" max={l.ordered - l.received} step="0.01" value={l.qty} placeholder="0" onChange={(e) => updateQty(i, e.target.value)} className="w-24 rounded-md border border-ui-border bg-ui-surface px-2 py-1 text-sm" />
+                        <input type="number" min="0" max={l.ordered - l.received} disabled={saving || !canReceive} step="0.01" value={l.qty} placeholder="0" onChange={(e) => updateQty(i, e.target.value)} className="w-24 rounded-md border border-ui-border bg-ui-surface px-2 py-1 text-sm" />
                       </td>
                       <td className="py-2 text-end font-medium text-ui-text">{formatCurrency(receiptQty * Number(l.unit_cost || 0), currency, lang)}</td>
                     </tr>
@@ -276,7 +279,7 @@ export function ReceivingPage() {
             </table>
             <div className="flex justify-end gap-2 pt-2 border-t border-ui-border">
               <Button variant="secondary" onClick={() => setReceiveModal(null)}>{t('cancel')}</Button>
-              <Button onClick={saveReceipt} disabled={saving}><Save className="w-4 h-4" /> {saving ? t('loading') : t('save')}</Button>
+              <Button onClick={saveReceipt} disabled={saving || !canReceive} title={!canReceive ? receivePermissionHint : undefined}><Save className="w-4 h-4" /> {saving ? t('loading') : t('save')}</Button>
             </div>
           </div>
         )}

@@ -2,26 +2,29 @@ import { REPORT_REGISTRY } from './reportRegistry';
 import type { ReportType } from './reportFilters';
 import type { FinancialReportView } from './reportFamilies';
 
-export type WorkspaceView = { key: string; type?: ReportType; financial?: FinancialReportView; ar: string; en: string; permissions: string[] };
+export type WorkspaceView = { consumptionGroup?: 'material'|'product'|'unit'; key: string; type?: ReportType; financial?: FinancialReportView; ar: string; en: string; permissions: string[] };
 export type BasicReport = { key: string; ar: string; en: string; descriptionAr: string; descriptionEn: string; views: WorkspaceView[] };
 const op = (type: ReportType, ar: string, en: string): WorkspaceView => ({ key: type, type, ar, en, permissions: REPORT_REGISTRY.find(r => r.key === type)!.permissions });
 const financial = (view: FinancialReportView, ar: string, en: string): WorkspaceView => ({ key: `financial:${view}`, financial: view, ar, en, permissions: ['reports.financial'] });
 
 export const BASIC_REPORTS: BasicReport[] = [
-  { key: 'sales', ar: 'المبيعات', en: 'Sales', descriptionAr: 'الفواتير والأصناف والمرتجعات وأداء الموظفين', descriptionEn: 'Invoices, items, returns and employee performance', views: [
-    op('sales', 'الفواتير', 'Invoices'), op('sales_by_product', 'ملخص الأصناف', 'Item summary'),
+  { key: 'sales', ar: 'المبيعات الشامل', en: 'Comprehensive Sales', descriptionAr: 'الفواتير والمنتجات والإضافات والخامات والوحدات المصنعة والمرتجعات', descriptionEn: 'Invoices, products, saved modifiers, materials, manufactured units and returns', views: [
+    op('sales', 'الفواتير', 'Invoices'), op('sales_by_product', 'المنتجات وخيارات الإضافات', 'Products & saved options'),
+    { ...op('component_consumption','الخامات المرتبطة بالمبيعات','Sales-related materials'),key:'sales_materials',consumptionGroup:'material' },
+    { ...op('component_consumption','الوحدات المصنعة المرتبطة بالمبيعات','Sales-related manufactured units'),key:'sales_manufactured_units',consumptionGroup:'unit' },
     op('sales_by_station', 'تفاصيل الأصناف والمحطات', 'Items & stations'), op('cashier_performance', 'أداء الموظفين', 'Employee performance'), op('returns', 'المرتجعات', 'Returns'),
   ] },
-  { key: 'cost', ar: 'تكلفة وربح المبيعات', en: 'Sales Cost & Profit', descriptionAr: 'تكلفة المباع وربحه، وتكلفة المكونات والمطابقة', descriptionEn: 'Sold-item costs, profit, component costs and reconciliation', views: [
-    op('sales_costs', 'تكلفة المباع وربحه', 'Sold-item costs & profit'), op('profit', 'ملخص الربح المحاسبي', 'Accounting profit summary'), op('recipe_costs', 'تكلفة مكونات المنتجات الحالية', 'Current product component costs'),
-    op('raw_material_current_cost', 'أسعار الخامات الحالية', 'Current raw material prices'), op('sales_component_reconciliation', 'مطابقة استهلاك المبيعات', 'Sales consumption reconciliation'), op('raw_material_financial', 'ملخص تكلفة الخامات', 'Material cost summary'),
+  { key: 'consumption', ar: 'استهلاك الخامات وتكلفته', en: 'Material Consumption & Cost', descriptionAr: 'صافي المباع × الوصفة الحالية × آخر سعر معتمد؛ بالخامـة أو المنتج، وبلا سعر يُحسب بصفر', descriptionEn: 'Net sold × current recipes × latest approved price, by material or product; missing prices count as zero', views: [
+    op('component_consumption', 'استهلاك المباع بالوصفة الحالية', 'Sold-item consumption at current recipes'),
+    op('raw_material_current_cost', 'الأسعار المعتمدة الحالية ومصادرها', 'Current approved prices and sources'),
+    op('recipe_costs', 'تكلفة الوصفة الحالية', 'Current recipe cost'), op('sales_component_reconciliation', 'مطابقة النظري والفعلي', 'Theoretical vs actual reconciliation'),
   ] },
   { key: 'purchases', ar: 'المشتريات', en: 'Purchases', descriptionAr: 'فواتير المشتريات والموردون ومرتجعات الشراء', descriptionEn: 'Purchase invoices, suppliers and purchase returns', views: [op('purchases', 'فواتير المشتريات', 'Purchase invoices')] },
   { key: 'expenses', ar: 'المصروفات', en: 'Expenses', descriptionAr: 'التفاصيل والتصنيفات وملخص الفترة', descriptionEn: 'Details, categories and period totals', views: [op('expenses', 'تفاصيل المصروفات', 'Expense details')] },
   { key: 'inventory', ar: 'المخزون', en: 'Inventory', descriptionAr: 'الأرصدة الحالية والتاريخية والحركة والنواقص والهالك', descriptionEn: 'Current & historical balances, movements, shortages and waste', views: [
-    op('inventory', 'الأرصدة الحالية', 'Current balances'), op('raw_material_valuation', 'تقييم الخامات المحاسبي', 'Raw material accounting valuation'), op('inventory_as_of', 'أرصدة الخامات بتاريخ', 'Material balances as of date'),
+    op('inventory', 'الأرصدة الحالية', 'Current balances'), op('raw_material_valuation', 'تقييم الخامات بآخر سعر', 'Raw Material Latest-Price Valuation'), op('inventory_as_of', 'أرصدة الخامات بتاريخ', 'Material balances as of date'),
     op('raw_material_consumption', 'حركة واستهلاك الخامات', 'Material movements & consumption'), financial('inventory_movement', 'كشف حركة صنف', 'Item statement'),
-    op('low_stock', 'النواقص', 'Shortages'), op('production_waste', 'الهالك', 'Waste'), op('component_consumption', 'استهلاك المكونات', 'Component consumption'),
+    op('low_stock', 'النواقص', 'Shortages'), op('production_waste', 'الهالك', 'Waste'),
   ] },
   { key: 'collections', ar: 'التحصيل والأرصدة', en: 'Collections & Balances', descriptionAr: 'طرق الدفع والخزائن والبنوك والعملاء والموردون', descriptionEn: 'Payment methods, treasuries, banks, customers and suppliers', views: [
     op('sales_by_payment', 'طرق الدفع', 'Payment methods'), op('daily_closing_range', 'ملخص التحصيل اليومي', 'Daily collections'),
@@ -29,7 +32,10 @@ export const BASIC_REPORTS: BasicReport[] = [
     financial('ar_aging', 'أرصدة العملاء بتاريخ', 'Customer balances as of date'), financial('ap_aging', 'أرصدة الموردين بتاريخ', 'Supplier balances as of date'),
     financial('aging_summary', 'ملخص الذمم بتاريخ', 'Receivables & payables as of date'), op('financial_reconciliation', 'مطابقة التحصيل', 'Collection reconciliation'),
   ] },
-  { key: 'accounting', ar: 'التقارير المحاسبية', en: 'Accounting Reports', descriptionAr: 'القوائم المالية وميزان المراجعة ودفتر الأستاذ', descriptionEn: 'Financial statements, trial balance and general ledger', views: [
+  { key: 'month_close', ar: 'مراجعة إغلاق الشهر', en: 'Month-end Review', descriptionAr: 'مراجعة المبيعات والتحصيل والمخزون والتكلفة والقوائم المالية قبل الإغلاق', descriptionEn: 'Review sales, collections, inventory, costs and financial statements before closing', views: [
+    { key: 'period_close_raw', ar: 'إقفال الفترة بآخر سعر', en: 'Period close at latest prices', permissions: ['reports.view', 'reports.costing', 'reports.financial'] },
+    { key: 'month_review', ar: 'خطوات مراجعة الشهر', en: 'Month review checklist', permissions: ['reports.view'] },
+    op('sales_costs', 'تكلفة وربح المباع', 'Sold-item cost and profit'), op('profit', 'ملخص الربح المحاسبي', 'Accounting profit summary'), op('raw_material_financial', 'ملخص تكلفة الخامات', 'Material cost summary'),
     financial('income', 'قائمة الدخل', 'Income statement'), financial('balance_sheet', 'الميزانية بتاريخ', 'Balance sheet as of date'),
     financial('trial_balance', 'ميزان المراجعة بتاريخ', 'Trial balance as of date'), financial('ledger', 'دفتر الأستاذ', 'General ledger'), financial('cash_flow', 'التدفقات النقدية', 'Cash flow'),
   ] },

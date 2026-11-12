@@ -5,16 +5,19 @@ import { loadExpenseCategoryOptions, loadReportFilterOptions, type ReportFilterO
 
 type PageFilterOptions = ReportFilterOptions & { expenseCategories: string[] };
 export const EMPTY_REPORT_FILTER_OPTIONS: PageFilterOptions = {
-  stations: [], warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [], expenseCategories: [],
+  rawMaterials: [], stations: [], warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [], expenseCategories: [],
 };
 
 /** Filter options share one scoped snapshot; partial failures and old categories never publish. */
-export function useReportFilterOptions(reportType: ReportType, branchId: string | null, userId: string | undefined) {
+export function useReportFilterOptions(reportType: ReportType, branchId: string | null, userId: string | undefined, permittedBranches: string[] = []) {
+  const branchKey = JSON.stringify(permittedBranches);
   const read = useCallback(async (): Promise<PageFilterOptions> => {
-    if (!branchId || !userId) return EMPTY_REPORT_FILTER_OPTIONS;
+    const scope: string | string[] = branchId || JSON.parse(branchKey);
+    if (!userId || (!branchId && !scope.length)) return EMPTY_REPORT_FILTER_OPTIONS;
     const dims = new Set(REPORT_FILTER_DIMS[reportType]);
     const [options, expenseCategories] = await Promise.all([
-      loadReportFilterOptions(branchId, {
+      loadReportFilterOptions(scope, {
+        raw_material: dims.has('raw_material'), material_category: dims.has('material_category'),
         station: dims.has('station'),
         warehouse: dims.has('warehouse'),
         cashier: dims.has('cashier') || dims.has('buyer'),
@@ -24,9 +27,9 @@ export function useReportFilterOptions(reportType: ReportType, branchId: string 
         category: dims.has('category') && reportType !== 'expenses',
         table: dims.has('table'),
       }),
-      reportType === 'expenses' ? loadExpenseCategoryOptions(branchId) : Promise.resolve([] as string[]),
+      reportType === 'expenses' ? loadExpenseCategoryOptions(scope) : Promise.resolve([] as string[]),
     ]);
     return { ...options, expenseCategories };
-  }, [reportType, branchId, userId]);
+  }, [reportType, branchId, userId, branchKey]);
   return useLatestRead(read);
 }

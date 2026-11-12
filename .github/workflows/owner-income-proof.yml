@@ -1,0 +1,28 @@
+name: Owner accounting isolated SQL proof
+on:
+  pull_request:
+    paths:
+      - 'scripts/db/candidates/owner-income-proof.mjs'
+      - 'scripts/db/candidates/owner_income_baseline.json'
+      - 'scripts/db/candidates/owner_balance_baseline.json'
+      - 'scripts/db/candidates/owner_trial_baseline.json'
+      - 'scripts/rollback/owner_income_classification_20261022.sql'
+      - 'supabase/migrations/*_owner_income_classification.sql'
+      - '.github/workflows/owner-income-proof.yml'
+permissions:
+  contents: read
+jobs:
+  isolated-sql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install pinned disposable Postgres engine
+        run: npm install --prefix /tmp/finance-payment-proof --no-save --ignore-scripts @electric-sql/pglite@0.3.14
+      - name: Reproduce original failure and verify repair and rollback on owned synthetic rows
+        env:
+          OWNER_INCOME_PGLITE_MODULE: /tmp/finance-payment-proof/node_modules/@electric-sql/pglite
+        run: node scripts/db/candidates/owner-income-proof.mjs

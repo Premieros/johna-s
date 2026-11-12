@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 
 const mocks = vi.hoisted(() => ({
   branch: 'a',
@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
   branches: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }],
   loadSales: vi.fn(),
   materialBalances: vi.fn(),
+  latestValuation: vi.fn(),
+  rawFinancial: vi.fn(),
+  reconciliation: vi.fn(),
   stationLines: vi.fn(),
   fullSales: vi.fn(),
   loadOptions: vi.fn(),
@@ -18,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   visibleColumns: null as string[] | null,
   columnOrder: undefined as string[] | undefined,
 }));
-vi.mock('@/api', () => ({ supabase: {}, costing: {}, reporting: { getRawMaterialConsumptionReport: mocks.materialBalances } }));
+vi.mock('@/api', () => ({ supabase: {}, costing: { getRawMaterialCostOverview: mocks.latestValuation }, reporting: { getRawMaterialConsumptionReport: mocks.materialBalances, getRawMaterialFinancialReport:mocks.rawFinancial, getSalesComponentReconciliationReport:mocks.reconciliation } }));
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: mocks.userId } }) }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en', t: (key: string) => key }) }));
 vi.mock('@/lib/useBranchFilter', () => ({ useBranchFilter: () => mocks.branch }));
@@ -32,7 +35,7 @@ vi.mock('@/features/reporting/ColumnPicker', () => ({ ColumnPicker: () => null }
 vi.mock('@/features/reporting/CustomReportBar', () => ({ CustomReportBar: () => null }));
 vi.mock('@/features/reporting/services/reportCoreLoaders', () => ({ loadOperationalReportPage: async (args: { page: number }) => {
   const rows = await mocks.loadSales(args) as Record<string, unknown>[];
-  return { rows: rows.slice(args.page * 100, args.page * 100 + 100), summary: { count: rows.length, total: rows.reduce((sum, row) => sum + Math.max(0, Number(row.total || 0) - Number(row.refunded_amount || 0)), 0) } };
+  return { metrics: {'Net Sales':rows.reduce((sum,row)=>sum+Math.max(0,Number(row.total || 0)-Number(row.refunded_amount || 0)),0)}, rows: rows.slice(args.page * 100, args.page * 100 + 100), summary: { count: rows.length, total: rows.reduce((sum, row) => sum + Math.max(0, Number(row.total || 0) - Number(row.refunded_amount || 0)), 0) } };
 }, loadSalesReportRows: mocks.fullSales, loadPurchaseReportRows: vi.fn(), loadExpenseReportRows: vi.fn() }));
 vi.mock('@/features/reporting/services/reportFilterOptions', () => ({
   loadReportFilterOptions: mocks.loadOptions,
@@ -40,8 +43,8 @@ vi.mock('@/features/reporting/services/reportFilterOptions', () => ({
 }));
 vi.mock('@/lib/reportExport', () => ({ openPrintWindow: mocks.print, downloadCSV: mocks.csv }));
 vi.mock('@/lib/excel', () => ({ exportToExcelAdvanced: mocks.excel }));
-vi.mock('@/features/reporting/ReportFilterBar', () => ({ ReportFilterBar: (props: { total: number; count: number; from: string; onFromChange: (s: string) => void; onRunReport: () => void; filters: { warehouse?: string; customer?: string; payment_method?: string }; onFilterChange: (key: 'warehouse' | 'customer' | 'payment_method', value: string) => void }) => (
-  <div><output data-testid="report-summary">{props.total}:{props.count}</output><input aria-label="From" value={props.from} onChange={e => props.onFromChange(e.target.value)} /><input aria-label="Warehouse filter" value={props.filters.warehouse || ''} onChange={e => props.onFilterChange('warehouse', e.target.value)} /><input aria-label="Customer filter" value={props.filters.customer || ''} onChange={e => props.onFilterChange('customer', e.target.value)} /><input aria-label="Payment filter" value={props.filters.payment_method || ''} onChange={e => props.onFilterChange('payment_method', e.target.value)} /><button onClick={props.onRunReport}>Run report</button></div>
+vi.mock('@/features/reporting/ReportFilterBar', () => ({ ReportFilterBar: (props: { viewControl?: ReactNode; total: number; count: number; from: string; onFromChange: (s: string) => void; onRunReport: () => void; filters: { warehouse?: string; customer?: string; payment_method?: string }; onFilterChange: (key: 'warehouse' | 'customer' | 'payment_method', value: string) => void }) => (
+  <div>{props.viewControl}<output data-testid="report-summary">{props.total}:{props.count}</output><input aria-label="From" value={props.from} onChange={e => props.onFromChange(e.target.value)} /><input aria-label="Warehouse filter" value={props.filters.warehouse || ''} onChange={e => props.onFilterChange('warehouse', e.target.value)} /><input aria-label="Customer filter" value={props.filters.customer || ''} onChange={e => props.onFilterChange('customer', e.target.value)} /><input aria-label="Payment filter" value={props.filters.payment_method || ''} onChange={e => props.onFilterChange('payment_method', e.target.value)} /><button onClick={props.onRunReport}>Run report</button></div>
 ) }));
 vi.mock('@/features/reporting/services/stationSalesReport', () => ({ loadStationSalesLines: mocks.stationLines }));
 import { ReportsPage } from '@/features/reporting/pages/ReportsPage';
@@ -56,6 +59,34 @@ afterEach(cleanup);
 beforeEach(() => { vi.clearAllMocks(); mocks.visibleColumns = null; mocks.columnOrder = undefined; vi.spyOn(window, 'open').mockReturnValue({ close: vi.fn() } as unknown as Window); mocks.fullSales.mockReset().mockResolvedValue([]); mocks.branch = 'a'; mocks.userId = 'reader'; mocks.loadOptions.mockReset().mockResolvedValue({ warehouses: [], cashiers: [], customers: [], suppliers: [], products: [], categories: [], tables: [] }); });
 
 describe('report read stability', () => {
+  it('uses the costing center price and stock value for valuation and Excel totals', async () => {
+    mocks.latestValuation.mockResolvedValue({ data: [
+      { raw_material_name: 'Priced material', stock_quantity: 3, latest_cost: 61, estimated_net_stock_value: 183, price_source: 'pricing', price_missing: false },
+      { raw_material_name: 'Unpriced material', stock_quantity: 4, latest_cost: 0, estimated_net_stock_value: 0, price_source: 'unpriced', price_missing: true },
+    ], error: null });
+    render(page({ controlledReportType: 'raw_material_valuation' }));
+    expect(mocks.latestValuation).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText('Unpriced — valued at zero')).toBeTruthy();
+    expect(within(table).queryByText(/FIFO/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'exportExcel' }));
+    await waitFor(() => expect(mocks.excel).toHaveBeenCalledOnce());
+    expect(mocks.excel.mock.calls[0][0].totalRow).toHaveProperty('Current Inventory Value', 183);
+    expect(mocks.latestValuation).toHaveBeenCalledExactlyOnceWith({ p_branch_id: 'a' }, expect.any(AbortSignal));
+  });
+  it.each(['raw_material_financial','sales_component_reconciliation'] as const)('keeps %s branch summaries out of details, analysis and exported data',async type=>{
+    const source=type==='raw_material_financial'?mocks.rawFinancial:mocks.reconciliation;
+    source.mockResolvedValue({data:{summary:{net_sales:100,opening_inventory_value:30,purchases_value:10,sales_consumption_value:20,closing_inventory_value:20,gross_profit:80,theoretical_value:20,actual_value:15,value_difference:5,mismatched_raws:1},rows:[{raw_material_name:'Ingredient A',opening_value:10,sales_consumption_value:5,theoretical_value:5,actual_value:4},{raw_material_name:'Ingredient B',opening_value:20,sales_consumption_value:15,theoretical_value:15,actual_value:11}]},error:null});
+    render(page({controlledReportType:type}));fireEvent.click(screen.getByRole('button',{name:'Run report'}));
+    const table=await screen.findByRole('table');expect(within(table).queryByText('Period Total')).toBeNull();
+    expect(within(table).getByText('Ingredient A')).toBeTruthy();expect(within(table).getByText('Ingredient B')).toBeTruthy();
+    expect(screen.getByText('Period summary by branch — separate from details')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button',{name:'exportExcel'}));await waitFor(()=>expect(mocks.excel).toHaveBeenCalledOnce());
+    expect(mocks.excel.mock.calls[0][0].data).toHaveLength(2);
+    expect(mocks.excel.mock.calls[0][0].totalRow).toHaveProperty(type==='raw_material_financial'?'1. A · Opening Value':'1. A · Theoretical Value',type==='raw_material_financial'?30:20);
+    expect(source).toHaveBeenCalledOnce();
+  });
   it('does not request results on mount, filter changes or a report-type change', async () => {
     mocks.loadSales.mockResolvedValue([sale('manual')]);
     const view = render(page());
@@ -66,6 +97,11 @@ describe('report read stability', () => {
     expect(mocks.loadSales).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
     await waitFor(() => expect(mocks.loadSales).toHaveBeenCalledOnce());
+    expect(screen.getByTestId('report-result-context').textContent).toContain('01/10/2026');
+    fireEvent.change(screen.getByLabelText('From'),{target:{value:'2026-09-01'}});
+    expect(screen.getByTestId('report-result-context').textContent).toContain('01/10/2026');
+    expect(screen.getByTestId('report-result-context').textContent).toContain('New filters are not applied');
+    expect(mocks.loadSales).toHaveBeenCalledOnce();
     view.rerender(page({ controlledReportType: 'sales_costs' }));
     expect(mocks.stationLines).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'exportExcel' })).toBeDisabled();
@@ -110,6 +146,25 @@ describe('report read stability', () => {
     expect(mocks.print.mock.calls[0][0].rows).toHaveLength(205);
   });
 
+  it('places authoritative totals beneath matching columns on every page',async()=>{
+    mocks.loadSales.mockResolvedValue(Array.from({length:205},(_,i)=>sale(`invoice-${i}`)));
+    render(page());fireEvent.click(screen.getByRole('button',{name:'Run report'}));
+    await waitFor(()=>expect(screen.getByTestId('report-summary').textContent).toBe('2050:205'));
+    const assertTotal=()=>{const table=screen.getByRole('table');const headings=within(table.querySelector('thead')!).getAllByRole('columnheader').map(cell=>cell.textContent);const cells=within(table.querySelector('tfoot')!).getAllByRole('cell');expect(cells).toHaveLength(headings.length);expect(cells[headings.indexOf('Net Sales')].textContent).toMatch(/2[,.]050/);expect(cells.some(cell=>cell.hasAttribute('colspan'))).toBe(false);};
+    assertTotal();fireEvent.click(screen.getByRole('button',{name:'Next'}));await waitFor(()=>expect(within(screen.getByRole('table').querySelector('tbody')!).getByText('invoice-100')).toBeTruthy());assertTotal();
+    expect(mocks.fullSales).not.toHaveBeenCalled();
+  });
+  it('requests the selected purchase material view and labels its line-value basis',async()=>{
+    mocks.loadSales.mockResolvedValue([{branch_id:'a',raw_material_id:'flour',material_name:'Flour',material_category:'Food',unit_name:'kg',quantity:10,returned_quantity:2,net_quantity:8,line_gross:100,line_returned:20,line_net:80,invoice_count:1}]);
+    render(page({controlledReportType:'purchases'}));
+    fireEvent.change(screen.getByLabelText('Purchase view'),{target:{value:'material'}});
+    expect(mocks.loadSales).not.toHaveBeenCalled();fireEvent.click(screen.getByRole('button',{name:'Run report'}));
+    await screen.findByRole('table');expect(mocks.loadSales.mock.calls[0][0].filters).toMatchObject({purchase_view:'material'});
+    expect(screen.getAllByText('Flour').length).toBeGreaterThan(0);expect(screen.getByText(/Recorded purchase lines and returns/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Purchase view'),{target:{value:'invoice'}});
+    expect(screen.getByText(/Recorded purchase lines and returns/)).toBeTruthy();expect(mocks.loadSales).toHaveBeenCalledOnce();
+  });
+
   it('blocks export when every column is hidden instead of revealing all columns', async () => {
     mocks.visibleColumns = [];
     mocks.loadSales.mockResolvedValue([sale('sale')]);
@@ -149,7 +204,9 @@ describe('report read stability', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     await waitFor(() => expect(body().getByText('invoice-204')).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'print' }));
-    await waitFor(() => expect(mocks.print.mock.calls[0][0].rows).toHaveLength(205));
+    await waitFor(() => expect(mocks.print.mock.calls[0][0].rows).toHaveLength(206));
+    const printed=mocks.print.mock.calls[0][0];
+    expect(printed.rows[205][printed.headers.indexOf('Net Sales')]).toBe('2050');
     fireEvent.click(screen.getByRole('button', { name: 'exportExcel' }));
     await waitFor(() => expect(mocks.excel.mock.calls[0][0].data).toHaveLength(205));
   });

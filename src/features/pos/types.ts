@@ -1,4 +1,4 @@
-import type { DiningTable, Order, OrderItem, ProductModifierSnapshot } from '@/lib/types';
+import type { DiningTable, Order, OrderItem, ProductModifierSnapshot, RpcResult } from '@/lib/types';
 
 export interface OrderKitchenSend {
   id: string;
@@ -76,4 +76,33 @@ export interface PosRealtimeData {
   kitchenSends: OrderKitchenSend[];
   /** All branch open/held order ids, including empty shells hidden from operational UI. */
   watchedOrderIds: string[];
+}
+
+export interface PosItemTransferRequest {
+  operation_id: string;
+  quantities: Array<{
+    order_item_id: string;
+    quantity: number;
+    expected: Pick<OrderItem, 'quantity' | 'product_id' | 'unit_name' | 'unit_price' | 'discount_amount' | 'bonus_quantity'> & {
+      notes: string;
+      modifier_option_ids: string[];
+    };
+  }>;
+}
+
+export interface PosItemTransferSnapshot extends Pick<PosRealtimeData, 'orders' | 'tables' | 'orderItems' | 'kitchenSends'> {
+  order_ids: string[];
+}
+
+export interface PosItemTransferResult extends RpcResult {
+  source_order_id?: string;
+  target_order_id?: string;
+  target_order_number?: string;
+  moved_item_count?: number;
+  source_order_empty?: boolean;
+  inventory_changed?: boolean;
+  kds_changed?: boolean;
+  replayed?: boolean;
+  quantity_transfers?: Array<{ source_item_id: string; moved_item_id: string; quantity: number }>;
+  snapshot?: PosItemTransferSnapshot;
 }

@@ -19,35 +19,48 @@ type CountCacheEntry = CountSnapshot & {
 };
 
 const countCache = new Map<string, CountCacheEntry>();
+const activeOrderCountReads = new Map<string, Promise<CountSnapshot>>();
 
 async function fetchActiveOrderCount(branchId: string): Promise<CountSnapshot> {
-  const { data: orderRows, error: ordersError } = await supabase
-    .from('orders')
-    .select('id')
-    .eq('branch_id', branchId)
-    .in('status', ['open', 'held']);
+  const existing = activeOrderCountReads.get(branchId);
+  if (existing) return existing;
 
-  if (ordersError) throw ordersError;
+  const read = (async (): Promise<CountSnapshot> => {
+    const { data: orderRows, error: ordersError } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('branch_id', branchId)
+      .in('status', ['open', 'held']);
 
-  const watchedOrderIds = (orderRows || []).map((row) => row.id as string).filter(Boolean);
-  if (watchedOrderIds.length === 0) {
-    return { value: 0, watchedOrderIds: [], visibleItemIds: [] };
+    if (ordersError) throw ordersError;
+
+    const watchedOrderIds = (orderRows || []).map((row) => row.id as string).filter(Boolean);
+    if (watchedOrderIds.length === 0) {
+      return { value: 0, watchedOrderIds: [], visibleItemIds: [] };
+    }
+
+    const { data: itemRows, error: itemsError } = await supabase
+      .from('order_items')
+      .select('id,order_id,quantity')
+      .in('order_id', watchedOrderIds)
+      .gt('quantity', 0);
+
+    if (itemsError) throw itemsError;
+
+    const rows = itemRows || [];
+    return {
+      value: new Set(rows.map((row) => row.order_id as string).filter(Boolean)).size,
+      watchedOrderIds,
+      visibleItemIds: rows.map((row) => row.id as string).filter(Boolean),
+    };
+  })();
+
+  activeOrderCountReads.set(branchId, read);
+  try {
+    return await read;
+  } finally {
+    if (activeOrderCountReads.get(branchId) === read) activeOrderCountReads.delete(branchId);
   }
-
-  const { data: itemRows, error: itemsError } = await supabase
-    .from('order_items')
-    .select('id,order_id,quantity')
-    .in('order_id', watchedOrderIds)
-    .gt('quantity', 0);
-
-  if (itemsError) throw itemsError;
-
-  const rows = itemRows || [];
-  return {
-    value: new Set(rows.map((row) => row.order_id as string).filter(Boolean)).size,
-    watchedOrderIds,
-    visibleItemIds: rows.map((row) => row.id as string).filter(Boolean),
-  };
 }
 
 /**
@@ -115,10 +128,17 @@ export function useActiveOrderCount(branchId: string, enabled = true): number {
 
     const scheduleRefresh = () => {
       if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+      const cachedSnapshot = countCache.get(branchId);
+      const cacheRemainingMs = cachedSnapshot
+        ? Math.max(0, COUNT_CACHE_TTL_MS - (Date.now() - cachedSnapshot.loadedAt))
+        : 0;
+      // Realtime bursts may arrive for every item/order mutation. Keep the
+      // non-critical shell badge to at most one database refresh per 15s window.
+      const refreshDelayMs = Math.max(REFRESH_DEBOUNCE_MS, cacheRemainingMs);
       refreshTimer.current = window.setTimeout(() => {
         refreshTimer.current = null;
         void refresh(true);
-      }, REFRESH_DEBOUNCE_MS);
+      }, refreshDelayMs);
     };
 
     const unsubscribe = subscribePosRealtime({

@@ -5,7 +5,7 @@ const source = readFileSync('src/context/RolesContext.tsx', 'utf8');
 
 describe('roles refresh stability contract', () => {
   it('keys role bootstrap to stable user identity instead of the mutable session object', () => {
-    expect(source).toContain('const sessionUserId = session?.user?.id ?? null;');
+    expect(source).toContain('const sessionUserId = needsOrganizationSetup ? null : session?.user?.id ?? null;');
     expect(source).toContain('}, [sessionUserId]);');
     expect(source).not.toContain('}, [session]);');
   });

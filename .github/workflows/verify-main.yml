@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main, master]
   workflow_dispatch:
+    inputs:
+      legacy_dispatch_benchmark:
+        description: Run the unpublished October dispatch load experiment in owned CI
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -23,7 +28,30 @@ env:
 # consume the database job. Keep every suite mandatory; remove only scheduling
 # dependencies so elapsed verification time is the slowest suite, not their sum.
 jobs:
+  scope:
+    runs-on: ubuntu-latest
+    outputs:
+      runtime: ${{ steps.plan.outputs.runtime }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify mandatory active work log
+        run: node scripts/ci/verify-worklog.mjs
+      - name: Classify verified source scope
+        id: plan
+        env:
+          CI_SCOPE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/ci/verification-scope.mjs plan ci-scope/verification-scope.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verify-scope-plan
+          path: ci-scope/verification-scope.json
+          retention-days: 3
+
   verify:
+    needs: scope
+    if: needs.scope.outputs.runtime == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,8 +61,6 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
-      - name: Verify mandatory active work log
-        run: npx vitest run tests/unit/activeWorklogGateContract.test.ts
       - name: Verify locked Supabase project identity
         run: node scripts/db/verify-database-identity.js
       - name: Verify frontend API contract is current
@@ -46,6 +72,8 @@ jobs:
       - run: npm run build
 
   pages-continuity:
+    needs: scope
+    if: needs.scope.outputs.runtime == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -67,6 +95,8 @@ jobs:
           deployment-branch: main
 
   db:
+    needs: scope
+    if: needs.scope.outputs.runtime == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -85,6 +115,7 @@ jobs:
       SUPABASE_PROJECT_REF: azzdesuowpdcoflmyezn
       VITE_SUPABASE_URL: https://azzdesuowpdcoflmyezn.supabase.co
       SUPABASE_DB_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      JOHNAS_RUN_LEGACY_DISPATCH_BENCHMARK: ${{ inputs.legacy_dispatch_benchmark && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -122,7 +153,13 @@ jobs:
           path: integration-test.log
           retention-days: 3
 
-  browser-smoke:
+  browser-shards:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    needs: scope
+    if: needs.scope.outputs.runtime == 'true'
     runs-on: ubuntu-latest
     env:
       SUPABASE_PROJECT_REF: azzdesuowpdcoflmyezn
@@ -137,15 +174,31 @@ jobs:
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
       - name: Verify locked Supabase project identity
         run: node scripts/db/verify-database-identity.js
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Use installed Chrome and prepare video helper
+        timeout-minutes: 2
+        run: |
+          google-chrome --version
+          npx playwright install ffmpeg
       - name: Build application
         run: npm run build
       - name: Run Playwright smoke tests
-        run: npx playwright test --project=chromium
+        env:
+          PLAYWRIGHT_CHANNEL: chrome
+        run: npx playwright test --project=chromium --shard=${{ matrix.shard }}/2
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: verify-playwright-report
+          name: verify-playwright-report-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 7
+
+  # Preserve the existing required check name and require BOTH shards to pass.
+  browser-smoke:
+    needs: [scope, browser-shards]
+    if: ${{ always() && needs.scope.outputs.runtime == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every browser shard
+        env:
+          SHARD_RESULT: ${{ needs.browser-shards.result }}
+        run: test "$SHARD_RESULT" = success

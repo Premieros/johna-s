@@ -19,7 +19,7 @@ const kitchenService = fs.readFileSync(
 describe('POS kitchen-send click reliability contract', () => {
   it('does not accept another kitchen click while the order is being saved or already sent', () => {
     expect(header).toContain('const kitchenActionBusy = kitchenSending || completing;');
-    expect(header).toContain('disabled={kitchenActionBusy}');
+    expect(header).toContain('disabled={!canSendKitchen || kitchenActionBusy}');
     expect(header).toContain('aria-busy={kitchenActionBusy}');
     expect(header).toContain("'جارٍ حفظ الطلب...'");
     expect(header).not.toContain('disabled={kitchenSending}');
@@ -27,7 +27,7 @@ describe('POS kitchen-send click reliability contract', () => {
 
   it('keeps the hook guard against transient order/loading/send races', () => {
     expect(orderHook).toContain(
-      'if (cart.length === 0 || completing || orderLoading || kitchenSending) return false;',
+      'if (saleMutationLockRef.current || cart.length === 0 || completing || orderLoading || kitchenSending) return false;',
     );
     expect(orderHook).toContain('setKitchenSending(true);');
     expect(orderHook).toContain('setKitchenSending(false);');

@@ -1,0 +1,30 @@
+[
+  {
+    "tablename": "order_kitchen_sends",
+    "policyname": "auth_select_order_kitchen_sends",
+    "cmd": "SELECT",
+    "qual": "(is_pos_admin() OR ((branch_id = get_branch_id()) AND (can_permission('pos.send_kitchen'::text) OR can_permission('pos.kds_view'::text))))",
+    "with_check": null
+  },
+  {
+    "tablename": "order_kitchen_sends",
+    "policyname": "auth_write_order_kitchen_sends",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(is_pos_admin() OR ((branch_id = get_branch_id()) AND can_permission('pos.send_kitchen'::text)))"
+  },
+  {
+    "tablename": "order_kitchen_sends",
+    "policyname": "auth_write_order_kitchen_sends_del",
+    "cmd": "DELETE",
+    "qual": "(is_pos_admin() OR ((branch_id = get_branch_id()) AND can_permission('pos.send_kitchen'::text)))",
+    "with_check": null
+  },
+  {
+    "tablename": "order_kitchen_sends",
+    "policyname": "auth_write_order_kitchen_sends_upd",
+    "cmd": "UPDATE",
+    "qual": "(is_pos_admin() OR ((branch_id = get_branch_id()) AND can_permission('pos.send_kitchen'::text)))",
+    "with_check": "(is_pos_admin() OR ((branch_id = get_branch_id()) AND can_permission('pos.send_kitchen'::text)))"
+  }
+]

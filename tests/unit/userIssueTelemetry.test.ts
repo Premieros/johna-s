@@ -27,12 +27,27 @@ describe('safe structured issue diagnostics', () => {
   it('submits safe fields and context without raw error, stack, details, request or token', async () => {
     const source = { code: 'PGRST116', message: 'secret=private-value', details: 'raw query', stack: 'raw stack', request: { token: 'private-token' } };
     await reportUserIssue(source, { action: 'pos_settlement_submit', branchId: 'order-branch', entityType: 'order', entityId: 'order-id' });
-    expect(mocks.record).toHaveBeenCalledWith(expect.objectContaining({ p_error_code: 'PGRST116', p_user_message: 'Safe user-facing message', p_action: 'pos_settlement_submit', p_branch_id: 'order-branch', p_entity_id: 'order-id' }));
+    expect(mocks.record).toHaveBeenCalledWith(expect.objectContaining({ p_error_code: 'PGRST116', p_user_message: 'Safe user-facing message', p_app_version: expect.any(String), p_action: 'pos_settlement_submit', p_branch_id: 'order-branch', p_entity_id: 'order-id' }));
     const payload = JSON.stringify(mocks.record.mock.calls[0][0]);
     for (const value of ['private-value', 'private-token', 'raw stack', 'raw query', 'request']) expect(payload).not.toContain(value);
   });
   it('absorbs telemetry failure instead of rejecting the primary workflow', async () => {
     mocks.record.mockRejectedValue(new Error('telemetry unavailable'));
     await expect(reportUserIssue(new TypeError('Cannot read properties'))).resolves.toBeUndefined();
+  });
+});
+
+describe('nested cause diagnostics', () => {
+  it('records the specific bounded cause instead of the transaction wrapper', async () => {
+    await reportUserIssue({error:'TRANSACTION_FAILED',detail:'PERMISSION_DENIED:pos.order.transfer password=do-not-store'}, {correlationId:'ERR-abc'});
+    expect(mocks.record).toHaveBeenCalledWith(expect.objectContaining({p_error_code:'PERMISSION_DENIED',p_correlation_id:'ERR-abc'}));
+    expect(JSON.stringify(mocks.record.mock.calls)).not.toContain('do-not-store');
+  });
+  it('keeps the wrapper when the raw detail cannot be classified', () => {
+    expect(deriveUserIssueCode({error:'TRANSACTION_FAILED',detail:'unrecognized database failure'})).toBe('TRANSACTION_FAILED');
+    expect(classifyUserIssue({error:'TRANSACTION_FAILED'})).toBe('technical');
+    expect(classifyUserIssue('CLIENT_ERROR')).toBe('technical');
+    expect(classifyUserIssue('اختر طاولة أولاً')).toBe('expected');
+    expect(deriveUserIssueCode({error:'TRANSACTION_FAILED',detail:'deadlock detected on private relation'})).toBe('SQLSTATE_40P01');
   });
 });

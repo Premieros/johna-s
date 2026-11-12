@@ -1,3 +1,5 @@
+import { userFacingErrorMessage } from '@/lib/userFacingError';
+import { formatPercentValue } from '@/lib/format';
 import { clearReportRequestCache } from '@/lib/reportRequestCache';
 import { useReportPermissionVersion } from '@/hooks/useReportPermissionVersion';
 import { loadRawLatestPriceRows, type RawLatestPriceRow } from '../services/rawLatestPriceData';
@@ -39,6 +41,7 @@ export function CostingCenterPage() {
 
   const [tab, setTab] = useState<Tab>('overview');
   const [overview, setOverview] = useState<CostingOverviewRow[]>([]);
+  const [overviewScope, setOverviewScope] = useState<string | null>(null);
   const [orders, setOrders] = useState<HistoricalOrderMargin[]>([]);
   const [supplierImpact, setSupplierImpact] = useState<SupplierPriceImpactRow[]>([]);
   const [rawCosts, setRawCosts] = useState<(RawMaterialCostOverviewRow & { fifo_cost?: number | null; current_price?: number | null })[]>([]);
@@ -62,6 +65,12 @@ export function CostingCenterPage() {
   const [draftTo, setDraftTo] = useState(toDate);
   const [periodRows, setPeriodRows] = useState<RawConsumptionCostBreakdownRow[]>([]);
   const request = useRef(0);
+  const reportAbort = useRef<AbortController | null>(null);
+  const beginReportRead = useCallback(() => {
+    reportAbort.current?.abort();
+    reportAbort.current = new AbortController();
+    return reportAbort.current.signal;
+  }, []);
   const supplierRequest = useRef(0);
   const [rawMaterialUnits, setRawMaterialUnits] = useState<Record<string, MeasurementUnitDisplay>>({});
   const [detail, setDetail] = useState<ProductCostingDetail | null>(null);
@@ -85,6 +94,7 @@ export function CostingCenterPage() {
   const [loadedScope, setLoadedScope] = useState<string | null>(null);
   const [runVersion, setRunVersion] = useState(0);
   const hasReport = loadedScope === reportScope && !error && !loading;
+  const hasOverview = tab === 'overview' && overviewScope === reportScope;
   const startedVersion = useRef(0);
   const runReport = () => {
     const dated = tab === 'overview' || tab === 'orders' || tab === 'period';
@@ -94,7 +104,11 @@ export function CostingCenterPage() {
     setRequestedScope(JSON.stringify([permissionVersion, tab, effBranch, allowed.from, allowed.to, tab === 'supplier' ? supplierId : null, history.unlimited]));
     setRunVersion(value => value + 1);
   };
-  useLayoutEffect(() => { request.current += 1; setLoading(false); setError(null); setDetail(null); setRawHistoryTarget(null); }, [reportScope]);
+  useLayoutEffect(() => {
+    request.current += 1; reportAbort.current?.abort();
+    setLoading(false); setError(null); setDetail(null); setRawHistoryTarget(null);
+    return () => { request.current += 1; reportAbort.current?.abort(); };
+  }, [reportScope]);
 
   const loadSuppliers = useCallback(async () => {
     const requestId = ++supplierRequest.current;
@@ -112,20 +126,26 @@ export function CostingCenterPage() {
 
   const loadOverview = useCallback(async () => {
     const requestId = ++request.current;
+    const signal = beginReportRead();
     setLoading(true);
     setError(null);
+    setOverviewScope(null); setOverview([]); setHistoricalEstimate(null);
+    let stage = 'costing_overview';
     try {
       // These reads scan overlapping costing/inventory sources. Serialize them
       // so a single screen does not run overlapping heavy reads on the small database.
-      const res = await api.costing.getOverview({ p_branch_id: effBranch });
+      const res = await api.costing.getOverview({ p_branch_id: effBranch }, signal);
       if (requestId !== request.current) return;
-      if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
-      const summaryRes = await api.costing.getSalesSummary({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate });
+      if (res.error) throw res.error;
+      setOverview(res.data || []); setOverviewScope(reportScope);
+      stage = 'costing_sales_summary';
+      const summaryRes = await api.costing.getSalesSummary({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate }, signal);
       if (requestId !== request.current) return;
-      if (summaryRes.error) { setHistoricalEstimate(null); setError(summaryRes.error.message); setLoading(false); show(summaryRes.error.message, 'error'); return; }
-      const historicalRes = await api.costing.getHistoricalSaleCostEstimates({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate });
+      if (summaryRes.error) throw summaryRes.error;
+      stage = 'costing_historical_estimate';
+      const historicalRes = await api.costing.getHistoricalSaleCostEstimates({ p_branch_id: effBranch, p_from: fromDate, p_to: toDate }, signal);
       if (requestId !== request.current) return;
-      if (historicalRes.error || summaryRes.error) { const message = (historicalRes.error || summaryRes.error)!.message; setHistoricalEstimate(null); setError(message); setLoading(false); show(message, 'error'); return; }
+      if (historicalRes.error) throw historicalRes.error;
       setHistoricalEstimate({ cost: (historicalRes.data || []).reduce((sum, row) => sum + Number(row.estimated_cost), 0), unpriced: (historicalRes.data || []).reduce((sum, row) => sum + Number(row.unpriced_movements), 0) });
       setOverview(res.data || []);
       if (!summaryRes.error && summaryRes.data) {
@@ -142,39 +162,63 @@ export function CostingCenterPage() {
       setLoading(false);
     } catch (error) {
       if (requestId !== request.current) return;
-      const message = error instanceof Error ? error.message : String(error);
-      setError(message); setLoading(false); show(message, 'error');
+      const reason = userFacingErrorMessage(error, isAr ? 'ar' : 'en', { operation: 'read' });
+      const stageMessage = stage === 'costing_historical_estimate'
+        ? (isAr ? 'تعذر استكمال تكلفة المبيعات التاريخية؛ تكلفة المنتجات الحالية متاحة أدناه.' : 'Historical sales cost supplement could not be loaded; current product costs remain available below.')
+        : (isAr ? 'تعذر تحميل ملخص المبيعات؛ تكلفة المنتجات الحالية متاحة أدناه.' : 'Sales summary could not be loaded; current product costs remain available below.');
+      const message = stage === 'costing_overview' ? reason : `${stageMessage} ${reason}`;
+      setHistoricalEstimate(null); setError(message); setLoading(false);
+      show(message, 'error', { source: error, action: stage, branchId: effBranch, operation: 'read' });
     }
-  }, [effBranch, show, fromDate, toDate, reportScope]);
+  }, [beginReportRead, effBranch, show, fromDate, toDate, reportScope, isAr]);
 
   const loadOrders = useCallback(async () => {
     const requestId = ++request.current;
+    const signal = beginReportRead();
     setLoading(true);
     setError(null);
-    const params = { p_branch_id: effBranch, p_from: fromDate, p_to: toDate };
-    const res = await api.costing.getOrderMargin(params);
-    if (requestId !== request.current) return;
-    if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
-    const historicalRes = await api.costing.getHistoricalSaleCostEstimates(params);
-    if (requestId !== request.current) return;
-    if (historicalRes.error) { setOrders([]); setError(historicalRes.error.message); setLoading(false); show(historicalRes.error.message, 'error'); return; }
-    setOrders(supplementHistoricalMargins(res.data || [], historicalRes.data || []));
-    setLoadedScope(reportScope);
-    setLoading(false);
-  }, [effBranch, fromDate, toDate, show, reportScope]);
+    try {
+      const params = { p_branch_id: effBranch, p_from: fromDate, p_to: toDate };
+      const res = await api.costing.getOrderMargin(params, signal);
+      if (requestId !== request.current) return;
+      if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error', { source: res.error, operation: 'read' }); return; }
+      const historicalRes = await api.costing.getHistoricalSaleCostEstimates(params, signal);
+      if (requestId !== request.current) return;
+      if (historicalRes.error) { setOrders([]); setError(historicalRes.error.message); setLoading(false); show(historicalRes.error.message, 'error', { source: historicalRes.error, operation: 'read' }); return; }
+      setOrders(supplementHistoricalMargins(res.data || [], historicalRes.data || []));
+      setLoadedScope(reportScope);
+      setLoading(false);
+    } catch (failure) {
+      if (requestId !== request.current) return;
+      const message = userFacingErrorMessage(failure, lang, { operation: 'read' });
+      setError(message);
+      show(message, 'error', { source: failure, operation: 'read', action: 'costing_orders', branchId: effBranch });
+    } finally {
+      if (requestId === request.current) setLoading(false);
+    }
+  }, [beginReportRead, effBranch, fromDate, toDate, show, reportScope, lang]);
 
   const loadSupplierImpact = useCallback(async () => {
     if (!supplierId) { setSupplierImpact([]); return; }
     const requestId = ++request.current;
     setLoading(true);
     setError(null);
-    const res = await api.costing.getSupplierPriceImpact({ p_supplier_id: supplierId });
-    if (requestId !== request.current) return;
-    if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error'); return; }
-    setSupplierImpact(res.data || []);
-    setLoadedScope(reportScope);
-    setLoading(false);
-  }, [supplierId, show, reportScope]);
+    try {
+      const res = await api.costing.getSupplierPriceImpact({ p_supplier_id: supplierId });
+      if (requestId !== request.current) return;
+      if (res.error) { setError(res.error.message); setLoading(false); show(res.error.message, 'error', { source: res.error, operation: 'read' }); return; }
+      setSupplierImpact(res.data || []);
+      setLoadedScope(reportScope);
+      setLoading(false);
+    } catch (failure) {
+      if (requestId !== request.current) return;
+      const message = userFacingErrorMessage(failure, lang, { operation: 'read' });
+      setError(message);
+      show(message, 'error', { source: failure, operation: 'read', action: 'costing_supplier', branchId: effBranch });
+    } finally {
+      if (requestId === request.current) setLoading(false);
+    }
+  }, [supplierId, show, reportScope, lang, effBranch]);
 
   const loadLatestPrices = useCallback(async () => {
     const requestId = ++request.current;
@@ -186,7 +230,7 @@ export function CostingCenterPage() {
     } catch (failure) {
       if (requestId !== request.current) return;
       const message = failure instanceof Error ? failure.message : String(failure);
-      setError(message); show(message, 'error');
+      setError(message); show(message, 'error', { operation: 'read' });
     } finally {
       if (requestId === request.current) setLoading(false);
     }
@@ -202,7 +246,7 @@ export function CostingCenterPage() {
       if (res.error) {
         setError(res.error.message);
         setLoading(false);
-        show(res.error.message, 'error');
+        show(res.error.message, 'error', { source: res.error, operation: 'read' });
         return;
       }
       setRawCosts((res.data || []).map(row => ({ ...row, current_price: row.price_missing ? null : row.latest_cost })));
@@ -211,40 +255,49 @@ export function CostingCenterPage() {
     } catch (error) {
       if (requestId !== request.current) return;
       const message = error instanceof Error ? error.message : String(error);
-      setError(message); setLoading(false); show(message, 'error');
+      setError(message); setLoading(false); show(message, 'error', { operation: 'read' });
     }
   }, [effBranch, show, reportScope]);
 
   const loadPeriod = useCallback(async () => {
     const requestId = ++request.current;
     setLoading(true); setError(null); setPeriodRows([]);
-    const targetBranches = effBranch ? branches.filter((branch) => branch.id === effBranch) : branches;
-    const dates = reportDateRangeUtc(fromDate, toDate);
-    const results = [];
-    for (const branch of targetBranches) {
+    try {
+      const targetBranches = effBranch ? branches.filter((branch) => branch.id === effBranch) : branches;
+      const dates = reportDateRangeUtc(fromDate, toDate);
+      const results = [];
+      for (const branch of targetBranches) {
+        if (requestId !== request.current) return;
+        const result = await api.costing.getRawConsumptionCostBreakdown({
+          p_branch_id: branch.id, p_from: dates.startIso, p_to: new Date(Date.parse(dates.endExclusiveIso) - 1).toISOString(),
+        });
+        results.push(result);
+        if (result.error) break;
+      }
       if (requestId !== request.current) return;
-      const result = await api.costing.getRawConsumptionCostBreakdown({
-        p_branch_id: branch.id, p_from: dates.startIso, p_to: new Date(Date.parse(dates.endExclusiveIso) - 1).toISOString(),
-      });
-      results.push(result);
-      if (result.error) break;
+      const failed = results.find((result) => result.error);
+      if (failed?.error) setError(failed.error.message);
+      else {
+        const rows = new Map<string, RawConsumptionCostBreakdownRow>();
+        results.flatMap((result) => result.data || []).forEach((row) => {
+          const value = rows.get(row.raw_material_id) || { ...row, consumed_quantity: 0, actual_quantity: 0, estimated_quantity: 0, actual_cost: 0, estimated_cost: 0, displayed_cost: 0 };
+          for (const field of ['consumed_quantity', 'actual_quantity', 'estimated_quantity', 'actual_cost', 'estimated_cost', 'displayed_cost'] as const) value[field] += Number(row[field] || 0);
+          value.price_missing = value.price_missing || row.price_missing;
+          rows.set(row.raw_material_id, value);
+        });
+        setPeriodRows([...rows.values()]);
+        setLoadedScope(reportScope);
+      }
+      setLoading(false);
+    } catch (failure) {
+      if (requestId !== request.current) return;
+      const message = userFacingErrorMessage(failure, lang, { operation: 'read' });
+      setError(message);
+      show(message, 'error', { source: failure, operation: 'read', action: 'costing_period', branchId: effBranch });
+    } finally {
+      if (requestId === request.current) setLoading(false);
     }
-    if (requestId !== request.current) return;
-    const failed = results.find((result) => result.error);
-    if (failed?.error) setError(failed.error.message);
-    else {
-      const rows = new Map<string, RawConsumptionCostBreakdownRow>();
-      results.flatMap((result) => result.data || []).forEach((row) => {
-        const value = rows.get(row.raw_material_id) || { ...row, consumed_quantity: 0, actual_quantity: 0, estimated_quantity: 0, actual_cost: 0, estimated_cost: 0, displayed_cost: 0 };
-        for (const field of ['consumed_quantity', 'actual_quantity', 'estimated_quantity', 'actual_cost', 'estimated_cost', 'displayed_cost'] as const) value[field] += Number(row[field] || 0);
-        value.price_missing = value.price_missing || row.price_missing;
-        rows.set(row.raw_material_id, value);
-      });
-      setPeriodRows([...rows.values()]);
-      setLoadedScope(reportScope);
-    }
-    setLoading(false);
-  }, [effBranch, branches, fromDate, toDate, reportScope]);
+  }, [effBranch, branches, fromDate, toDate, reportScope, lang, show]);
 
   const openRawHistory = useCallback(async (row: RawHistoryTarget) => {
     const scopeGeneration = request.current;
@@ -259,7 +312,7 @@ export function CostingCenterPage() {
     if (scopeGeneration !== request.current) return;
     setRawHistoryLoading(false);
     if (res.error) {
-      show(res.error.message, 'error');
+      show(res.error.message, 'error', { source: res.error, operation: 'read' });
       return;
     }
     setRawHistory(res.data || []);
@@ -291,7 +344,7 @@ export function CostingCenterPage() {
       if (current !== request.current) return;
       setError(failure instanceof Error ? failure.message : String(failure)); setLoading(false);
     });
-    return () => { request.current += 1; };
+    return () => { request.current += 1; reportAbort.current?.abort(); };
   }, [runVersion, requestedScope, reportScope, activeLoader]);
 
   const openDetail = async (productId: string) => {
@@ -362,9 +415,9 @@ export function CostingCenterPage() {
   };
   const pill = (label: string, cls: string) => <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{label}</span>;
   const marginPill = (v: number) => {
-    if (v >= 40) return pill(`${formatNumber(v, 1)}%`, 'bg-ui-success-soft text-ui-success dark:text-ui-success');
-    if (v >= 20) return pill(`${formatNumber(v, 1)}%`, 'bg-ui-warning-soft text-ui-warning');
-    return pill(`${formatNumber(v, 1)}%`, 'bg-ui-danger-soft text-ui-danger');
+    if (v >= 40) return pill(formatPercentValue(v,1), 'bg-ui-success-soft text-ui-success dark:text-ui-success');
+    if (v >= 20) return pill(formatPercentValue(v,1), 'bg-ui-warning-soft text-ui-warning');
+    return pill(formatPercentValue(v,1), 'bg-ui-danger-soft text-ui-danger');
   };
 
   const rawPriceSourceLabel = (source: RawMaterialPriceSource | string) => {
@@ -394,7 +447,8 @@ export function CostingCenterPage() {
     { key: 'product', header: t('product'), render: (r) => <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-ui-page-alt flex items-center justify-center text-xs font-bold text-ui-subtle">{r.product_name[0]}</div><div><p className="font-medium text-ui-text">{r.product_name}</p><p className="text-xs text-ui-subtle">{r.barcode || r.sku || r.category_name || ''}</p></div></div> },
     { key: 'sale', header: t('salePrice'), render: (r) => money(r.sale_price) },
     { key: 'actual', header: isAr ? 'تكلفة الوحدة الحالية (تقديرية)' : 'Current unit cost (estimated)', render: (r) => r.actual_cost == null ? (isAr ? 'غير مكتملة' : 'Incomplete') : money(r.actual_cost) },
-    { key: 'margin', header: t('marginPct'), render: (r) => r.actual_cost == null ? '-' : marginPill(marginPct(Number(r.actual_cost), r.sale_price)) },
+    { key: 'costRatio', header: isAr ? 'نسبة التكلفة %' : 'Cost ratio %', render: (r) => r.actual_cost == null || r.sale_price <= 0 ? '—' : formatPercentValue(foodCostPct(Number(r.actual_cost),r.sale_price),1) },
+    { key: 'margin', header: t('marginPct'), render: (r) => r.actual_cost == null || r.sale_price <= 0 ? '—' : marginPill(marginPct(Number(r.actual_cost), r.sale_price)) },
   ];
 
   const orderColumns: Column<HistoricalOrderMargin & { id: string }>[] = [
@@ -406,7 +460,8 @@ export function CostingCenterPage() {
     { key: 'estimated_cost', header: isAr ? 'تكلفة مستكملة (تقديرية)' : 'Supplemental cost (estimated)', render: (r) => money(r.estimated_cost) },
     { key: 'displayed_cost', header: isAr ? 'إجمالي التكلفة' : 'Total cost', render: (r) => money(r.displayed_cost) },
     { key: 'margin', header: t('grossMargin'), render: (r) => <span className={`font-semibold ${r.displayed_margin >= 0 ? 'text-ui-success dark:text-ui-success' : 'text-ui-danger'}`}>{money(r.displayed_margin)}</span> },
-    { key: 'marginPct', header: t('marginPct'), render: (r) => marginPill(marginPct(r.displayed_cost, r.total)) },
+    { key: 'costRatio', header: isAr ? 'نسبة التكلفة %' : 'Cost ratio %', render: (r) => r.total <= 0 ? '—' : formatPercentValue(foodCostPct(r.displayed_cost,r.total),1) },
+    { key: 'marginPct', header: t('marginPct'), render: (r) => r.total <= 0 ? '—' : marginPill(marginPct(r.displayed_cost, r.total)) },
   ];
 
   const supplierColumns: Column<SupplierPriceImpactRow & { id: string }>[] = [
@@ -456,7 +511,7 @@ export function CostingCenterPage() {
 
   return (
     <DesignSurface testId="costing-center-page">
-      <DesignPageHeader title={t('costingCenter')} subtitle={isAr ? 'تكلفة المنتجات وربحية المبيعات وآخر أسعار الخامات' : 'Product costing, sales margin and latest raw-material prices'} actions={<Button variant="outline" size="sm" disabled={!hasReport || loading} onClick={() => { if (tab === 'overview') handleExportOverview(); else if (tab === 'raw_prices') exportToExcel(filteredLatestPrices.map(row => ({ RawMaterial: row.raw_material_name, Code: row.raw_material_code || '', LatestApprovedUnitPrice: row.latest_cost ?? '', Source: rawPriceSourceLabel(row.price_source), PriceDate: row.priced_at || '', Reference: row.reference_number || '' })), 'latest-raw-prices'); else if (tab === 'valuation') handleExportRawCosts(); else if (tab === 'orders') handleExportOrders(); else if (tab === 'period') exportToExcel(periodRows.map((row) => ({ RawMaterial: row.raw_material_name, Unit: row.unit_name, ConsumedQuantity: row.consumed_quantity, LatestPriceCost: row.price_missing ? '' : row.displayed_cost, PriceMissing: row.price_missing || false, From: fromDate, To: toDate })), 'costing-period'); else handleExportSupplier(); }}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>} />
+      <DesignPageHeader title={t('costingCenter')} subtitle={isAr ? 'تكلفة المنتجات وربحية المبيعات وآخر أسعار الخامات' : 'Product costing, sales margin and latest raw-material prices'} actions={<Button variant="outline" size="sm" disabled={tab === 'overview' ? !hasOverview : !hasReport || loading} onClick={() => { if (tab === 'overview') handleExportOverview(); else if (tab === 'raw_prices') exportToExcel(filteredLatestPrices.map(row => ({ RawMaterial: row.raw_material_name, Code: row.raw_material_code || '', LatestApprovedUnitPrice: row.latest_cost ?? '', Source: rawPriceSourceLabel(row.price_source), PriceDate: row.priced_at || '', Reference: row.reference_number || '' })), 'latest-raw-prices'); else if (tab === 'valuation') handleExportRawCosts(); else if (tab === 'orders') handleExportOrders(); else if (tab === 'period') exportToExcel(periodRows.map((row) => ({ RawMaterial: row.raw_material_name, Unit: row.unit_name, ConsumedQuantity: row.consumed_quantity, LatestPriceCost: row.price_missing ? '' : row.displayed_cost, PriceMissing: row.price_missing || false, From: fromDate, To: toDate })), 'costing-period'); else handleExportSupplier(); }}><Download className="w-4 h-4" /> {t('exportExcel')}</Button>} />
 
       <div className="flex gap-1.5 liquid-glass rounded-2xl p-1.5 w-full flex-wrap mb-4" role="tablist">
         {tabBtn('period', isAr ? 'تكلفة فترة' : 'Period cost')}
@@ -480,9 +535,9 @@ export function CostingCenterPage() {
         <p className="mt-2 text-sm text-ui-muted">{fromDate} — {toDate}</p>
         {(draftFrom !== fromDate || draftTo !== toDate) && <p className="mt-2 text-sm text-ui-muted">{isAr ? 'اضغط عرض التقرير لتطبيق الفترة الجديدة' : 'Run report to apply the new period.'}</p>}
       </DesignPanel>}
-      <div className="flex gap-2 mb-4"><Button data-testid="costing-run-report" disabled={loading || (tab === 'period' && branches.length === 0) || (tab === 'supplier' && !supplierId)} onClick={runReport}>{isAr ? 'عرض التقرير' : 'Run report'}</Button><Button variant="outline" disabled={loading || !hasReport} onClick={() => { clearReportRequestCache(); runReport(); }}>{isAr ? 'تحديث التقرير' : 'Refresh report'}</Button></div>
+      <div className="flex gap-2 mb-4"><Button data-testid="costing-run-report" disabled={loading || (tab === 'period' && branches.length === 0) || (tab === 'supplier' && !supplierId)} onClick={runReport}>{isAr ? 'عرض التقرير' : 'Run report'}</Button><Button variant="outline" disabled={loading || (!hasReport && !hasOverview)} onClick={() => { clearReportRequestCache(); runReport(); }}>{isAr ? 'تحديث التقرير' : 'Refresh report'}</Button></div>
       <p className="mb-3 text-xs text-ui-muted">{isAr ? 'تتشارك الصفحات النتائج المتطابقة لمدة دقيقة. اضغط تحديث التقرير لطلب أحدث البيانات.' : 'Identical results are shared for up to one minute. Refresh report requests the latest data.'}</p>
-      {!hasReport && <DesignPanel testId="costing-report-status"><p className="py-8 text-center">{loading ? t('loading') : error || (isAr ? 'اختر الفترة واضغط عرض التقرير' : 'Choose filters and run the report.')}</p></DesignPanel>}
+      {!hasReport && <DesignPanel testId="costing-report-status"><p className="py-8 text-center">{loading ? (hasOverview ? (isAr ? 'تكلفة المنتجات جاهزة؛ جاري تحميل ملخص المبيعات…' : 'Product costs are ready; loading sales summary…') : t('loading')) : (error ? userFacingErrorMessage(error, lang, { operation: 'read' }) : null) || (isAr ? 'اختر الفترة واضغط عرض التقرير' : 'Choose filters and run the report.')}</p></DesignPanel>}
       {hasReport && tab === 'period' && <DesignPanel testId="costing-period-report">
         <p className="mb-3 text-sm text-ui-muted">{isAr ? 'تكلفة استهلاك الخامات خلال الفترة = الكمية × آخر سعر معتمد للخامة.' : 'Raw-material period consumption cost = quantity × latest approved raw price.'}</p>
         <DataTable columns={[
@@ -490,7 +545,7 @@ export function CostingCenterPage() {
           { key: 'unit_name', header: isAr ? 'الوحدة' : 'Unit' },
           { key: 'consumed_quantity', header: isAr ? 'الكمية المستهلكة' : 'Consumed quantity', render: (row: RawConsumptionCostBreakdownRow) => formatNumber(row.consumed_quantity, 4) },
           { key: 'displayed_cost', header: isAr ? 'التكلفة بآخر سعر' : 'Latest-price cost', render: (row: RawConsumptionCostBreakdownRow) => row.price_missing ? (isAr ? 'غير مسعر' : 'Unpriced') : money(row.displayed_cost) },
-        ]} data={periodRows.map((row) => ({ ...row, id: row.raw_material_id }))} loading={loading} error={error} emptyMessage={t('noData')} />
+        ]} data={periodRows.map((row) => ({ ...row, id: row.raw_material_id }))} loading={loading} error={error ? userFacingErrorMessage(error, lang, { operation: 'read' }) : null} emptyMessage={t('noData')} />
         <p className="mt-3 font-bold text-ui-text">{isAr ? 'إجمالي تكلفة الفترة: ' : 'Total period cost: '}{money(periodRows.reduce((total, row) => total + Number(row.displayed_cost), 0))}{periodRows.some(row => row.price_missing) && <span className="ms-2 text-ui-danger">{isAr ? 'إجمالي جزئي: توجد خامات غير مسعرة' : 'Partial total: some materials are unpriced'}</span>}</p>
       </DesignPanel>}
 
@@ -512,14 +567,16 @@ export function CostingCenterPage() {
             <div className="rounded-xl border border-ui-border bg-ui-surface/60 p-4 shadow-sm"><p className="text-xs font-medium text-ui-subtle uppercase tracking-wide">{isAr ? 'أعلى تكلفة نسبة' : 'Highest cost ratio'}</p><p className="mt-1 truncate font-semibold text-ui-text">{stats.worst ? stats.worst.product_name : '-'}</p></div>
           </div>
         </DesignPanel>
+      </>}
+      {hasOverview && <>
         <DesignPanel testId="costing-search-panel"><div className="flex flex-col sm:flex-row gap-3"><DesignSearch value={search} onChange={setSearch} className="flex-1" label={t('search')} placeholder={t('search')} testId="costing-search" /><Select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="sm:w-44"><option value="">{t('allBranches')}</option>{visibleBranches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select></div></DesignPanel>
-        <DesignPanel testId="costing-table-panel"><p className="mb-2 text-sm text-ui-muted">{isAr ? 'أسعار وتكاليف الوصفات الحالية؛ ملخص المبيعات أعلاه يتبع الفترة المختارة.' : 'Current recipe prices and costs; the sales summary above follows the selected period.'}</p><DataTable columns={overviewColumns} data={filteredOverview.map((r) => ({ ...r, id: r.product_id }))} loading={loading} error={error} emptyMessage={t('noData')} onRowClick={(r) => void openDetail(r.product_id)} /></DesignPanel>
+        <DesignPanel testId="costing-table-panel"><p className="mb-2 text-sm text-ui-muted">{isAr ? 'أسعار وتكاليف الوصفات الحالية؛ ملخص المبيعات أعلاه يتبع الفترة المختارة.' : 'Current recipe prices and costs; the sales summary above follows the selected period.'}</p><DataTable columns={overviewColumns} data={filteredOverview.map((r) => ({ ...r, id: r.product_id }))} loading={false} error={null} emptyMessage={t('noData')} onRowClick={(r) => void openDetail(r.product_id)} /></DesignPanel>
       </>}
 
       {hasReport && tab === 'raw_prices' && <>
         <DesignPanel testId="raw-latest-price-description"><p>{isAr ? 'آخر سعر معتمد للخامة هو المستخدم في المشتريات الجديدة وتكلفة الوصفة الحالية. غير المسعّر يبقى بلا سعر. تقييم المخزون المحاسبي والتكاليف التاريخية محفوظة في تقاريرها.' : 'Latest approved prices are used in new purchases and current recipes. Unpriced materials remain unknown. Inventory accounting valuation and historical costs remain in their own reports.'}</p></DesignPanel>
         <DesignPanel testId="raw-latest-price-search"><DesignSearch value={search} onChange={setSearch} label={t('search')} placeholder={t('search')} testId="raw-latest-price-search-input" /></DesignPanel>
-        <DesignPanel testId="raw-latest-price-table"><DataTable columns={latestPriceColumns} data={filteredLatestPrices.map(row => ({ ...row, id: row.raw_material_id }))} loading={loading} error={error} emptyMessage={t('noData')} onRowClick={row => void openRawHistory(row)} /></DesignPanel>
+        <DesignPanel testId="raw-latest-price-table"><DataTable columns={latestPriceColumns} data={filteredLatestPrices.map(row => ({ ...row, id: row.raw_material_id }))} loading={loading} error={error ? userFacingErrorMessage(error, lang, { operation: 'read' }) : null} emptyMessage={t('noData')} onRowClick={row => void openRawHistory(row)} /></DesignPanel>
       </>}
 
       {hasReport && tab === 'valuation' && <>
@@ -541,19 +598,19 @@ export function CostingCenterPage() {
           </div>
         </DesignPanel>
         <DesignPanel testId="raw-material-cost-table">
-          <DataTable columns={rawCostColumns} data={filteredRawCosts.map((r) => ({ ...r, id: r.raw_material_id }))} loading={loading} error={error} emptyMessage={t('noData')} onRowClick={(r) => void openRawHistory(r)} />
+          <DataTable columns={rawCostColumns} data={filteredRawCosts.map((r) => ({ ...r, id: r.raw_material_id }))} loading={loading} error={error ? userFacingErrorMessage(error, lang, { operation: 'read' }) : null} emptyMessage={t('noData')} onRowClick={(r) => void openRawHistory(r)} />
         </DesignPanel>
       </>}
 
       {hasReport && tab === 'orders' && <DesignPanel testId="order-margin-panel">
         <p className="mb-3 text-sm text-ui-muted">{isAr ? 'الربحية تشمل استكمال حركات الخامات المسجلة بصفر بآخر سعر معروف، مع فصلها كتقدير عن التكلفة الفعلية.' : 'Profit includes zero-cost raw movements supplemented at the latest known price, shown separately from actual cost.'}</p>
 
-        <DataTable columns={orderColumns} data={orders.map((r) => ({ ...r, id: r.sale_id }))} loading={loading} error={error} emptyMessage={t('noData')} />
+        <DataTable columns={orderColumns} data={orders.map((r) => ({ ...r, id: r.sale_id }))} loading={loading} error={error ? userFacingErrorMessage(error, lang, { operation: 'read' }) : null} emptyMessage={t('noData')} />
       </DesignPanel>}
 
       {tab === 'supplier' && <DesignPanel testId="supplier-impact-panel">
         <div className="flex flex-col sm:flex-row gap-3 mb-4"><Select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="sm:w-72">{suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></div>
-        {hasReport && <DataTable columns={supplierColumns} data={supplierImpact.map((r) => ({ ...r, id: `${r.item_type}-${r.item_id}` }))} loading={loading} error={error} emptyMessage={t('noData')} />}
+        {hasReport && <DataTable columns={supplierColumns} data={supplierImpact.map((r) => ({ ...r, id: `${r.item_type}-${r.item_id}` }))} loading={loading} error={error ? userFacingErrorMessage(error, lang, { operation: 'read' }) : null} emptyMessage={t('noData')} />}
       </DesignPanel>}
 
       <Modal open={rawHistoryTarget !== null} onClose={() => { setRawHistoryTarget(null); setRawHistory([]); }} title={rawHistoryTarget ? `${isAr ? 'تاريخ سعر' : 'Price History'} — ${rawHistoryTarget.raw_material_name}` : ''} size="xl">
@@ -574,8 +631,8 @@ export function CostingCenterPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('salePrice')}</p><p className="text-lg font-bold text-ui-text">{money(detail.sale_price)}</p></div>
             <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{isAr ? 'تكلفة الوحدة الحالية (تقديرية)' : 'Current unit cost (estimated)'}</p><p className="text-lg font-bold text-ui-text">{detail.actual_cost == null ? (isAr ? 'غير مكتملة' : 'Incomplete') : money(detail.actual_cost)}</p></div>
-            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('foodCostPct')}</p><p className="text-lg font-bold text-ui-text">{detail.actual_cost == null ? '-' : `${formatNumber(foodCostPct(Number(detail.actual_cost), detail.sale_price || 0), 1)}%`}</p></div>
-            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('marginPct')}</p><p className="text-lg font-bold text-ui-text">{detail.actual_cost == null ? '-' : `${formatNumber(marginPct(Number(detail.actual_cost), detail.sale_price || 0), 1)}%`}</p></div>
+            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('foodCostPct')}</p><p className="text-lg font-bold text-ui-text">{detail.actual_cost == null || (detail.sale_price||0)<=0 ? '—' : formatPercentValue(foodCostPct(Number(detail.actual_cost), detail.sale_price || 0),1)}</p></div>
+            <div className="rounded-ui-lg border border-ui-border bg-ui-page p-3"><p className="text-xs text-ui-subtle">{t('marginPct')}</p><p className="text-lg font-bold text-ui-text">{detail.actual_cost == null || (detail.sale_price||0)<=0 ? '—' : formatPercentValue(marginPct(Number(detail.actual_cost), detail.sale_price || 0),1)}</p></div>
           </div>
 
           {(detail.components?.length || 0) > 0 && <div>
