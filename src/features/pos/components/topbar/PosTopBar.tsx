@@ -8,6 +8,8 @@ import { Logo } from '@/components/Logo';
 import type { Branch } from '@/lib/types';
 import type { ActiveShiftInfo } from '../../hooks/usePosOrder';
 import { usePosPermissions } from '../../hooks/usePosPermissions';
+import { useCan } from '@/lib/permissions';
+import { ManualPrintRecovery } from '../settings/ManualPrintRecovery';
 import { offlinePosManager } from '../../services/offlinePos';
 
 export type PosPanelId = 'orders' | 'tables' | 'kitchen' | null;
@@ -60,6 +62,8 @@ export function PosTopBar({
 
   const [now, setNow] = useState(() => new Date());
   const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const can = useCan();
+  const [manualPrintOpen, setManualPrintOpen] = useState(false);
   const [more, setMore] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
@@ -147,6 +151,7 @@ export function PosTopBar({
 
   return (
     <>
+    {manualPrintOpen && can('pos.print_recovery') && <ManualPrintRecovery key={branchId} branchId={branchId} onClose={() => setManualPrintOpen(false)} />}
     <header data-testid="pos-top-bar" className="sticky top-0 z-50 flex flex-wrap min-h-14 items-center gap-1.5 border-b border-ui-border bg-ui-surface px-2.5 shadow-ui-sm md:px-3">
       <div className="flex shrink-0 items-center gap-2">
         <Logo variant="mark" size={32} tone="auto" />
@@ -238,6 +243,9 @@ export function PosTopBar({
 
         {more && (
           <div data-testid="pos-more-menu" className="absolute end-0 top-11 z-50 w-64 rounded-2xl border border-ui-border bg-ui-surface p-2 shadow-ui-xl">
+            <button disabled={!can('pos.print_recovery') || !branchId} onClick={() => { setManualPrintOpen(true); setMore(false); }} className="w-full rounded-xl px-3 py-2 text-start text-sm disabled:opacity-50">
+              {isAr ? 'طباعة يدوية للتذاكر المتأخرة' : 'Print delayed tickets manually'}
+            </button>
             <div className="mb-1 px-3 py-2 text-xs font-black text-ui-subtle">{isAr ? 'إجراءات إضافية' : 'More actions'}</div>
             <button
               onClick={() => { onPanel('orders'); setMore(false); }}
