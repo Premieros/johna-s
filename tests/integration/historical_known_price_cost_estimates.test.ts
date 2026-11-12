@@ -109,6 +109,16 @@ describe.skipIf(!dbUrl)('historical zero consumption priced independently of sto
     } finally { await db.query('ROLLBACK TO SAVEPOINT ledger_visibility_parity'); }
   });
 
+  it('fails closed if the ledger visibility policy changes after release', async () => {
+    await db.query('SAVEPOINT historical_policy_drift');
+    try {
+      await db.query('ALTER POLICY financial_visibility_inventory_ledger ON public.inventory_ledger USING (true)');
+      await db.query(`SELECT set_config('app.user_id',$1,true)`, [admin]);
+      await db.query('SET LOCAL ROLE authenticated');
+      await expect(db.query(`SELECT public.get_historical_sale_cost_estimates($1,CURRENT_DATE-1,CURRENT_DATE+1)`,[branch])).rejects.toThrow('CONSUMPTION_RLS_BASELINE_CHANGED');
+    } finally { await db.query('ROLLBACK TO SAVEPOINT historical_policy_drift'); }
+  });
+
   it('preserves complete costing results at Cairo date boundaries and rehearses exact rollback', async () => {
     const migration = readFileSync('supabase/migrations/20261029195303_costing_date_range_read_optimization.sql', 'utf8');
     const rollback = readFileSync('scripts/rollback/costing_date_range_read_optimization_20261029.sql', 'utf8');

@@ -30,11 +30,34 @@ CASE
  END
 );
 
+-- Preserve the existing report's fail-closed guard, bound to the new exact policy.
+DO $report_guard$
+DECLARE definition text; policy_hash text;
+BEGIN
+ SELECT md5(pg_get_expr(polqual,polrelid)) INTO STRICT policy_hash FROM pg_policy
+ WHERE polrelid='public.inventory_ledger'::regclass AND polname='financial_visibility_inventory_ledger';
+ SELECT pg_get_functiondef('public.get_consumption_latest_report(uuid,date,date,text,text,boolean,integer,integer)'::regprocedure) INTO STRICT definition;
+ IF (length(definition)-length(replace(definition,'7b10db0c9436fe509d27e52b95455fb9','')))/32<>1
+ THEN RAISE EXCEPTION 'CONSUMPTION_POLICY_GUARD_SOURCE_DRIFT'; END IF;
+ EXECUTE replace(definition,'7b10db0c9436fe509d27e52b95455fb9',policy_hash);
+END;
+$report_guard$;
+
 -- Keep INVOKER security. Authenticated SELECT is already subject to the same
 -- restrictive RLS; privileged invokers retain explicit visibility checks.
 DO $repair$
 DECLARE
  definition text;
+ policy_hash text;
+ visibility_guard text := $guard$ -- COSTING_LEDGER_VISIBILITY_GUARD_20261112
+ IF NOT EXISTS (
+  SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_policy pol ON pol.polrelid=c.oid
+  WHERE c.oid='public.inventory_ledger'::regclass AND c.relrowsecurity
+   AND pol.polname='financial_visibility_inventory_ledger' AND NOT pol.polpermissive
+   AND md5(pg_catalog.pg_get_expr(pol.polqual,pol.polrelid))=__EXPECTED_LEDGER_HASH__
+   AND (SELECT oid FROM pg_catalog.pg_roles WHERE rolname='authenticated')=ANY(pol.polroles)
+ ) THEN RAISE EXCEPTION 'CONSUMPTION_RLS_BASELINE_CHANGED'; END IF;
+$guard$;
  original_kitchen text := $old$    JOIN public.order_kitchen_inventory_events e ON e.settled_sale_id=s.id AND e.branch_id=s.branch_id
     JOIN public.inventory_ledger il ON il.reference_type='kitchen_send' AND il.reference_id=e.id
       AND il.entry_type='kitchen_send' AND il.branch_id=s.branch_id$old$;
@@ -82,7 +105,12 @@ BEGIN
  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid='public.inventory_ledger'::regclass)
  OR NOT (SELECT relrowsecurity FROM pg_class WHERE oid='public.sales'::regclass)
  THEN RAISE EXCEPTION 'COSTING_REQUIRES_ENFORCED_RLS'; END IF;
- EXECUTE replace(replace(replace(replace(definition,original_kitchen,scoped_kitchen),original_sale,scoped_sale),original_visibility,scoped_visibility),original_reference,scoped_reference);
+ SELECT md5(pg_get_expr(polqual,polrelid)) INTO STRICT policy_hash FROM pg_policy
+ WHERE polrelid='public.inventory_ledger'::regclass AND polname='financial_visibility_inventory_ledger';
+ visibility_guard:=replace(visibility_guard,'__EXPECTED_LEDGER_HASH__',quote_literal(policy_hash));
+ definition:=replace(replace(replace(definition,original_kitchen,scoped_kitchen),original_sale,scoped_sale),original_reference,scoped_reference);
+ IF position('  WITH history_bounds AS MATERIALIZED (' IN definition)=0 THEN RAISE EXCEPTION 'COSTING_BODY_SOURCE_DRIFT'; END IF;
+ EXECUTE replace(definition,'  WITH history_bounds AS MATERIALIZED (',visibility_guard||'  WITH history_bounds AS MATERIALIZED (');
 END;
 $repair$;
 NOTIFY pgrst,'reload schema';
