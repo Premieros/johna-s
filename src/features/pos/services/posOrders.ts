@@ -81,7 +81,7 @@ export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeDa
   const [tRes, oRes] = await Promise.all([
     supabase.from('dining_tables').select('*').eq('branch_id', branchId).eq('is_active', true).order('name'),
     supabase.from('orders')
-      .select('*, table:dining_tables(*), order_items!order_items_order_id_fkey(*), order_kitchen_sends!order_kitchen_sends_order_id_fkey(*)')
+      .select('*, order_items!order_items_order_id_fkey(*), order_kitchen_sends!order_kitchen_sends_order_id_fkey(*)')
       .eq('branch_id', branchId)
       .in('status', ['open', 'held'])
       .order('created_at', { ascending: false }),
@@ -92,6 +92,18 @@ export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeDa
   if (oRes.error) throw oRes.error;
   const tables = (tRes.data as DiningTable[]) || [];
   const snapshotRows = (oRes.data as ActiveOrderSnapshotRow[] | null) || [];
+  // Tables are already fetched above. Reuse that response instead of repeating
+  // the table join and its RLS checks for every open order. Inactive tables can
+  // still have open orders, so hydrate only missing references in one scoped read.
+  const tableById = new Map(tables.map((table) => [table.id, table]));
+  const missingTableIds = [...new Set(snapshotRows.map((order) => order.table_id)
+    .filter((id): id is string => !!id && !tableById.has(id)))];
+  if (missingTableIds.length) {
+    const missingTables = await supabase.from('dining_tables').select('*')
+      .eq('branch_id', branchId).in('id', missingTableIds);
+    if (missingTables.error) throw missingTables.error;
+    for (const table of (missingTables.data as DiningTable[] | null) || []) tableById.set(table.id, table);
+  }
   // Do not broaden public.users RLS just to show occupied-table ownership.
   // Reuse a narrowly scoped label snapshot only while the active order/cashier
   // identity set is unchanged, and refresh it after a very short TTL.
@@ -110,7 +122,8 @@ export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeDa
   const orders = snapshotRows
     .filter((order) => effectiveOrderIds.has(order.id))
     .map((order) => {
-      const { order_items: _orderItems, order_kitchen_sends: _kitchenSends, ...baseOrder } = order;
+      const { order_items: _orderItems, order_kitchen_sends: _kitchenSends, ...orderFields } = order;
+      const baseOrder = { ...orderFields, table: order.table_id ? tableById.get(order.table_id) ?? null : null };
       void _orderItems;
       void _kitchenSends;
       const label = operatorByOrder.get(order.id);
