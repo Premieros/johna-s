@@ -45,11 +45,11 @@ it('keeps inactive-table details with one deduplicated branch-scoped fallback re
   expect(result.tables).toEqual([]); // Inactive tables do not enter the active floor plan.
 });
 
-it('keeps takeaway and unavailable table references null', async () => {
+it('keeps takeaway and unavailable table details absent', async () => {
   mock.orders = [order('takeaway', null), order('missing', 'not-readable')];
   const result = await fetchActiveOrders('missing-branch');
   expect(mock.queries[2].filters).toContainEqual(['id', ['not-readable']]);
-  expect(result.orders.map(o => o.table)).toEqual([null, null]);
+  expect(result.orders.map(o => o.table)).toEqual([undefined, undefined]);
 });
 
 it('rejects fallback errors rather than publishing partial tables or reading labels', async () => {
