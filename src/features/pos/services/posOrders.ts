@@ -123,7 +123,7 @@ export async function fetchActiveOrders(branchId: string): Promise<PosRealtimeDa
     .filter((order) => effectiveOrderIds.has(order.id))
     .map((order) => {
       const { order_items: _orderItems, order_kitchen_sends: _kitchenSends, ...orderFields } = order;
-      const baseOrder = { ...orderFields, table: order.table_id ? tableById.get(order.table_id) ?? null : null };
+      const baseOrder = { ...orderFields, table: order.table_id ? tableById.get(order.table_id) : undefined };
       void _orderItems;
       void _kitchenSends;
       const label = operatorByOrder.get(order.id);
