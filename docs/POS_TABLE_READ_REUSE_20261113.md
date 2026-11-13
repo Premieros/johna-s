@@ -39,8 +39,12 @@ notification reads, branch switching and unmount cleanup.
 Changed-file ESLint passed.
 First broad local UI run produced timeout failures in unrelated screen/report/
 paging files under concurrent validation; it was stopped, not counted as passed.
-Full lint/build were stopped to reduce contention. Application typecheck and
-exact-head CI remain unverified. Do not infer overall CPU savings from query shape.
+Full local lint/build/typecheck were stopped to reduce contention. A bounded full
+UI retry also hit timeouts and was stopped. Exact-head CI 43434233317 passed lint,
+API contract, source identity and Pages continuity/build, but caught a new nullable
+table mismatch in application types. Correct the missing-table representation to
+the existing optional DiningTable contract and rerun checks. No overall CPU saving
+is inferred from query shape. Full CI remains required after this correction.
 
 ## Production gate
 No merge/deployment until full required exact-head checks succeed and production
