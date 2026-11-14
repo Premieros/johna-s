@@ -42,3 +42,17 @@ recompute/validate its business effects; passing this envelope validator grants
 no permission and proves no sale/payment/kitchen parity by itself.
 
 See `docs/BRANCH_HUB_A0_20261114.md` for capability gaps and engine decision gates.
+
+## Disposable schema compatibility probe
+
+An optional development-only probe uses an externally installed PGlite 0.5.16:
+
+```sh
+node branch-hub/experiments/probe-pglite-schema.mjs /absolute/path/to/@electric-sql/pglite
+```
+
+It always creates a fresh in-memory database, uses the canonical CI Auth stub,
+replays all migrations without skipping failed files, and closes the database.
+It accepts a package directory, never a database connection string. It is not
+part of the application, installer or cloud synchronization. See the A0 evidence
+record for limitations; successful DDL replay does not prove business parity.

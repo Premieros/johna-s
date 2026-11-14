@@ -95,3 +95,28 @@ Build an owned local runtime fixture around the canonical financial operations;
 compare sale, split tender, reversal, kitchen delta and print-intent identity before
 selecting the production hub engine. In parallel collect branch diagnostic reports.
 Only then implement the shared local API and atomic operation/outbox persistence.
+
+## Disposable embedded PostgreSQL schema probe — 2026-11-14
+
+`branch-hub/experiments/probe-pglite-schema.mjs` replayed all **558** canonical
+migration files successfully on externally installed **PGlite 0.5.16**, using a
+fresh in-memory database, canonical CI Auth stub and migration tracking table.
+No production credentials, data, connection string or network database were used.
+The script reports its package version and a digest of sorted migration names
+and contents, so future results can be compared with the exact source inputs.
+
+Observed migration-source SHA256:
+`b0411ac0648f4914a3b2bcf23a15bd862b0204bf2b260f453ee57833eea128ee`.
+Installed extensions: `pgcrypto` 1.4, `plpgsql` 1.0, `uuid-ossp` 1.1.
+**pg_cron was not installed**: conditional migration success must not be mistaken
+for a running scheduler or extension parity. Scheduler ownership remains a gap.
+
+This is DDL compatibility evidence only. It does not exercise sale/split/refund/
+kitchen semantics, physical printing, native concurrent clients, filesystem
+durability, offline authorization, Windows packaging or upgrades. The harness
+does not reproduce the CI migration applier's outer transaction wrapping.
+No embedded engine is approved for branch deployment by this result.
+
+At prior PR head `c6098838aebb799aaa804a56ca4f893fa90a592b`, both full Verify main
+and isolated Branch Hub A0 workflows passed, including Windows PowerShell 5.1
+diagnostic fixtures. New probe changes require their own PR checks.
