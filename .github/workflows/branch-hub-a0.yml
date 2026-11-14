@@ -154,3 +154,35 @@ jobs:
           name: Johnas_Browser_Update_Source
           path: '${{ runner.temp }}/browser-update-source/'
           retention-days: 14
+  canonical-disk-recovery:
+    name: Canonical disk recovery (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked test tools and owned engine
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix branch-hub/experiments --ignore-scripts --no-audit --no-fund
+      - name: Verify encrypted backup rejection and no-overwrite boundary
+        run: node --test branch-hub/tests/backup.test.mjs
+      - name: Restore canonical backup and kill/reopen real split-payment worker
+        env:
+          JOHNAS_TEST_PGLITE_PACKAGE_ROOT: '${{ github.workspace }}/branch-hub/experiments/node_modules/@electric-sql/pglite'
+        run: >-
+          npx --no-install vitest run -c branch-hub/experiments/vitest.canonical-disk.config.mjs
+          --reporter=json --outputFile='${{ runner.temp }}/canonical-disk.json'
+      - name: Reject skipped canonical disk fixture
+        run: node branch-hub/tools/assert-canonical-report.mjs '${{ runner.temp }}/canonical-disk.json' 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: canonical-disk-${{ matrix.os }}
+          path: '${{ runner.temp }}/canonical-disk.json'
+          retention-days: 14

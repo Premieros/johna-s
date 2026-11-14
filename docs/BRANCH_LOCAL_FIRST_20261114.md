@@ -182,3 +182,13 @@ session, with its canonical main warehouse/settings/trial. Verified branch ID:
 first local-only installation. This is NOT an active local deployment or an
 implemented local-only cloud-write policy. Smouha/Cleopatra remain active and
 cloud-connected. See `branch-hub/pilots/TBS.md` for the full preparation record.
+
+## A1 backup and canonical filesystem recovery
+
+Private encrypted backup/fresh-directory restore primitives now preserve the
+pending outbox, pin branch/engine/application-migration identity and reject an
+existing destination. A full canonical split-sale crash/reopen/retry scenario
+passed locally on the Node filesystem. Windows/Ubuntu CI is added; exact-head
+results pending. No operational branch or cloud connection changed. See
+`docs/BRANCH_HUB_A1_BACKUP_20261114.md`. Do not confuse this with a finished local
+installer, real login, cloud sync or signed full-code/schema updater.

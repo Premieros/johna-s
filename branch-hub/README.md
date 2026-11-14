@@ -79,3 +79,9 @@ the boundary. Read `docs/BRANCH_HUB_A1_STORAGE_20261114.md` for limits.
 
 Existing branches continue using the deployed cloud application. Preparing or
 copying these files must not redirect them or change installed print programs.
+
+`runtime/backup.mjs` adds private authenticated encrypted backups and restore to a
+new directory only. A canonical split-sale filesystem crash/retry fixture now
+complements the synthetic ledger checks. Read the A1 backup record before use:
+this does not supply Windows key custody, administrator restore UI or an installer.
+No real branch/cloud data or credentials are used by these tests.

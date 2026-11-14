@@ -1,6 +1,7 @@
 // A1 private single-owner storage core. Not imported by POS, API or print agents.
 // No network/.env/connection strings. Caller must exclusively own this database.
 import { createOperation, verifyOperation } from '../prototype/operation-contract.mjs';
+import { applicationSchemaFingerprint } from './schema-identity.mjs';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export async function createOperationStore({db,branchId,handlers,authorize,verifyReceipt}) {
   if(!uuid.test(branchId)||typeof authorize!=='function'||!db?.transaction||!db?.syncToFs)throw Error('STORE_CONFIGURATION_REQUIRED');
@@ -71,6 +72,17 @@ export async function createOperationStore({db,branchId,handlers,authorize,verif
         // finds the committed inbox result rather than executing the handler again.
         await db.syncToFs();
         return response;
+      });
+    },
+    // Private backup seam: queue barrier excludes this owner's business writes.
+    // Caller must exclusively own db; never expose the raw archive to a browser.
+    async snapshot() {
+      return serialize(async()=>{
+        if(typeof db.dumpDataDir!=='function')throw Error('BACKUP_NOT_SUPPORTED');
+        await db.syncToFs();
+        const applicationSchema=await applicationSchemaFingerprint(db);
+        const archive=await db.dumpDataDir('gzip');
+        return Object.freeze({branchId,storeSchema:1,protocolVersion:1,applicationSchema,archive});
       });
     },
     // Private worker API, not a public/HTTP endpoint. The store holds one branch only.

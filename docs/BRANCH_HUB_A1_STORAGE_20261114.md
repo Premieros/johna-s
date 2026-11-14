@@ -100,3 +100,13 @@ Next: prove full canonical transactions on disk plus backup/restore, then add a
 single-owner authenticated local service and assets from the actual POS with a
 separate explicitly local build. Keep the deployed cloud client unchanged. Do not
 send another prototype package to a branch as if it were the installer.
+
+## Canonical-on-disk follow-up
+
+The next fixture now restores an encrypted snapshot of the complete canonical
+schema into a fresh on-disk DB and exercises real split-sale/tender/stock/outbox
+recovery across process kills, including an uncommitted RPC and its later retry.
+It passed locally; dedicated native Windows/Ubuntu Node 22 checks are added.
+See `docs/BRANCH_HUB_A1_BACKUP_20261114.md` for exact evidence and limits. This
+supersedes the earlier memory-only RPC coverage limit for this selected scenario;
+it does not imply full POS/physical-print/power-failure/installer readiness.
