@@ -8,6 +8,19 @@ on:
 permissions:
   contents: read
 jobs:
+  original-local-app-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build original application with isolated local client
+        run: npx --no-install vite build --config branch-hub/app/vite.local.config.ts
+      - name: Reject cloud client leakage and missing isolation policy
+        run: node branch-hub/tools/assert-local-build.mjs
   isolated-contract:
     runs-on: ubuntu-latest
     timeout-minutes: 5
