@@ -2,12 +2,13 @@
 
 Repository: `Premieros/johna-s`
 Production Supabase: `azzdesuowpdcoflmyezn`
-Branch: `feat/johnas-branch-local-first-20261114`
-Current PR: `#638`
+Branch: `feat/branch-hub-a0-20261114`
+Current PR: `#639`
 Last updated: 2026-11-14, Africa/Cairo
 
 ## Work status
-State: **BLOCKED** for runtime rollout. The owner has authorized changing the active
+State: **BLOCKED** for runtime rollout. A0 implementation is in progress in PR639.
+The owner has authorized changing the active
 work track to one local-first installation per branch with automatic cloud sync
 and verified application/schema updates. This document records that scope; it
 does not claim a working installer, migrated branch, or complete offline system.
@@ -16,7 +17,7 @@ does not claim a working installer, migrated branch, or complete offline system.
 Keep all operating branches on their current system throughout preparation.
 Preserve published POS/printing/permission/costing behavior and the existing local
 pilot. No production schema or password changes, data exports, branch redirection,
-router openings, app deployment, or print-agent replacement in this planning PR.
+router openings, app deployment, or print-agent replacement during A0 preparation.
 Do not modify Premieros/.com, its database or its Branch Hub in this scope.
 A GitHub commit is not an update authorization: distribute only explicitly
 published, tested releases. No automatic execution of arbitrary SQL from GitHub.
@@ -106,9 +107,14 @@ A disconnected older branch must be able to submit its supported operation versi
 before it is required to upgrade. Define minimum supported versions and recovery.
 
 ## Verification ledger
-Planning-only review: inspected current GitHub sources above, identified two queue
-paths and remote-UI dependency. No runtime implementation or installer is claimed.
-Markdown/worklog checks are appropriate here; no production load testing or sales.
+A0 progress: added a reproducible source audit (234 literal RPC names, 57 from
+targets, 558 migration files), capability/ownership gap matrix and provisional
+PostgreSQL-first evaluation rationale in docs/BRANCH_HUB_A0_20261114.md.
+Added an unwired operation contract with six passing Node tests, plus a read-only
+Windows hardware report and passing mocked PowerShell 7 fixture. The protocol
+digest is not authentication and no durable inbox/outbox or business handler is
+implemented. Native Windows PowerShell and full exact-head CI are pending.
+No production load tests, sale writes, cloud queries or branch installation ran.
 
 Required phases and exit criteria:
 | Phase | Deliverable | Exit gate |
@@ -132,9 +138,10 @@ schema change, live credential enrollment or production cutover requires a concr
 verified candidate and explicit release approval. No current branch is switched.
 
 ## Next action
-Perform A0 first: inventory operational entry points and both queue callers,
-produce a capability/ownership gap matrix and a reversible branch-hub prototype
-boundary. No more personal-PC cloud-password reset/full-export steps for this track.
+Complete transitive SQL/overload review and canonical local sale/split/reversal/
+kitchen parity fixtures; collect actual branch hardware reports before selecting
+the runtime and implementing durable business/outbox transactions. A0 is not closed.
+No personal-PC cloud-password reset/full-export steps are needed for this track.
 
 ## Mandatory update protocol
 This log and CURRENT_WORK_PLAN are the source of truth. Update them after decisions,
