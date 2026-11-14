@@ -71,3 +71,28 @@ jobs:
           name: Johnas_Synthetic_Lab
           path: '${{ runner.temp }}/johnas-lab/'
           retention-days: 14
+  canonical-business-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked test tools without lifecycle scripts
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix branch-hub/experiments --ignore-scripts --no-audit --no-fund
+      - name: Run original sale, split, reversal and kitchen fixtures on owned memory database
+        env:
+          JOHNAS_TEST_PGLITE_PACKAGE_ROOT: '${{ github.workspace }}/branch-hub/experiments/node_modules/@electric-sql/pglite'
+        run: >-
+          npx --no-install vitest run -c branch-hub/experiments/vitest.canonical.config.mjs
+          --reporter=json --outputFile='${{ runner.temp }}/canonical-lab.json'
+      - name: Reject skipped or missing canonical cases
+        run: node branch-hub/tools/assert-canonical-report.mjs '${{ runner.temp }}/canonical-lab.json'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: branch-hub-canonical-business-results
+          path: '${{ runner.temp }}/canonical-lab.json'
+          retention-days: 14

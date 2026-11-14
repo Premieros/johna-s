@@ -113,7 +113,12 @@ PostgreSQL-first evaluation rationale in docs/BRANCH_HUB_A0_20261114.md.
 Added an unwired operation contract with six passing Node tests, plus a read-only
 Windows hardware report and passing mocked PowerShell 7 fixture. The protocol
 digest is not authentication and no durable inbox/outbox or business handler is
-implemented. Native Windows PowerShell and full exact-head CI are pending.
+implemented. Windows PowerShell fixtures and network-disabled Docker recovery
+checks passed on GitHub; the owner also ran the seven-check package successfully
+on Windows Docker Desktop. Seventeen unchanged canonical sale/split/refund/kitchen
+cases now pass locally on the owned embedded engine, with no skipped cases.
+Exact-head CI for this additional fixture is pending. Durable recovery, multiple
+clients, real Auth and the POS UI are still unproven.
 No production load tests, sale writes, cloud queries or branch installation ran.
 
 Required phases and exit criteria:

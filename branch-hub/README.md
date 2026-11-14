@@ -61,3 +61,9 @@ For a Windows **engine-only** synthetic trial with Docker Desktop, extract the
 whole repository archive and run `lab/Run-Synthetic-Lab.cmd`. Read `lab/README.md`
 first. It does not initialize or change the existing local Supabase database,
 and does not supply a POS interface or synchronize branches.
+
+The additional development-only `experiments/vitest.canonical.config.mjs` runs
+17 unchanged canonical sale/split/refund/kitchen cases on a fresh memory database.
+It requires root test dependencies plus `JOHNAS_TEST_PGLITE_PACKAGE_ROOT` and
+blocks native pg clients. It cannot prove cross-client races, real Auth or data
+survival after restart. It is separate from the seven-check Windows trial.

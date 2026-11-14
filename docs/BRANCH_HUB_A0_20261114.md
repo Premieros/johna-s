@@ -142,5 +142,44 @@ on the test computer is not zero. Use a non-cashier lab computer.
 
 A PowerShell mock verifies launcher arguments and error propagation. Actual
 network-disabled Linux container execution is covered by the dedicated CI job;
-Windows Docker Desktop execution still needs the user's lab trial. This package
+The owner subsequently completed the seven-check trial successfully on Windows Docker Desktop. This package
 has no POS interface and must not be described as a complete application trial.
+
+## Canonical business fixture evidence (A0, owned memory database)
+
+A dedicated experimental Vitest configuration now substitutes **only** the test
+connection helper with an in-memory PGlite adapter. The selected canonical TS
+fixtures, their SQL calls, assertions and production migrations are unchanged:
+
+- `split_payment_atomicity`: 3 cases; cash/card tenders, no double inventory
+  deduction after kitchen send, tender mismatch creates no sale.
+- `kitchen_quantity_delta`: 4 cases; stable-line increments, exact void/net delta,
+  deletion guard while effects remain, new delta on served-order reopen.
+- `process_sale_order_settlement`: 5 cases; header discount, held takeaway payment,
+  second-payment rejection, foreign-branch rejection, freeing the settled table.
+- `auto_sale_production_reversal`: 4 cases; raw-source restoration, existing unit
+  stock restoration, kitchen reversal and nested component reversal.
+- `modifier_burger_lifecycle`: 1 transactional lifecycle with exact modifier
+  consumption, settlement and exact-line refund.
+
+**17/17 passed locally**, no skipped cases. CI validates the JSON report against
+all seventeen cases, so optional impersonation skips cannot count as success.
+Native `pg.Client` is explicitly blocked in this configuration. No `.env` or
+real database URL is read by the substitute helper. The adapter rejects multiple
+simultaneous clients rather than simulating cross-session transactions.
+
+The fixture uses the existing CI-only Auth stub, subscription-bypass and role
+fixtures. This tests business SQL behavior under synthetic identity, not real
+Auth login, offline authorization, a valid paid subscription or branch identity
+attestation. Only a fresh memory database receives those CI fixtures. It does
+not install subscription bypasses into the user's existing local Supabase.
+
+Multi-client races, durable commits and reopen/recovery, shared LAN service,
+physical printing and UI remain unproven. Native PostgreSQL CI remains the
+reference implementation. These results do not authorize a production cutover
+or choose the final Windows engine.
+
+Run from a source checkout with root development dependencies installed:
+`JOHNAS_TEST_PGLITE_PACKAGE_ROOT=/path/to/pglite npx --no-install vitest run -c branch-hub/experiments/vitest.canonical.config.mjs`.
+The user-facing synthetic ZIP still executes only the earlier seven recovery
+checks; it is not a bundle of this Vitest development fixture or a POS UI.
