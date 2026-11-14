@@ -42,3 +42,4 @@ supabase/.temp/
 /branch-hub/lab/synthetic-lab-result.json
 /branch-hub/update-lab/.state/
 /branch-hub/update-lab/.update-lab-state/
+/dist-local/
