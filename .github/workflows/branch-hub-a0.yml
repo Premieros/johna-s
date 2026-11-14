@@ -33,3 +33,28 @@ jobs:
       - name: Validate diagnostic with mocked hardware on Windows PowerShell
         shell: powershell
         run: ./branch-hub/tests/diagnostic-fixture.ps1
+      - name: Validate isolated synthetic lab launcher without Docker access
+        shell: powershell
+        run: ./branch-hub/tests/synthetic-lab-runner-fixture.ps1
+  synthetic-financial-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked development-only engine
+        run: npm ci --prefix branch-hub/experiments --ignore-scripts --no-audit --no-fund
+      - name: Prepare disposable Node image
+        run: docker pull node:22-bookworm-slim
+      - name: Run canonical synthetic recovery fixture with networking disabled
+        run: >-
+          docker run --rm --network none --read-only --cap-drop ALL
+          --security-opt no-new-privileges --memory 2g --cpus 2 --pids-limit 128
+          --tmpfs /tmp:rw,noexec,nosuid,size=256m
+          --mount "type=bind,source=$PWD,target=/source,readonly"
+          -w /source node:22-bookworm-slim
+          node branch-hub/experiments/probe-pglite-schema.mjs
+          /source/branch-hub/experiments/node_modules/@electric-sql/pglite
+          --financial-boundary

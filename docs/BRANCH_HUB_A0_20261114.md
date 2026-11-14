@@ -120,3 +120,27 @@ No embedded engine is approved for branch deployment by this result.
 At prior PR head `c6098838aebb799aaa804a56ca4f893fa90a592b`, both full Verify main
 and isolated Branch Hub A0 workflows passed, including Windows PowerShell 5.1
 diagnostic fixtures. New probe changes require their own PR checks.
+
+## Synthetic recovery trial package
+
+The optional `--financial-boundary` mode now executes the canonical
+`reconcile_offline_sale` function against fictional branches, cashier and a
+previously committed sale. Seven checks passed locally: exact acknowledgement,
+lost-ACK retry identity, amount/tender conflicts, branch rejection, rejection of
+ordinary invoice numbers, unchanged single settlement, and anonymous denial.
+The fixture is rolled back. This is not creation of a new offline sale and does
+not close the sale/split/refund/kitchen parity gate.
+
+`branch-hub/lab/Run-Synthetic-Lab.cmd` prepares a locked PGlite dependency in a
+separate cache using a disposable Node container, then runs the synthetic probe
+in another container with networking disabled, read-only source/dependencies,
+no published ports, no Docker socket and no production credentials. It does
+not use `docker exec`, compose, existing containers or database volumes.
+The only host writes are its package cache and JSON report. Test containers
+are limited to 2 GiB / 2 CPUs. Initial preparation needs Internet; resource use
+on the test computer is not zero. Use a non-cashier lab computer.
+
+A PowerShell mock verifies launcher arguments and error propagation. Actual
+network-disabled Linux container execution is covered by the dedicated CI job;
+Windows Docker Desktop execution still needs the user's lab trial. This package
+has no POS interface and must not be described as a complete application trial.

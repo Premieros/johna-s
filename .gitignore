@@ -36,3 +36,7 @@ test-results
 # Supabase temp
 .temp/
 supabase/.temp/
+
+# Disposable branch-hub lab dependency cache and synthetic result
+/branch-hub/lab/.lab-deps/
+/branch-hub/lab/synthetic-lab-result.json

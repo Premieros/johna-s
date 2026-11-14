@@ -56,3 +56,8 @@ replays all migrations without skipping failed files, and closes the database.
 It accepts a package directory, never a database connection string. It is not
 part of the application, installer or cloud synchronization. See the A0 evidence
 record for limitations; successful DDL replay does not prove business parity.
+
+For a Windows **engine-only** synthetic trial with Docker Desktop, extract the
+whole repository archive and run `lab/Run-Synthetic-Lab.cmd`. Read `lab/README.md`
+first. It does not initialize or change the existing local Supabase database,
+and does not supply a POS interface or synchronize branches.

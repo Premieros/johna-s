@@ -6,7 +6,7 @@ import { resolve, join } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 const packageRoot = process.argv[2];
-if (!packageRoot || process.argv.length !== 3 || /:\/\//.test(packageRoot)) throw new Error('Supply an installed PGlite package directory, never a database URL');
+if (!packageRoot || (process.argv.length !== 3 && !(process.argv.length === 4 && process.argv[3] === '--financial-boundary')) || /:\/\//.test(packageRoot)) throw new Error('Supply an installed PGlite package directory, never a database URL');
 const load = relative => import(pathToFileURL(join(resolve(packageRoot), 'dist', relative)).href);
 const { PGlite } = await load('index.js');
 const { pgcrypto } = await load('contrib/pgcrypto.js');
@@ -36,12 +36,18 @@ try {
   report.migrationSourceSha256 = migrationDigest.digest('hex');
   report.installedExtensions = (await db.query('SELECT extname, extversion FROM pg_extension ORDER BY extname')).rows;
   report.businessParityTested = false;
+  if (process.argv[3] === '--financial-boundary') {
+    report.stage = 'financial-boundary';
+    file = null;
+    const { testFinancialBoundary } = await import('./financial-boundary.mjs');
+    report.financialBoundary = await testFinancialBoundary(db);
+  }
   report.durabilityTested = false;
 } catch (error) {
   report.failedFile = file;
   report.sqlstate = error.code;
   report.error = String(error.message).slice(0, 250);
-  report.schemaReplayComplete = false;
+  if (!report.schemaReplayComplete) report.schemaReplayComplete = false;
   process.exitCode = 1;
 } finally {
   console.log(JSON.stringify(report, null, 2));
