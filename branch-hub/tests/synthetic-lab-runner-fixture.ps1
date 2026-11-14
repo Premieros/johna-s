@@ -33,3 +33,5 @@ try {
   Remove-Item function:docker -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $temp -Force -Recurse
 }
+# The expected negative case must not leak its native exit code to CI's wrapper.
+$global:LASTEXITCODE = 0

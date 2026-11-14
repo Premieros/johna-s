@@ -58,3 +58,16 @@ jobs:
           node branch-hub/experiments/probe-pglite-schema.mjs
           /source/branch-hub/experiments/node_modules/@electric-sql/pglite
           --financial-boundary
+      - name: Package minimal synthetic trial sources
+        run: |
+          mkdir -p "$RUNNER_TEMP/johnas-lab/branch-hub/experiments" "$RUNNER_TEMP/johnas-lab/branch-hub/lab" "$RUNNER_TEMP/johnas-lab/supabase/ci"
+          cp branch-hub/experiments/*.mjs branch-hub/experiments/package*.json "$RUNNER_TEMP/johnas-lab/branch-hub/experiments/"
+          cp branch-hub/lab/Run-Synthetic-Lab.* branch-hub/lab/README.md "$RUNNER_TEMP/johnas-lab/branch-hub/lab/"
+          cp -R supabase/migrations "$RUNNER_TEMP/johnas-lab/supabase/"
+          cp supabase/ci/stub_auth.sql "$RUNNER_TEMP/johnas-lab/supabase/ci/"
+          git rev-parse HEAD > "$RUNNER_TEMP/johnas-lab/SOURCE_COMMIT.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Johnas_Synthetic_Lab
+          path: '${{ runner.temp }}/johnas-lab/'
+          retention-days: 14
