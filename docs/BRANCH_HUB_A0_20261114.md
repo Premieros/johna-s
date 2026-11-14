@@ -225,3 +225,19 @@ without making the directory world-writable or restoring broad capabilities.
 The readiness probe retries startup errors and retains logs before cleanup;
 actual container readiness/update must pass before the artifact is emitted.
 Windows Docker Desktop bind permission behavior still requires the user trial.
+
+## Browser download warning and source-only distribution
+
+The user's browser blocked `Johnas_Browser_Update_Lab.zip` as a dangerous
+download. The screenshot does not identify the detection reason; no false-positive
+or malware-free claim is made. Do not override the warning or disable protection.
+The replacement source artifact omits CMD/PowerShell launchers and includes the
+three application source files, a manual Docker command and SHA256SUMS. This is
+inspectability and removal of automatic launch helpers, not a security scan or
+a guarantee that browser policy will allow the new archive. Stop if it too is
+blocked. Do not rename extensions to evade protection.
+
+The manual run uses a dedicated Docker named volume for lab state, separate from
+all Supabase volumes, and a named disposable lab container with loopback-only UI.
+CI tests this named-volume setup before packaging the source artifact. No host
+folder permission changes or broad capabilities are required for state writes.

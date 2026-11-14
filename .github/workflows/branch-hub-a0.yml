@@ -117,7 +117,7 @@ jobs:
       - name: Verify actual disposable Docker launcher environment
         run: |
           mkdir -p "$RUNNER_TEMP/update-lab-state"
-          docker run -d --name johnas-update-lab-ci --user "$(id -u):$(id -g)" --init --read-only --cap-drop ALL --security-opt no-new-privileges --memory 512m --cpus 1 --pids-limit 64 --tmpfs /tmp:rw,noexec,nosuid,size=32m -p 127.0.0.1:58110:58110 --mount "type=bind,source=$PWD/branch-hub/update-lab,target=/lab,readonly" --mount "type=bind,source=$RUNNER_TEMP/update-lab-state,target=/lab-state" -e JOHNAS_UPDATE_LAB_CONTAINER=1 -e JOHNAS_UPDATE_LAB_DATA=/lab-state node:22-bookworm-slim node /lab/server.mjs
+          docker run -d --name johnas-update-lab-ci --init --read-only --cap-drop ALL --security-opt no-new-privileges --memory 512m --cpus 1 --pids-limit 64 --tmpfs /tmp:rw,noexec,nosuid,size=32m -p 127.0.0.1:58110:58110 --mount "type=bind,source=$PWD/branch-hub/update-lab,target=/lab,readonly" --mount type=volume,source=johnas-update-lab-ci-state,target=/lab-state -e JOHNAS_UPDATE_LAB_CONTAINER=1 -e JOHNAS_UPDATE_LAB_DATA=/lab-state node:22-bookworm-slim node /lab/server.mjs
           curl --retry 10 --retry-all-errors --retry-connrefused --retry-delay 1 --fail http://127.0.0.1:58110/api/state
           curl --fail -H 'Content-Type: application/json' -d '{"text":"synthetic Docker draft","revision":1}' http://127.0.0.1:58110/api/draft
           curl --fail -H 'Content-Type: application/json' -d '{}' http://127.0.0.1:58110/api/publish-demo
@@ -127,8 +127,16 @@ jobs:
         run: |
           docker logs --tail 80 johnas-update-lab-ci || true
           docker rm -f johnas-update-lab-ci || true
+          docker volume rm johnas-update-lab-ci-state || true
+      - name: Package inspectable browser sources without launch scripts
+        run: |
+          mkdir -p "$RUNNER_TEMP/browser-update-source"
+          cp branch-hub/update-lab/server.mjs branch-hub/update-lab/release-contract.mjs branch-hub/update-lab/index.html "$RUNNER_TEMP/browser-update-source/"
+          cp branch-hub/update-lab/README-SOURCE.md "$RUNNER_TEMP/browser-update-source/README.md"
+          cd "$RUNNER_TEMP/browser-update-source"
+          sha256sum server.mjs release-contract.mjs index.html README.md > SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
-          name: Johnas_Browser_Update_Lab
-          path: branch-hub/update-lab/
+          name: Johnas_Browser_Update_Source
+          path: '${{ runner.temp }}/browser-update-source/'
           retention-days: 14
