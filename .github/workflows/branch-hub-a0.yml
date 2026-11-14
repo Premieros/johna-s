@@ -164,6 +164,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Confirm canonical SQL checkout bytes
+        run: git ls-files --eol supabase/migrations/20260902084000_refund_hybrid_inventory_restoration.sql
       - uses: actions/setup-node@v4
         with:
           node-version: 22

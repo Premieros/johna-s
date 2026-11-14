@@ -10,6 +10,7 @@ export async function createCanonicalMemoryDatabase(packageRoot) {
   const { pgcrypto } = await load('contrib/pgcrypto.js');
   const { uuid_ossp } = await load('contrib/uuid_ossp.js');
   const root = fileURLToPath(new URL('../../', import.meta.url));
+  const readSql=relative=>{const sql=readFileSync(join(root,relative),'utf8');if(sql.includes('\r\n'))throw new Error('CANONICAL_SQL_REQUIRES_LF: '+relative);return sql;};
   const db = new PGlite({ extensions: { pgcrypto, 'uuid-ossp': uuid_ossp } });
   const report = { packageVersion: JSON.parse(readFileSync(join(resolve(packageRoot), 'package.json'),'utf8')).version,
     prototypeOnly:true, productionContacted:false, authStubOnly:true, applied:0, failedFile:null };
@@ -18,10 +19,10 @@ export async function createCanonicalMemoryDatabase(packageRoot) {
   try {
     await db.exec(`CREATE TABLE public.schema_migrations(id bigserial PRIMARY KEY,version text NOT NULL UNIQUE,
       name text NOT NULL,checksum text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())`);
-    await db.exec(readFileSync(join(root,file),'utf8'));
+    await db.exec(readSql(file));
     for (const name of readdirSync(join(root,'supabase/migrations')).filter(n=>n.endsWith('.sql')).sort()) {
       file='supabase/migrations/'+name;
-      const sql=readFileSync(join(root,file),'utf8');
+      const sql=readSql(file);
       digest.update(name).update('\0').update(sql).update('\0');
       await db.exec(sql);
       await db.query('INSERT INTO public.schema_migrations(version,name,checksum) VALUES($1,$2,$3)',

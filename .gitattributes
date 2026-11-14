@@ -1,0 +1,3 @@
+# SQL function-body patch migrations depend on canonical LF text on every OS.
+# Preserve Git blob bytes when Windows Git has core.autocrlf enabled.
+/supabase/**/*.sql text eol=lf
