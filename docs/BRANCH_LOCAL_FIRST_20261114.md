@@ -7,7 +7,7 @@ Current PR: `#639`
 Last updated: 2026-11-14, Africa/Cairo
 
 ## Work status
-State: **BLOCKED** for runtime rollout. A0 implementation is in progress in PR639.
+State: **BLOCKED** for runtime rollout. A0 evidence and isolated A1 storage preparation are in progress in PR639.
 The owner has authorized changing the active
 work track to one local-first installation per branch with automatic cloud sync
 and verified application/schema updates. This document records that scope; it
@@ -161,3 +161,14 @@ fake-payment barrier. No original POS wiring, cloud feed, executable app update,
 SQL migration or branch cutover is included. See the A0 evidence record and lab
 README for its limits. User wants automatic arrival/activation on reconnection;
 production implementation must preserve real transactions and draft compatibility.
+
+## Owner rollout constraint and A1 storage progress
+
+All branches keep their current cloud connection until their own separately
+verified local installation and activation. Preparation/download alone must not
+redirect devices, change printer ownership or start a competing queue replayer.
+The cloud app and print shell remain unchanged. No production work was performed.
+See `docs/BRANCH_HUB_A1_STORAGE_20261114.md` for the private atomic inbox/outbox
+core, its five synthetic durability/failure checks and canonical split RPC fixture.
+They pass locally; new exact-head CI is pending. This is not an installer, shared
+LAN service, full on-disk POS recovery proof, real Auth or cloud synchronization.

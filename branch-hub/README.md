@@ -67,3 +67,15 @@ The additional development-only `experiments/vitest.canonical.config.mjs` runs
 It requires root test dependencies plus `JOHNAS_TEST_PGLITE_PACKAGE_ROOT` and
 blocks native pg clients. It cannot prove cross-client races, real Auth or data
 survival after restart. It is separate from the seven-check Windows trial.
+
+## Private A1 storage preparation
+
+`runtime/operation-store.mjs` atomically records a registered business handler,
+immutable inbox/result, pending outbox and device sequence in one owned database.
+Authorization and receipt verification require explicit trusted callbacks. It
+implements no HTTP listener, login, cloud transport or branch activation. Five
+synthetic storage/process-kill checks and one original split RPC fixture exercise
+the boundary. Read `docs/BRANCH_HUB_A1_STORAGE_20261114.md` for limits.
+
+Existing branches continue using the deployed cloud application. Preparing or
+copying these files must not redirect them or change installed print programs.

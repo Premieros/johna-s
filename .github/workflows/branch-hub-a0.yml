@@ -94,10 +94,24 @@ jobs:
           --reporter=json --outputFile='${{ runner.temp }}/canonical-lab.json'
       - name: Reject skipped or missing canonical cases
         run: node branch-hub/tools/assert-canonical-report.mjs '${{ runner.temp }}/canonical-lab.json'
+      - name: Verify atomic inbox/outbox and process-kill recovery
+        env:
+          JOHNAS_TEST_PGLITE_PACKAGE_ROOT: '${{ github.workspace }}/branch-hub/experiments/node_modules/@electric-sql/pglite'
+        run: node --test branch-hub/tests/durable-store.integration.mjs
+      - name: Verify original split-payment RPC commits atomically with outbox
+        env:
+          JOHNAS_TEST_PGLITE_PACKAGE_ROOT: '${{ github.workspace }}/branch-hub/experiments/node_modules/@electric-sql/pglite'
+        run: >-
+          npx --no-install vitest run -c branch-hub/experiments/vitest.atomic-store.config.mjs
+          --reporter=json --outputFile='${{ runner.temp }}/canonical-atomic.json'
+      - name: Reject skipped atomic RPC fixture
+        run: node branch-hub/tools/assert-canonical-report.mjs '${{ runner.temp }}/canonical-atomic.json' 1
       - uses: actions/upload-artifact@v4
         with:
           name: branch-hub-canonical-business-results
-          path: '${{ runner.temp }}/canonical-lab.json'
+          path: |
+            ${{ runner.temp }}/canonical-lab.json
+            ${{ runner.temp }}/canonical-atomic.json
           retention-days: 14
   browser-update-trial:
     runs-on: ubuntu-latest
