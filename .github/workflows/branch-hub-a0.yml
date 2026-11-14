@@ -1,0 +1,35 @@
+name: Branch Hub A0 isolation checks
+on:
+  pull_request:
+    paths:
+      - 'branch-hub/**'
+      - '.github/workflows/branch-hub-a0.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test protocol boundary without database or network access
+        run: node --test branch-hub/tests/*.test.mjs
+      - name: Inventory repository references without contacting production
+        run: node branch-hub/tools/audit-source.mjs --out '${{ runner.temp }}/johnas-source-inventory.json'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: branch-hub-source-inventory
+          path: '${{ runner.temp }}/johnas-source-inventory.json'
+          retention-days: 14
+  windows-diagnostic-fixture:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate diagnostic with mocked hardware on Windows PowerShell
+        shell: powershell
+        run: ./branch-hub/tests/diagnostic-fixture.ps1
