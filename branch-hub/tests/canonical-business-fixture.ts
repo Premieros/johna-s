@@ -5,8 +5,8 @@ import { randomUUID } from 'node:crypto';
 import { createCanonicalMemoryDatabase } from '../experiments/canonical-memory-db.mjs';
 import { createOperationStore } from '../runtime/operation-store.mjs';
 import { createOperation } from '../prototype/operation-contract.mjs';
-import { seedRlsFixture } from '../../tests/integration/rls';
-import { attachRawComponentToUnit } from '../../tests/integration/componentTestFixtures';
+import { seedRlsFixture } from '../../tests/integration/rls.ts';
+import { attachRawComponentToUnit } from '../../tests/integration/componentTestFixtures.ts';
 import type pg from 'pg';
 import { makeCanonicalSplitHandler } from './canonical-split-handler.mjs';
 export async function prepareCanonicalAtomicFixture(){

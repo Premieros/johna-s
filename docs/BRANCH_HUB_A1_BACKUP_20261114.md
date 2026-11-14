@@ -78,3 +78,17 @@ branch-scoped bootstrap, full locally served POS/LAN/KDS, exclusive print owners
 real cloud transport/receipts/config versions, signed code/schema releases and
 Windows installer/repair/key custody are still open. Keep existing cloud clients
 and agents unchanged. Do not sell on T.B.S using the experimental packages.
+
+## Windows test-runner boundary
+
+At head 8c21f11 the Ubuntu canonical disk scenario passed. Windows passed backup
+format/crypto guards, but its Vitest runner failed BEFORE executing the storage
+scenario because the existing root tooling lock lacks a Rolldown native binding.
+No storage success was claimed from that run, and the root lockfile was not deleted
+or regenerated to work around it. The disk scenario now uses one shared Node
+assertion module, reused by the optional Vitest wrapper and a native `node:test`
+entry. The matrix installs only the pinned PGlite fixture dependency and uses
+Node 22 type stripping for the unchanged TypeScript seed helpers. No Vite/Rolldown
+binding is required to exercise the actual runtime/restore/crash assertions.
+The native entry passed locally; new Windows/Ubuntu exact-head checks are pending.
+A success JSON is emitted only after all scenario assertions and cleanup finish.
