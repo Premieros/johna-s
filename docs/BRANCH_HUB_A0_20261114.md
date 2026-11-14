@@ -214,3 +214,10 @@ fixture passed locally. Local Chromium could not start because this execution
 environment disallows its singleton socket, so real browser and Docker verification
 are delegated to a dedicated CI job; Windows PowerShell 5.1 launcher checks run
 there too. The browser trial artifact is emitted after its browser/Docker checks.
+
+CI browser verification passed: automatic activation, preserved textarea, offline
+feed/reconnection, corrupt-package rejection and payment barrier, with exactly one
+initial page navigation. The first Docker smoke reached the published port before
+Node was listening and received a connection reset. The readiness probe now retries
+startup connection errors and retains container logs before cleanup; actual
+container readiness/update must pass before the downloadable artifact is emitted.

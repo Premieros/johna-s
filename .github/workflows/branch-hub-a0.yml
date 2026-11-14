@@ -118,13 +118,15 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/update-lab-state"
           docker run --rm -d --name johnas-update-lab-ci --init --read-only --cap-drop ALL --security-opt no-new-privileges --memory 512m --cpus 1 --pids-limit 64 --tmpfs /tmp:rw,noexec,nosuid,size=32m -p 127.0.0.1:58110:58110 --mount "type=bind,source=$PWD/branch-hub/update-lab,target=/lab,readonly" --mount "type=bind,source=$RUNNER_TEMP/update-lab-state,target=/lab-state" -e JOHNAS_UPDATE_LAB_CONTAINER=1 -e JOHNAS_UPDATE_LAB_DATA=/lab-state node:22-bookworm-slim node /lab/server.mjs
-          curl --retry 10 --retry-connrefused --retry-delay 1 --fail http://127.0.0.1:58110/api/state
+          curl --retry 10 --retry-all-errors --retry-connrefused --retry-delay 1 --fail http://127.0.0.1:58110/api/state
           curl --fail -H 'Content-Type: application/json' -d '{"text":"synthetic Docker draft","revision":1}' http://127.0.0.1:58110/api/draft
           curl --fail -H 'Content-Type: application/json' -d '{}' http://127.0.0.1:58110/api/publish-demo
           node --input-type=module -e 'import assert from "node:assert/strict"; await new Promise(r=>setTimeout(r,3000)); const s=await (await fetch("http://127.0.0.1:58110/api/state")).json(); assert.equal(s.sequence,2); assert.equal(s.draft,"synthetic Docker draft"); assert.equal(s.productionContacted,false);'
       - name: Stop disposable update lab
         if: always()
-        run: docker rm -f johnas-update-lab-ci || true
+        run: |
+          docker logs --tail 80 johnas-update-lab-ci || true
+          docker rm -f johnas-update-lab-ci || true
       - uses: actions/upload-artifact@v4
         with:
           name: Johnas_Browser_Update_Lab
