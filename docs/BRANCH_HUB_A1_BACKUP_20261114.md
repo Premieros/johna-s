@@ -100,3 +100,14 @@ without changing any SQL blobs/functions. The replay fixture also rejects CRLF
 input explicitly rather than silently normalizing or skipping a migration. CI
 prints Git's SQL index/worktree eol status. Linux inputs remain unchanged; the
 Windows replay/recovery must pass with the canonical source before readiness.
+
+## Verified result
+
+At head d01e04af68ece4d2a8088af0ae697d459d53ba93, A0/A1 workflow
+43582016706 passed all seven jobs, including native Node 22 canonical disk recovery
+on Windows (job132408561373) and Ubuntu (job132408561294). Both executed the same
+full encrypted-restore/committed-kill/uncommitted-kill/retry assertions with no
+skipped case. Crypto guards, original 17 cases, atomic split/outbox rollback,
+Windows launch fixtures and the separate browser trial also passed. This closes
+the selected native filesystem scenario gate, not the outstanding service/Auth/UI/
+key-custody/cloud-sync/installer or physical-power-loss gates. T.B.S stays inactive.

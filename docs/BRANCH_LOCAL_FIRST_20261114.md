@@ -192,3 +192,8 @@ passed locally on the Node filesystem. Windows/Ubuntu CI is added; exact-head
 results pending. No operational branch or cloud connection changed. See
 `docs/BRANCH_HUB_A1_BACKUP_20261114.md`. Do not confuse this with a finished local
 installer, real login, cloud sync or signed full-code/schema updater.
+
+A1 backup verification update: native Windows and Ubuntu Node22 disk recovery
+passed at d01e04af in workflow43582016706, alongside all seven isolated jobs.
+The selected canonical split-sale case survives restore/process kill/retry with
+pending operations preserved. No real branch runtime or cloud route was activated.
