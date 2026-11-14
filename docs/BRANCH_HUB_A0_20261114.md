@@ -217,7 +217,11 @@ there too. The browser trial artifact is emitted after its browser/Docker checks
 
 CI browser verification passed: automatic activation, preserved textarea, offline
 feed/reconnection, corrupt-package rejection and payment barrier, with exactly one
-initial page navigation. The first Docker smoke reached the published port before
-Node was listening and received a connection reset. The readiness probe now retries
-startup connection errors and retains container logs before cleanup; actual
-container readiness/update must pass before the downloadable artifact is emitted.
+initial page navigation. The Docker smoke initially received a connection reset. Retained startup logs
+then identified EACCES writing the lab-only key file: the host runner owns the
+state bind directory, while the root container has all capability overrides
+removed. The Linux CI smoke now runs as the host directory owner UID/GID,
+without making the directory world-writable or restoring broad capabilities.
+The readiness probe retries startup errors and retains logs before cleanup;
+actual container readiness/update must pass before the artifact is emitted.
+Windows Docker Desktop bind permission behavior still requires the user trial.
