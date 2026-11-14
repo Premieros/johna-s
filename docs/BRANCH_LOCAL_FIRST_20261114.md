@@ -152,3 +152,12 @@ No personal-PC cloud-password reset/full-export steps are needed for this track.
 This log and CURRENT_WORK_PLAN are the source of truth. Update them after decisions,
 test results and releases. Distinguish files prepared, services started, data synced
 and a proven operational pilot. Never call an empty local database a working backup.
+
+## Immediate update UX trial (personal PC only)
+
+Added `branch-hub/update-lab`: Arabic localhost browser trial with simulated
+signed publishing, automatic presentation activation, preserved draft and a
+fake-payment barrier. No original POS wiring, cloud feed, executable app update,
+SQL migration or branch cutover is included. See the A0 evidence record and lab
+README for its limits. User wants automatic arrival/activation on reconnection;
+production implementation must preserve real transactions and draft compatibility.

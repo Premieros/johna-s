@@ -183,3 +183,34 @@ Run from a source checkout with root development dependencies installed:
 `JOHNAS_TEST_PGLITE_PACKAGE_ROOT=/path/to/pglite npx --no-install vitest run -c branch-hub/experiments/vitest.canonical.config.mjs`.
 The user-facing synthetic ZIP still executes only the earlier seven recovery
 checks; it is not a bundle of this Vitest development fixture or a POS UI.
+
+## Personal-PC automatic browser update experiment
+
+The owner requested an immediate automatic update experience and a personal-PC
+trial. `branch-hub/update-lab` now supplies a standalone Arabic browser lab on
+loopback port 58110. It is not wired into the original app or agents. A local
+synthetic publisher models reconnection and releases; no GitHub/cloud URL or
+credential is accepted. The feed port stays internal to the disposable Docker
+container. The launcher does not touch existing Supabase services or databases.
+
+The lab checks Ed25519 signatures, exact payload hashes/sizes, increasing release
+sequence and schema compatibility. Compatible presentation data activates without
+page reload while the textarea stays mounted. Activation waits for an explicitly
+tracked fake payment. Corrupt packages keep the old active version. Draft edits
+and presentation state are serialized to atomically replaced files; a normal
+stop/restart test preserves them, with a browser localStorage recovery copy.
+
+This is a DATA-only presentation release: **it does not install downloaded
+JavaScript, production assets, SQL migrations or a real POS screen**. Signing keys
+are lab keys generated locally, not a production trust root. The fake payment is
+not a sale, and its busy flag is not a durable business/outbox barrier. Sudden
+power-loss, process-crash recovery, real Auth, shared LAN clients, safe full-code
+activation, signed production distribution and automatic schema upgrades remain
+unimplemented. Native schema incompatibility is rejected, never auto-migrated.
+
+Local Node checks passed for signature/tamper/rollback/schema gates and the API
+outage/reconnect/payment/draft/normal-restart flow. PowerShell launcher argument
+fixture passed locally. Local Chromium could not start because this execution
+environment disallows its singleton socket, so real browser and Docker verification
+are delegated to a dedicated CI job; Windows PowerShell 5.1 launcher checks run
+there too. The browser trial artifact is emitted after its browser/Docker checks.
