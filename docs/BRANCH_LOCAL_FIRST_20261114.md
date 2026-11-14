@@ -172,3 +172,13 @@ See `docs/BRANCH_HUB_A1_STORAGE_20261114.md` for the private atomic inbox/outbox
 core, its five synthetic durability/failure checks and canonical split RPC fixture.
 They pass locally; new exact-head CI is pending. This is not an installer, shared
 LAN service, full on-disk POS recovery proof, real Auth or cloud synchronization.
+
+## T.B.S branch record — owner-authorized metadata bootstrap
+
+T.B.S was created in the actual Johna’s website via the owner's authenticated UI
+session, with its canonical main warehouse/settings/trial. Verified branch ID:
+`0a54e71b-5ac1-42ec-a620-f0296637e79c`; warehouse:
+`274fbaaa-efcc-48da-850c-d1f6d0255f2d`. Branch was set inactive pending its intended
+first local-only installation. This is NOT an active local deployment or an
+implemented local-only cloud-write policy. Smouha/Cleopatra remain active and
+cloud-connected. See `branch-hub/pilots/TBS.md` for the full preparation record.
