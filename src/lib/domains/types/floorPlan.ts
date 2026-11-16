@@ -62,6 +62,7 @@ export interface Order {
   order_number: string;
   branch_id: string;
   order_type: OrderType;
+  online_markup_percent?: number | null;
   status: OrderStatus;
   table_id: string | null;
   customer_id: string | null;
