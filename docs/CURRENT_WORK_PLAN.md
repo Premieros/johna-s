@@ -1,5 +1,9 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
+## Current active branch — 2026-11-16
+- **Current active branch:** `feat/branch-online-order-markup-20261116`. Mandatory active log: `docs/ONLINE_ORDER_MARKUP_20261116.md`. Owner explicitly requested implementing a fifth **online** POS order category with a per-branch configurable markup (default 26% only when enabled), existing branch tax and unchanged base product prices. Candidate changes only; preserve writers, inventory, accounting, printing and historical orders. Sequential single writer. Full Verify and Fresh DB are mandatory before production. Previously planned branch-local-first #638 is paused, not cancelled. The historical financial security branch was merged as PR #640, its production migrations already applied; old Active labels are historical.
+
+
 ## Active work
 - Active security audit: `security/financial-history-report-fence-20261116`; mandatory log `docs/FINANCIAL_HISTORY_REPORT_FENCE_20261116.md`. Owner requested enforcing history.unlimited/visibility percentage across historical sales reports and totals. Candidate-only review/SQL/tests; no Production migration, business writes, merge or deployment before exact-head verification and explicit approval. Previously active branch-local-first PR#638 is paused for this narrow security scope, not cancelled.
 - Active branch-local-first delivery: PR#638; Mandatory active work log: `docs/BRANCH_LOCAL_FIRST_20261114.md`. Owner changed the work track to one local-first Windows hub per Johna’s branch, shared LAN sales/kitchen/printing, durable cloud sync and verified app/schema updates. Begin A0 capability/queue/hardware inventory and engine parity gate; no branch cutover, production SQL/password change or full export. Personal-PC Supabase remains a lab; the central fallback/export track is paused. Existing browser queues/Electron shell are partial, not the finished system.
