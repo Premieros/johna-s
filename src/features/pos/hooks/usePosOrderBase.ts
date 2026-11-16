@@ -1125,6 +1125,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     discountType, setDiscountType,
     paidAmount, setPaidAmount,
     orderType, setOrderType,
+    effectiveOnlineMarkup,
     tableId, setTableId,
     guestCount, setGuestCount,
     activeOrderId, activeOrderNumber, activeTable,
