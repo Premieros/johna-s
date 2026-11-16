@@ -87,6 +87,7 @@ export function PosWorkspacePage() {
   const [loadWarning, setLoadWarning] = useState('');
   const [activeShift, setActiveShift] = useState<{ id: string; expected: number; opened_at: string; opening_amount: number } | null>(null);
   const [shiftChecked, setShiftChecked] = useState(false);
+  const [onlineEnabled, setOnlineEnabled] = useState(false);
   const [panel, setPanel] = useState<PosPanelId>(null);
   const [ordersCategory, setOrdersCategory] = useState<ActiveCategory>('all');
   const [mobileOrderOpen, setMobileOrderOpen] = useState(false);
@@ -113,6 +114,20 @@ export function PosWorkspacePage() {
   const barcodeRef = useRef<HTMLInputElement>(null);
   const payConsumed = useRef(false);
   const effectiveBranch = branchFilter || user?.branch_id || '';
+
+  useEffect(() => {
+    let alive = true;
+    setOnlineEnabled(false);
+    if (!effectiveBranch) return;
+    void supabase.from('branch_online_pricing')
+      .select('enabled')
+      .eq('branch_id', effectiveBranch)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (alive && !error) setOnlineEnabled(data?.enabled === true);
+      });
+    return () => { alive = false; };
+  }, [effectiveBranch]);
   const settings = sharedSettings || offlineSettings;
   const branches = sharedBranches.length > 0 ? sharedBranches : offlineBranches;
   const effSettings: Settings | null = settings ? mergeEffectiveSettings(settings, effectiveBranch ? branchSettingsMap[effectiveBranch] : null) : null;
@@ -1094,6 +1109,7 @@ export function PosWorkspacePage() {
           customers={customers}
           preselectedTableId={preselectedTableId}
           currency={pos.effCurrency}
+          onlineEnabled={onlineEnabled}
           onStepChange={setStartStep}
           onBack={() => setStartStep(null)}
           onStart={handleStartOrder}
