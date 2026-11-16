@@ -5,10 +5,11 @@ export const ORDER_TYPE_KEY: Record<OrderType, TranslationKey> = {
   dine_in: 'dineIn',
   takeaway: 'takeaway',
   delivery: 'delivery',
+  online: 'onlineOrder',
   drive_thru: 'driveThru',
 } as const;
 
-export const ORDER_TYPES: readonly OrderType[] = ['dine_in', 'takeaway', 'delivery', 'drive_thru'] as const;
+export const ORDER_TYPES: readonly OrderType[] = ['dine_in', 'takeaway', 'delivery', 'drive_thru', 'online'] as const;
 
 export interface TableStatusStyle {
   label: DiningTableStatus;
