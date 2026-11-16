@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bike, Car, ListOrdered, Pencil, Search, ShoppingBag, Utensils } from 'lucide-react';
+import { Bike, Car, Globe2, ListOrdered, Pencil, Search, ShoppingBag, Utensils } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { Modal } from '@/components/Modal';
@@ -23,12 +23,15 @@ interface PosTablesSidebarProps {
   activeTableId: string | null;
   activeOrderId: string | null;
   collapsed: boolean;
+  fullWidth?: boolean;
   onToggleCollapse: () => void;
   onSelectTable: (table: DiningTable) => void;
   onTransferOrder?: (order: Order, table: DiningTable) => void;
   onStartQuick?: () => void;
   onStartDelivery?: () => void;
   onStartDriveThru?: () => void;
+  onStartOnline?: () => void;
+  onlineEnabled?: boolean;
   onOpenActiveOrders?: () => void;
   onSelectTakeaway?: () => void;
   onSelectDelivery?: () => void;
@@ -47,12 +50,15 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
     activeTableId,
     activeOrderId,
     collapsed,
+    fullWidth = false,
     onToggleCollapse,
     onSelectTable,
     onTransferOrder,
     onStartQuick,
     onStartDelivery,
     onStartDriveThru,
+    onStartOnline,
+    onlineEnabled = false,
     onOpenActiveOrders,
     onSelectTakeaway,
     onSelectDelivery,
@@ -211,7 +217,7 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
   };
 
   return (
-    <aside data-testid="pos-tables-workspace" className="flex h-full min-h-0 w-screen min-w-0 max-w-full shrink-0 flex-col border-e border-ui-border bg-ui-surface lg:w-[calc(100vw-380px)] xl:w-[calc(100vw-410px)] 2xl:w-[calc(100vw-440px)]">
+    <aside data-testid="pos-tables-workspace" className={`flex h-full min-h-0 min-w-0 max-w-full flex-col border-e border-ui-border bg-ui-surface ${fullWidth ? "w-full flex-1" : "w-screen shrink-0 lg:w-[calc(100vw-380px)] xl:w-[calc(100vw-410px)] 2xl:w-[calc(100vw-440px)]"}`}>
       <div data-testid="pos-table-picker-header" className="shrink-0 border-b border-ui-border px-3 py-2 sm:px-4 sm:py-3">
         <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
           <div data-testid="pos-table-picker-intro" className="hidden sm:block">
@@ -219,7 +225,7 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
             <p className="mt-0.5 text-[11px] font-bold text-ui-subtle">{isAr ? 'اختر طاولة أو ابدأ نوع طلب من الاختصارات' : 'Choose a table or start an order from the shortcuts'}</p>
           </div>
 
-          <div data-testid="pos-tables-landing-actions" className="grid w-full grid-cols-4 gap-1 sm:w-auto sm:gap-2">
+          <div data-testid="pos-tables-landing-actions" className="grid w-full grid-cols-3 gap-1 sm:w-auto sm:grid-cols-5 sm:gap-2">
             {(onStartQuick || onSelectTakeaway) && (
               <button
                 type="button"
@@ -251,6 +257,21 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
               >
                 <Car className="h-4 w-4" />
                 {isAr ? 'درايف ثرو' : 'Drive thru'}
+              </button>
+            )}
+            {onStartOnline && (
+              <button
+                type="button"
+                data-testid="pos-tables-start-online"
+                onClick={onStartOnline}
+                disabled={!onlineEnabled}
+                title={!onlineEnabled
+                  ? (isAr ? 'فعّل أسعار الأونلاين من إعدادات الفرع أولًا' : 'Enable online pricing in branch settings first')
+                  : undefined}
+                className="flex h-11 flex-col items-center justify-center gap-0.5 rounded-xl border border-ui-border bg-ui-page px-1 text-[10px] leading-tight font-black text-ui-text transition hover:border-ui-primary hover:text-ui-primary active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 sm:flex-row sm:gap-2 sm:px-3 sm:text-xs sm:leading-4"
+              >
+                <Globe2 className="h-4 w-4" />
+                {isAr ? 'أونلاين' : 'Online'}
               </button>
             )}
             {onOpenActiveOrders && (
