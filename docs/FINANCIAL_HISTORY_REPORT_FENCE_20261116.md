@@ -50,3 +50,22 @@ Older full closing snapshots cannot truthfully return the configured *invoice sa
 
 ## Verification status
 Production remains unchanged; no migration applied. Earlier PR Verify run was superseded/cancelled by later candidate commits and cannot be taken as a successful gate. Exact-head native CI Fresh DB, runtime and browser checks must be green at the final commit; no release claim until then. Need ensure other privileged reports / exported financial data do not disclose unauthorized aggregate history.
+
+## Privileged sales reader sweep
+A read-only production pg_catalog search found other authenticated SECURITY DEFINER entry points reading `public.sales`. Categorized as:
+- Mutators/printing/refunds: out of read-visibility scope; no changes to business operations or print.
+- `get_raw_material_financial_report`: already filters the sale calculation through `private.financial_reference_visible`; review helper semantics in full integration test.
+- `get_branch_activity_snapshot`: privileged management dashboard aggregates full sale counts/amounts; added `20261116161000_branch_activity_history_visibility.sql` to constrain only the sale LEFT JOIN by `private.financial_row_visible`.
+- `get_system_health_snapshot`: exposes diagnostic discrepancy counts rather than total sales; preserve operational diagnostics, requires separate assessment.
+- `get_branch_treasury_day_close_reconciliation`: ledger-derived whole-history financial reconciliation, requires separate scope/permission review before declaring complete cross-report proof.
+Exact production pg_get_functiondef anchor checks matched all candidate source patterns. No business table SELECTs were used in production.
+
+## Final candidate checklist
+- [x] Protect direct sales, sale items, payments with existing RESTRICTIVE RLS (source reviewed).
+- [x] Candidate explicit sale filtering in component, payment, finance, shift-tender and branch-activity reports.
+- [x] Candidate fail-closed limits on historic full stored day/shift reports, preserving stored accounting truth.
+- [x] Integration tests for limited/unlimited with equal reporting permissions and direct snapshot reads (written, NOT yet proven green).
+- [ ] Exact-head Fresh/Test DB migration and security test success.
+- [ ] Verify CI all jobs green.
+- [ ] Review whole-history treasury and diagnostic paths for legitimate access and unintended sale visibility.
+- [ ] Separate release approval, guarded Production apply and authenticated read-only smoke proof.
