@@ -72,6 +72,9 @@ async function mockPosBackend(page: Page) {
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/customers**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/categories**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/branches**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(branches) }));
+  await page.route(`${SUPABASE_ORIGIN}/rest/v1/branch_online_pricing**`, async (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify({ branch_id: BRANCH_ID, enabled: true, markup_percent: 26 }) }));
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/settings**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ currency: 'EGP', tax_enabled: false, tax_rate: 0 }) }));
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/warehouses**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: WAREHOUSE_ID, branch_id: BRANCH_ID, is_active: true }]) }));
   await page.route(`${SUPABASE_ORIGIN}/rest/v1/inventory**`, async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ product_id: PRODUCT_ID, quantity: 20 }]) }));
@@ -273,6 +276,28 @@ test.describe('POS action-level', () => {
     await expect(page.locator('body')).not.toHaveText(/Error Loading Data|خطأ في تحميل البيانات/i);
   });
 
+
+  test('table landing uses full width without cart; Online opens direct quick-order workspace', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const landing = page.getByTestId('pos-tables-workspace');
+    await expect(landing).toBeVisible();
+    await expect(page.getByTestId('pos-catalog-shell')).toHaveCount(0);
+    await expect(page.getByTestId('pos-mobile-order-sheet')).toHaveCount(0);
+    await expect(page.getByTestId('pos-tables-start-online')).toBeVisible();
+    const width = await landing.evaluate((el) => el.getBoundingClientRect().width);
+    expect(width).toBeGreaterThan(1200);
+
+    await page.getByTestId('pos-tables-start-online').click();
+    await expect(landing).toBeHidden();
+    await expect(page.getByTestId('pos-catalog-shell')).toBeVisible();
+    await expect(page.getByTestId('pos-mobile-order-sheet')).toBeVisible();
+    await expect(page.getByTestId('pos-product-card-' + PRODUCT_ID)).toBeVisible();
+
+    await page.getByTestId('pos-action-new-order').click();
+    await expect(page.getByTestId('pos-tables-workspace')).toBeVisible();
+    await expect(page.getByTestId('pos-catalog-shell')).toHaveCount(0);
+    await expect(page.getByTestId('pos-mobile-order-sheet')).toHaveCount(0);
+  });
 
   test('phone product dialog keeps actions visible while long contents scroll', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
