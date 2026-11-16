@@ -70,6 +70,35 @@ describe.skipIf(!dbUrl)('reconciliation report historical sales visibility', () 
     expect(Number((unlimited.rows[0].result as {summary: {net_sales: number}}).summary.net_sales)).toBe(200);
   });
 
+  it('limits settlement and financial reconciliation totals to visible sales', async (ctx) => {
+    if (!impersonation) return ctx.skip();
+    const from = new Date(Date.now() - 35 * 86400000).toISOString();
+    const to = new Date(Date.now() + 86400000).toISOString();
+    const paymentSql = `SELECT public.get_sales_by_payment_report(
+      $1::uuid,$2::timestamptz,$3::timestamptz
+    ) AS result`;
+    const financeSql = `SELECT public.get_financial_reconciliation_report(
+      $1::uuid,$2::timestamptz,$3::timestamptz
+    ) AS result`;
+
+    for (const sql of [paymentSql, financeSql]) {
+      const limited = await runAs(client, ids.users.cashier, sql, [ids.branchA, from, to]);
+      const unlimited = await runAs(client, ids.users.branch_manager, sql, [ids.branchA, from, to]);
+      expect(limited.error).toBeUndefined();
+      expect(unlimited.error).toBeUndefined();
+      const limitedResult = limited.rows[0].result as {success: boolean; summary: {invoice_count: number; net_sales?: number; sales_total?: number}};
+      const fullResult = unlimited.rows[0].result as typeof limitedResult;
+      expect(limitedResult.success).toBe(true);
+      expect(fullResult.success).toBe(true);
+      expect(limitedResult.summary.invoice_count).toBe(1);
+      expect(fullResult.summary.invoice_count).toBe(2);
+      const limitedSales = limitedResult.summary.net_sales ?? limitedResult.summary.sales_total;
+      const fullSales = fullResult.summary.net_sales ?? fullResult.summary.sales_total;
+      expect(Number(limitedSales)).toBe(100);
+      expect(Number(fullSales)).toBe(200);
+    }
+  });
+
   it('rejects cross-branch reconciliation reads', async (ctx) => {
     if (!impersonation) return ctx.skip();
     const result = await runAs(client, ids.users.cashier,
