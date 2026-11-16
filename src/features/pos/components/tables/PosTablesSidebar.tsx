@@ -225,7 +225,7 @@ export function PosTablesSidebar(props: PosTablesSidebarProps) {
             <p className="mt-0.5 text-[11px] font-bold text-ui-subtle">{isAr ? 'اختر طاولة أو ابدأ نوع طلب من الاختصارات' : 'Choose a table or start an order from the shortcuts'}</p>
           </div>
 
-          <div data-testid="pos-tables-landing-actions" className="grid w-full grid-cols-3 gap-1 sm:w-auto sm:grid-cols-5 sm:gap-2">
+          <div data-testid="pos-tables-landing-actions" className="grid w-full grid-cols-5 gap-1 sm:w-auto sm:gap-2">
             {(onStartQuick || onSelectTakeaway) && (
               <button
                 type="button"
