@@ -28,3 +28,14 @@ User scope: implement fifth POS category `online` analogous to `delivery`; confi
 ## Delivery
 - Initial code + migration, tests candidate in this PR.
 - Explicitly list any deferred integration or incomplete parity; don't claim production deployment before verified.
+
+## Candidate implementation staged
+- `20261116171000_branch_online_pricing_foundation.sql`: one branch-local opt-in row, 0–100% increase setting default 26%, permission-guarded settings RPC, immutable base product prices, server helper. Existing delivery capability authorizes online order initiation; settings.manage gates configuration.
+- `20261116171500_online_order_markup_snapshot.sql`: frozen order percentage in new nullable `orders.online_markup_percent`, no backfill and no change to existing order rows.
+- `20261116172000_online_authoritative_pos_pricing.sql`: guarded replacements for the current modifier-aware item repricer, core sale item accounting, single and split checkout previews, with linked-order type mismatch guard. Existing tax function unchanged.
+- UI: online order labels/type and POS button disabled until branch activation; settings tab and permission-scoped editor; price preview for cart, modifier options and branch tax; frozen live order markup preview.
+- `tests/integration/branch_online_order_markup.test.ts`: localhost transaction/rollback test for tax, branch settings, 26% vs old, frozen 26% when new policy 40%, cross-branch RLS and non-opted-in branch failure.
+
+## Important scope boundary
+This feature is an additional manually operated Premier POS order type, not an external app API integration. No provider webhook or external payment settlement, no menu publication, no automatic imported order. For later platform integrations, use verified provider signatures, immutable inbound amount, idempotency and a separate settlement ledger; never apply the markup twice.
+No branch automatically activated or percentage changed in production; target branch was not identified. Full Verify and actual production release are still pending.
