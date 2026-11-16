@@ -57,7 +57,7 @@ BEGIN
 
       -- The caller must not request a different type for an already staged
       -- order, which would change the markup while settling sent inventory.
-      v_from := '    IF p_order_id IS NOT NULL THEN';
+      v_from := E'    IF p_order_id IS NOT NULL THEN\n      SELECT table_id INTO v_order_table';
       v_to := $guard$
     IF p_order_id IS NOT NULL AND NOT EXISTS (
       SELECT 1 FROM public.orders o
@@ -66,7 +66,8 @@ BEGIN
     ) THEN
       RETURN jsonb_build_object('success',false,'error','ORDER_TYPE_MISMATCH');
     END IF;
-    IF p_order_id IS NOT NULL THEN$guard$;
+    IF p_order_id IS NOT NULL THEN
+      SELECT table_id INTO v_order_table$guard$;
       v_count:=(length(v_def)-length(replace(v_def,v_from,'')))/length(v_from);
       IF v_count<>1 THEN RAISE EXCEPTION 'ONLINE_ORDER_TYPE_GUARD_DRIFT'; END IF;
       v_def:=replace(v_def,v_from,v_to);
