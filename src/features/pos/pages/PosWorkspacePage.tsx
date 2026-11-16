@@ -88,6 +88,7 @@ export function PosWorkspacePage() {
   const [activeShift, setActiveShift] = useState<{ id: string; expected: number; opened_at: string; opening_amount: number } | null>(null);
   const [shiftChecked, setShiftChecked] = useState(false);
   const [onlineEnabled, setOnlineEnabled] = useState(false);
+  const [onlineMarkupPercent, setOnlineMarkupPercent] = useState(26);
   const [panel, setPanel] = useState<PosPanelId>(null);
   const [ordersCategory, setOrdersCategory] = useState<ActiveCategory>('all');
   const [mobileOrderOpen, setMobileOrderOpen] = useState(false);
@@ -118,13 +119,17 @@ export function PosWorkspacePage() {
   useEffect(() => {
     let alive = true;
     setOnlineEnabled(false);
+    setOnlineMarkupPercent(26);
     if (!effectiveBranch) return;
     void supabase.from('branch_online_pricing')
-      .select('enabled')
+      .select('enabled,markup_percent')
       .eq('branch_id', effectiveBranch)
       .maybeSingle()
       .then(({ data, error }) => {
-        if (alive && !error) setOnlineEnabled(data?.enabled === true);
+        if (alive && !error) {
+          setOnlineEnabled(data?.enabled === true);
+          if (data) setOnlineMarkupPercent(Number(data.markup_percent));
+        }
       });
     return () => { alive = false; };
   }, [effectiveBranch]);
@@ -166,6 +171,7 @@ export function PosWorkspacePage() {
     activeShift,
     products,
     stockMap: EMPTY_POS_STOCK_MAP,
+    onlineMarkupPercent,
   });
   const canModifyCurrentOrder = pos.activeOrderId ? perms.canEditOrder : perms.canOperateType(pos.orderType, pos.tableId);
 
@@ -1134,6 +1140,7 @@ export function PosWorkspacePage() {
           product={configProduct || configItem?.product || null}
           initialItem={configItem}
           currency={pos.effCurrency}
+          onlineMarkupPercent={pos.orderType === 'online' ? pos.effectiveOnlineMarkup : 0}
           onConfirm={(item) => {
             if (configItem) {
               const originalLineKey = cartLineKey(configItem);
