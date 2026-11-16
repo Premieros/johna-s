@@ -31,7 +31,7 @@ BEGIN
 
     IF v_step=1 THEN
       v_from := 'NEW.unit_price:=ROUND(GREATEST(COALESCE(v_base_price,0)+COALESCE((v_mod->>''price_delta'')::numeric,0),0),2);';
-      v_to := 'NEW.unit_price:=public._online_order_price(v_branch_id,(SELECT o.order_type FROM public.orders o WHERE o.id=NEW.order_id),GREATEST(COALESCE(v_base_price,0)+COALESCE((v_mod->>''price_delta'')::numeric,0),0));';
+      v_to := 'NEW.unit_price:=ROUND(public._online_order_price(v_branch_id,(SELECT o.order_type FROM public.orders o WHERE o.id=NEW.order_id),GREATEST(COALESCE(v_base_price,0)+COALESCE((v_mod->>''price_delta'')::numeric,0),0)),2);';
     ELSIF v_step=2 THEN
       v_from := 'v_unit_price := GREATEST(v_unit_price+COALESCE((v_mod->>''price_delta'')::numeric,0),0);';
       v_to := 'v_unit_price := public._online_order_price(p_branch_id,p_order_type,GREATEST(v_unit_price+COALESCE((v_mod->>''price_delta'')::numeric,0),0));';
