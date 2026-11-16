@@ -19,3 +19,14 @@ User scope: Table area is a browsing/selection screen, not a split sale/cart wor
 - No auto-activation of Online, no new business records, no changes to pricing or branch taxes.
 - Empty checkout/cart never covers table landing; order cart, payment and controls remain reachable when editing a genuine order.
 - Do not merge until full exact-head CI is green; production GitHub Pages publication must be separately verified.
+
+## Implementation
+- The tables landing is now full viewport width and does not render catalog, current cart or payment side panel until a real order is started or resumed.
+- Online is a fifth compact action in the table landing header, adjacent to Quick, Delivery, Drive Thru and Active Orders. Its button is available only to users with pos.order.online and is disabled until the branch pricing setting is enabled.
+- Clicking Online follows the same direct flow as Quick: it marks the tables picker as completed and immediately opens products + cart with order_type online, without requiring a table, customer or external platform selection.
+- New Order resets to the full-width table landing; opening an existing table/order retains the prior order/cart/checkout behavior.
+- Added Playwright regression for desktop full width, no idle cart, direct Online start and reset. Existing phone single-row action geometry contract preserved with five-column layout.
+- No SQL migrations, pricing changes, role grants, external APIs or business data edits.
+
+## Verification
+- CI pending on final exact head. No merge or Pages release asserted.
