@@ -36,7 +36,7 @@ BEGIN
   v_count := (length(v_def)-length(replace(v_def,v_anchor,'')))/length(v_anchor);
   IF v_count<>1
      OR position('WITH sales_scope AS MATERIALIZED' in v_def)=0
-     OR position('SELECT\n        s.id,\n        s.total' in v_def)=0
+     OR position(E'SELECT\n        s.id,\n        s.total' in v_def)=0
      OR position('summary' in v_def)=0
   THEN
     RAISE EXCEPTION 'RECONCILIATION_REPORT_SOURCE_DRIFT';
