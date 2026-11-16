@@ -39,3 +39,8 @@ User scope: implement fifth POS category `online` analogous to `delivery`; confi
 ## Important scope boundary
 This feature is an additional manually operated Premier POS order type, not an external app API integration. No provider webhook or external payment settlement, no menu publication, no automatic imported order. For later platform integrations, use verified provider signatures, immutable inbound amount, idempotency and a separate settlement ledger; never apply the markup twice.
 No branch automatically activated or percentage changed in production; target branch was not identified. Full Verify and actual production release are still pending.
+
+## QA repair after first complete CI cycle
+Run 43887494816: frontend/typecheck/lint and browser sections passed, but two unit cases correctly rejected reuse of delivery permission for online. New `pos.order.online` added to canonical Permission type, label, dependency contract, UI gate and `_pos_order_type_allowed`. This keeps each order type isolated (no silent broadening of delivery).
+DB run failed two scenarios because the canonical fresh DB still has `orders_order_type_check` for the four old types. Forward-only migration `20261116171200_online_order_type_constraint.sql` extends that check; no existing row changed.
+CI must be rerun at exact new HEAD. Nothing merged, production unchanged.
