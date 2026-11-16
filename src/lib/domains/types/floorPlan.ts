@@ -1,6 +1,6 @@
 import type { Product, ProductModifierSnapshot } from './catalog';
 
-export type OrderType = 'dine_in' | 'takeaway' | 'delivery' | 'drive_thru';
+export type OrderType = 'dine_in' | 'takeaway' | 'delivery' | 'drive_thru' | 'online';
 export type DiningTableStatus = 'vacant' | 'occupied' | 'reserved' | 'closed';
 export type OrderStatus = 'open' | 'held' | 'completed' | 'cancelled';
 
@@ -62,6 +62,7 @@ export interface Order {
   order_number: string;
   branch_id: string;
   order_type: OrderType;
+  online_markup_percent?: number | null;
   status: OrderStatus;
   table_id: string | null;
   customer_id: string | null;

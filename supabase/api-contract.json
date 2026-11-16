@@ -1612,6 +1612,7 @@
     "approval_policies",
     "approval_requests",
     "audit_log",
+    "branch_online_pricing",
     "branch_settings",
     "branches",
     "categories",

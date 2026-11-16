@@ -10,6 +10,7 @@ import {
   Loader2,
   CalendarClock,
   Percent,
+  Globe2,
   LockKeyhole,
   Unlock,
   Activity,
@@ -29,8 +30,9 @@ import { findUiTheme, UI_THEMES } from '@/lib/themes';
 import type { BranchSettings } from '@/lib/types';
 import { APP_ROUTES } from '@/core/navigation/routes';
 import { fetchBranchStaff, type BranchStaffOption } from '../services/branchStaff';
+import { OnlinePricingSettings } from '../components/OnlinePricingSettings';
 
-type SettingsTab = 'branch_profile' | 'tax' | 'business_day' | 'branch_staff' | 'appearance' | 'language';
+type SettingsTab = 'branch_profile' | 'online_pricing' | 'tax' | 'business_day' | 'branch_staff' | 'appearance' | 'language';
 
 export function SettingsControlCenterPage() {
   const { user } = useAuth();
@@ -129,6 +131,7 @@ export function SettingsControlCenterPage() {
   const SECTIONS: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
     { key: 'branch_profile', label: isAr ? 'بيانات الفرع والطباعة' : 'Branch Profile & Receipts', icon: <Store className="w-4 h-4" /> },
     { key: 'tax', label: isAr ? 'الضريبة' : 'Tax', icon: <Percent className="w-4 h-4" /> },
+    { key: 'online_pricing', label: isAr ? 'أسعار الأونلاين' : 'Online Pricing', icon: <Globe2 className="w-4 h-4" /> },
     { key: 'business_day', label: isAr ? 'اليوم المالي والشفتات' : 'Business Day & Shifts', icon: <CalendarClock className="w-4 h-4" /> },
     { key: 'branch_staff', label: isAr ? 'طاقم عمل الفرع' : 'Branch Staff', icon: <Users className="w-4 h-4" /> },
     { key: 'appearance', label: isAr ? 'المظهر والثيم' : 'Appearance & Theme', icon: <Palette className="w-4 h-4" /> },
@@ -265,6 +268,12 @@ export function SettingsControlCenterPage() {
                   <span>{isAr ? 'حفظ إعدادات الفرع' : 'Save Branch Profile'}</span>
                 </Button>
               </div>
+            </Card>
+          )}
+
+          {active === 'online_pricing' && (
+            <Card className="space-y-4 p-4 sm:p-6">
+              <OnlinePricingSettings branchId={targetBranchId} isAr={isAr} />
             </Card>
           )}
 

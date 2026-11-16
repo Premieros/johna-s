@@ -10,6 +10,7 @@ interface ProductConfigModalProps {
   product: Product | null;
   initialItem?: CartItem | null;
   currency: string;
+  onlineMarkupPercent?: number;
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (item: CartItem) => void;
@@ -26,6 +27,7 @@ export function ProductConfigModal({
   product,
   initialItem,
   currency,
+  onlineMarkupPercent = 0,
   isOpen,
   onClose,
   onConfirm,
@@ -111,7 +113,10 @@ export function ProductConfigModal({
   };
 
   const modifierExtra = selectedIds.reduce((sum, id) => sum + Number(optionById.get(id)?.option.price_delta || 0), 0);
-  const unitPrice = Math.max(0, Number(product.sale_price || 0) + modifierExtra);
+  const baseUnitPrice = Math.max(0, Number(product.sale_price || 0) + modifierExtra);
+  const unitPrice = onlineMarkupPercent > 0
+    ? Math.round((baseUnitPrice * (1 + onlineMarkupPercent / 100) + Number.EPSILON) * 100) / 100
+    : baseUnitPrice;
   const lineSubtotal = unitPrice * quantity;
   const lineTotal = Math.max(0, lineSubtotal - itemDiscount);
 
@@ -145,7 +150,7 @@ export function ProductConfigModal({
       product,
       unit_name: initialItem?.unit_name || 'piece',
       quantity,
-      unit_price: unitPrice,
+      unit_price: baseUnitPrice,
       discount_amount: Math.min(Math.max(itemDiscount, 0), lineSubtotal),
       bonus_quantity: initialItem?.bonus_quantity || 0,
       modifier_option_ids: selectedIds,
@@ -167,7 +172,7 @@ export function ProductConfigModal({
             )}
             <div className="min-w-0">
               <h3 className="truncate text-sm font-black text-ui-text sm:text-base">{isAr ? product.name : product.name_en || product.name}</h3>
-              <p className="text-[11px] font-bold text-ui-accent sm:text-xs">{formatCurrency(product.sale_price, currency, lang)}</p>
+              <p className="text-[11px] font-bold text-ui-accent sm:text-xs">{formatCurrency(onlineMarkupPercent > 0 ? Math.round(Number(product.sale_price) * (1 + onlineMarkupPercent / 100) * 100) / 100 : product.sale_price, currency, lang)}</p>
             </div>
           </div>
           <button onClick={onClose} aria-label={isAr ? 'إغلاق' : 'Close'} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-ui-subtle hover:bg-ui-page-alt hover:text-ui-text"><X className="h-5 w-5" /></button>

@@ -1,4 +1,4 @@
-import { Table2, Car, Bike, Zap, ListOrdered } from 'lucide-react';
+import { Table2, Car, Bike, Zap, Globe, ListOrdered } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import type { OrderType } from '@/lib/types';
 import { ORDER_TYPE_META } from '../../utils/orderLabels';
@@ -8,12 +8,13 @@ interface OrderTypePickerProps {
   onActiveOrders: () => void;
 }
 
-const ICONS = { table: Table2, car: Car, bike: Bike, zap: Zap } as const;
+const ICONS = { table: Table2, car: Car, bike: Bike, zap: Zap, globe: Globe } as const;
 
 const CARDS: Array<{ type: OrderType; icon: keyof typeof ICONS; emoji: string; descAr: string; descEn: string }> = [
   { type: 'dine_in', icon: 'table', emoji: '🪑', descAr: 'داخل الصالة', descEn: 'Dine-in' },
   { type: 'drive_thru', icon: 'car', emoji: '🚗', descAr: 'الطلب من السيارة', descEn: 'Drive thru' },
   { type: 'delivery', icon: 'bike', emoji: '🛵', descAr: 'توصيل للعميل', descEn: 'Delivery' },
+  { type: 'online', icon: 'globe', emoji: '🌐', descAr: 'طلبات المنيو والتطبيقات الخارجية', descEn: 'External menus and apps' },
   { type: 'takeaway', icon: 'zap', emoji: '⚡', descAr: 'استلام سريع', descEn: 'Quick pickup' },
 ];
 

@@ -29,6 +29,7 @@ const REQUIREMENTS: Partial<Record<Permission, Permission[]>> = {
   'pos.order.takeaway': ['pos.view'],
   'pos.order.drive_thru': ['pos.view'],
   'pos.order.delivery': ['pos.view'],
+  'pos.order.online': ['pos.view'],
   'pos.order.edit': ['pos.view'],
   'pos.payment.take': ['pos.view'],
   'pos.order.split': ['pos.view'],
@@ -224,6 +225,12 @@ const EFFECTS: Partial<Record<Permission, { ar: string; en: string; notesAr?: st
     en: 'Create and send delivery orders to kitchen and bar only.',
     notesAr: 'لا تمنح أنواع الطلبات الأخرى أو التعديل أو الدفع أو الخصم أو طباعة الفاتورة. تذكرة المطبخ والبار جزء من الإرسال.',
     notesEn: 'No other order types, editing, payment, discount or receipt permission. Kitchen and bar tickets are part of dispatch.',
+  },
+  'pos.order.online': {
+    ar: 'إنشاء وإرسال طلبات الأونلاين فقط للفرع الذي فعّل تسعير الأونلاين.',
+    en: 'Create and send online orders only in branches with online pricing enabled.',
+    notesAr: 'مستقلة عن صلاحية التوصيل، وتبقى إدارة النسبة بصلاحية settings.manage.',
+    notesEn: 'Independent from delivery permission; pricing configuration requires settings.manage.',
   },
   'pos.payment.take': {
     ar: 'يُظهر وينفذ التحصيل داخل POS. يحتاج شفت فرع مفتوح فعليًا، لكنه لا يمنح صلاحية فتح الشفت.',
