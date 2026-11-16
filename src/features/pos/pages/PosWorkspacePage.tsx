@@ -105,6 +105,7 @@ export function PosWorkspacePage() {
   const [tableModalOpen, setTableModalOpen] = useState(false);
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
   const [tablesCollapsed, setTablesCollapsed] = useState(false);
+  const [tablesLandingDismissed, setTablesLandingDismissed] = useState(Boolean(orderIdParam || initState.startStep));
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [transferOrder, setTransferOrder] = useState<Order | null>(null);
   const [transferSourceTable, setTransferSourceTable] = useState<DiningTable | null>(null);
@@ -530,6 +531,7 @@ export function PosWorkspacePage() {
       if (!ok) return;
       pos.resetWorkspace();
     }
+    setTablesLandingDismissed(true);
     setStartStep('table');
     setPreselectedTableId(tableId);
     setPanel(null);
@@ -540,6 +542,7 @@ export function PosWorkspacePage() {
     if (pos.completing || pos.kitchenSending) return;
     if (!perms.canOperateType(opts.orderType, opts.tableId)) return;
     pos.resetWorkspace();
+    setTablesLandingDismissed(true);
     pos.setOrderType(opts.orderType);
     if (opts.tableId) pos.setTableId(opts.tableId);
     pos.setGuestCount(opts.guestCount ?? null);
@@ -556,6 +559,7 @@ export function PosWorkspacePage() {
     setPreselectedTableId(null);
     setPanel(null);
     setMobileOrderOpen(false);
+    setTablesLandingDismissed(true);
     openOrderWorkspace(order.id, pay ? { pay: true } : {});
   };
 
@@ -632,6 +636,9 @@ export function PosWorkspacePage() {
   }
 
   const isCheckout = pos.checkoutOpen;
+  const isTablesLanding = !tablesLandingDismissed && !orderIdParam
+    && !pos.activeOrderId && !pos.activeTable && pos.cart.length === 0
+    && !startStep && !isCheckout;
 
   const handleSidebarSelectTable = (table: DiningTable) => {
     const tableOrders = ordersByTable[table.id] || [];
@@ -647,6 +654,7 @@ export function PosWorkspacePage() {
         );
         if (!ok) return;
       }
+      setTablesLandingDismissed(true);
       pos.startTableOrder(table);
       if (orderIdParam) navigate('/pos');
     }
@@ -788,6 +796,8 @@ export function PosWorkspacePage() {
         onOpenShiftModal={() => setShiftModalOpen(true)}
         onNewOrder={() => {
           pos.resetWorkspace();
+          setTablesLandingDismissed(false);
+          setTablesCollapsed(false);
           window.dispatchEvent(new Event('pos:show-tables-landing'));
           setStartStep(null);
           setPreselectedTableId(null);
@@ -832,7 +842,7 @@ export function PosWorkspacePage() {
       {/* Main Split-Screen Workspace */}
       <div data-testid="pos-main-workspace" className="flex min-h-0 flex-1 overflow-hidden">
         {/* Tables-first landing stays available on phones, tablets, and desktop. */}
-        <div data-testid="pos-tables-landing-shell" className="flex h-full shrink-0">
+        <div data-testid="pos-tables-landing-shell" className={isTablesLanding ? "flex h-full min-w-0 flex-1" : "flex h-full shrink-0"}>
           <PosTablesSidebar
             branchId={effectiveBranch}
             tables={tables}
@@ -843,7 +853,8 @@ export function PosWorkspacePage() {
             currency={pos.effCurrency}
             activeTableId={pos.tableId || pos.activeTable?.id || null}
             activeOrderId={pos.activeOrderId}
-            collapsed={tablesCollapsed}
+            collapsed={isTablesLanding ? false : tablesCollapsed}
+            fullWidth={isTablesLanding}
             onToggleCollapse={() => setTablesCollapsed((prev) => !prev)}
             onSelectTable={handleSidebarSelectTable}
             onTransferOrder={(ord, tb) => {
@@ -858,6 +869,8 @@ export function PosWorkspacePage() {
               setPanel(null);
               setMobileOrderOpen(false);
             } : undefined}
+            onStartOnline={perms.canOperateType('online', null) ? () => handleStartOrder({ orderType: 'online' }) : undefined}
+            onlineEnabled={onlineEnabled}
             onStartDriveThru={perms.canCreateDriveThru ? () => {
               setStartStep('car');
               setPreselectedTableId(null);
@@ -875,8 +888,8 @@ export function PosWorkspacePage() {
           />
         </div>
 
-        {/* Center: Product Browser with Fast Order Header Bar */}
-        <div data-testid="pos-catalog-shell" className="flex min-h-0 min-w-0 flex-1 flex-col bg-ui-page">
+        {/* The tables landing has no empty catalog or cart. */}
+        {!isTablesLanding && <div data-testid="pos-catalog-shell" className="flex min-h-0 min-w-0 flex-1 flex-col bg-ui-page">
           <PosOrderHeaderBar
             orderNumber={pos.activeOrderNumber}
             orderId={pos.activeOrderId}
@@ -940,10 +953,10 @@ export function PosWorkspacePage() {
               inputRef={barcodeRef}
             />
           </div>
-        </div>
+        </div>}
 
-        {/* One responsive order panel: desktop sidebar, mobile bottom sheet. */}
-        <div
+        {/* Keep the order panel for an actual selected or started order. */}
+        {!isTablesLanding && <div
           data-testid="pos-mobile-order-sheet"
           className={`${mobileOrderOpen || isCheckout
             ? 'fixed inset-0 z-[60] flex items-end justify-center bg-black/45 backdrop-blur-[1px]'
@@ -994,7 +1007,7 @@ export function PosWorkspacePage() {
               {rightPanel}
             </div>
           </section>
-        </div>
+        </div>}
       </div>
 
       <nav
