@@ -11,7 +11,7 @@ import { useAuth } from '@/context/AuthContext';
  * The dedicated Johna-S project and public key are configured. The deployment
  * remains gated by GitHub's verified-main workflow.
  */
-const SUPPORT_ORIGIN = 'https://premieros-agent-support-public.vercel.app';
+const SUPPORT_ORIGIN = 'https://premieros-ai-sales-agent.vercel.app';
 // The public widget key belongs only to Johna-S, never to Premier.
 const PUBLIC_KEY = '8e299da0ef520017d2c74c4e688109dd0dda3b48cee20f2d';
 const KEY_FORMAT = /^[a-f0-9]{48}$/;
