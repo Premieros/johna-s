@@ -31,16 +31,16 @@ BEGIN
 
     IF v_step=1 THEN
       v_from := 'NEW.unit_price:=ROUND(GREATEST(COALESCE(v_base_price,0)+COALESCE((v_mod->>''price_delta'')::numeric,0),0),2);';
-      v_to := 'NEW.unit_price:=ROUND(public._online_order_price(v_branch_id,(SELECT o.order_type FROM public.orders o WHERE o.id=NEW.order_id),GREATEST(COALESCE(v_base_price,0)+COALESCE((v_mod->>''price_delta'')::numeric,0),0)),2);';
+      v_to := 'NEW.unit_price:=ROUND(public._online_order_price(v_branch_id,(SELECT o.order_type FROM public.orders o WHERE o.id=NEW.order_id),GREATEST(COALESCE(v_base_price,0)+COALESCE((v_mod->>''price_delta'')::numeric,0),0),NEW.order_id),2);';
     ELSIF v_step=2 THEN
       v_from := 'v_unit_price := GREATEST(v_unit_price+COALESCE((v_mod->>''price_delta'')::numeric,0),0);';
-      v_to := 'v_unit_price := public._online_order_price(p_branch_id,p_order_type,GREATEST(v_unit_price+COALESCE((v_mod->>''price_delta'')::numeric,0),0));';
+      v_to := 'v_unit_price := public._online_order_price(p_branch_id,p_order_type,GREATEST(v_unit_price+COALESCE((v_mod->>''price_delta'')::numeric,0),0),p_order_id);';
     ELSIF v_step=3 THEN
       v_from := 'v_price := GREATEST(COALESCE(v_price,0) + COALESCE((v_mod->>''price_delta'')::numeric,0), 0);';
-      v_to := 'v_price := public._online_order_price(p_branch_id,p_order_type,GREATEST(COALESCE(v_price,0) + COALESCE((v_mod->>''price_delta'')::numeric,0), 0));';
+      v_to := 'v_price := public._online_order_price(p_branch_id,p_order_type,GREATEST(COALESCE(v_price,0) + COALESCE((v_mod->>''price_delta'')::numeric,0), 0),p_order_id);';
     ELSE
       v_from := 'v_price := GREATEST(COALESCE(v_price,0)+COALESCE((v_mod->>''price_delta'')::numeric,0),0);';
-      v_to := 'v_price := public._online_order_price(p_branch_id,p_order_type,GREATEST(COALESCE(v_price,0)+COALESCE((v_mod->>''price_delta'')::numeric,0),0));';
+      v_to := 'v_price := public._online_order_price(p_branch_id,p_order_type,GREATEST(COALESCE(v_price,0)+COALESCE((v_mod->>''price_delta'')::numeric,0),0),p_order_id);';
     END IF;
 
     v_count:=(length(v_def)-length(replace(v_def,v_from,'')))/length(v_from);
@@ -50,7 +50,7 @@ BEGIN
     v_def := replace(v_def,v_from,v_to);
     IF v_step=2 THEN
       v_from := 'v_unit_price := GREATEST(COALESCE(v_unit_price,0)+COALESCE((v_mod->>''price_delta'')::numeric,0),0);';
-      v_to := 'v_unit_price := public._online_order_price(p_branch_id,p_order_type,GREATEST(COALESCE(v_unit_price,0)+COALESCE((v_mod->>''price_delta'')::numeric,0),0));';
+      v_to := 'v_unit_price := public._online_order_price(p_branch_id,p_order_type,GREATEST(COALESCE(v_unit_price,0)+COALESCE((v_mod->>''price_delta'')::numeric,0),0),p_order_id);';
       v_count:=(length(v_def)-length(replace(v_def,v_from,'')))/length(v_from);
       IF v_count<>1 THEN RAISE EXCEPTION 'ONLINE_PRICING_SALE_ITEM_DRIFT'; END IF;
       v_def:=replace(v_def,v_from,v_to);
