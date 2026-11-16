@@ -1,9 +1,9 @@
-import { Table2, Car, Bike, Zap } from 'lucide-react';
+import { Table2, Car, Bike, Zap, Globe } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import type { OrderType } from '@/lib/types';
 import { ORDER_TYPE_META } from '../../utils/orderLabels';
 
-const ICONS = { table: Table2, car: Car, bike: Bike, zap: Zap } as const;
+const ICONS = { table: Table2, car: Car, bike: Bike, zap: Zap, globe: Globe } as const;
 
 interface OrderTypePillProps {
   type: OrderType;
