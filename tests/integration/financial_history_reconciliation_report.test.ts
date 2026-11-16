@@ -23,12 +23,12 @@ describe.skipIf(!dbUrl)('reconciliation report historical sales visibility', () 
     // history permission may explain the historical difference.
     await client.query(`
       UPDATE public.roles
-      SET permissions = permissions || '["reports.costing"]'::jsonb
+      SET permissions = permissions || '["reports.costing","reports.view","reports.financial","shifts.report.shift"]'::jsonb
       WHERE role = 'cashier'
     `);
     await client.query(`
       UPDATE public.roles
-      SET permissions = permissions || '["reports.costing","history.unlimited"]'::jsonb
+      SET permissions = permissions || '["reports.costing","reports.view","reports.financial","shifts.report.shift","history.unlimited"]'::jsonb
       WHERE role = 'branch_manager'
     `);
     await client.query(`
