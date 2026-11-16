@@ -30,3 +30,6 @@ User scope: Table area is a browsing/selection screen, not a split sale/cart wor
 
 ## Verification
 - CI pending on final exact head. No merge or Pages release asserted.
+
+## First CI regression and correction
+Verify run 43894206051: the new desktop 1280px full-width/no-cart/Online-direct-start Playwright test **passed**. The existing 320px phone geometry test failed: five actions wrapped to a second row because `src/mobile-layer-fix.css` had an older `@media(max-width:639px)` four-column `!important` override, despite five-column JSX. Adjusted only this mobile override from four to five columns; kept the existing 44px touch target and one-row contract. Fresh exact-head Full Verify required before release.
