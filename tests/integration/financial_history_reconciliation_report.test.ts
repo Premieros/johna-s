@@ -23,12 +23,12 @@ describe.skipIf(!dbUrl)('reconciliation report historical sales visibility', () 
     // history permission may explain the historical difference.
     await client.query(`
       UPDATE public.roles
-      SET permissions = permissions || '["reports.costing","reports.view","reports.financial","shifts.report.shift"]'::jsonb
+      SET permissions = permissions || '["reports.costing","reports.view","reports.financial","shifts.report.shift","settings.manage"]'::jsonb
       WHERE role = 'cashier'
     `);
     await client.query(`
       UPDATE public.roles
-      SET permissions = permissions || '["reports.costing","reports.view","reports.financial","shifts.report.shift","history.unlimited"]'::jsonb
+      SET permissions = permissions || '["reports.costing","reports.view","reports.financial","shifts.report.shift","settings.manage","history.unlimited"]'::jsonb
       WHERE role = 'branch_manager'
     `);
     await client.query(`
@@ -140,6 +140,27 @@ describe.skipIf(!dbUrl)('reconciliation report historical sales visibility', () 
     expect(denied.rows[0].result).toMatchObject({
       success: false, error: 'HISTORY_PERMISSION_DENIED',
     });
+  });
+
+  it('limits the branch activity sales count and value for history-limited settings managers', async (ctx) => {
+    if (!impersonation) return ctx.skip();
+    const from = new Date(Date.now() - 30.5 * 86400000).toISOString();
+    const to = new Date(Date.now() + 60000).toISOString();
+    const sql = `SELECT public.get_branch_activity_snapshot(
+      $1::timestamptz,$2::timestamptz,$3::uuid
+    ) AS result`;
+    const limited = await runAs(client, ids.users.cashier, sql, [from,to,ids.branchA]);
+    const unlimited = await runAs(client, ids.users.branch_manager, sql, [from,to,ids.branchA]);
+    expect(limited.error).toBeUndefined();
+    expect(unlimited.error).toBeUndefined();
+    const limitedResult = limited.rows[0].result as {success:boolean;branches:Array<{completed_sales_count:number;completed_sales_value:number}>};
+    const fullResult = unlimited.rows[0].result as typeof limitedResult;
+    expect(limitedResult.success).toBe(true);
+    expect(fullResult.success).toBe(true);
+    expect(Number(limitedResult.branches[0].completed_sales_value)).toBe(100);
+    expect(Number(fullResult.branches[0].completed_sales_value)).toBe(200);
+    expect(limitedResult.branches[0].completed_sales_count).toBe(1);
+    expect(fullResult.branches[0].completed_sales_count).toBe(2);
   });
 
   it('rejects cross-branch reconciliation reads', async (ctx) => {
