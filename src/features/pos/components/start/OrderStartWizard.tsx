@@ -1,6 +1,6 @@
 import { canOperateOrderType } from '@/lib/posOrderPermissions';
 import { useCan } from '@/lib/permissions';
-import { ArrowRight, Table2, Car, Bike, Zap, ListOrdered } from 'lucide-react';
+import { ArrowRight, Table2, Car, Bike, Zap, Globe2, ListOrdered } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 import type { Customer, DiningTable, Order, OrderItem, OrderType } from '@/lib/types';
 import type { OrderKitchenSend } from '../../types';
@@ -27,6 +27,7 @@ interface OrderStartWizardProps {
   customers: Customer[];
   preselectedTableId: string | null;
   currency: string;
+  onlineEnabled: boolean;
   onStepChange: (step: StartStep) => void;
   onBack: () => void;
   onStart: (opts: StartOrderOptions) => void;
@@ -45,6 +46,7 @@ export function OrderStartWizard({
   customers,
   preselectedTableId,
   currency,
+  onlineEnabled,
   onStepChange,
   onBack,
   onStart,
@@ -102,7 +104,7 @@ export function OrderStartWizard({
         </div>
 
         {step === 'type' && (
-          <div data-testid="pos-landing-actions" className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div data-testid="pos-landing-actions" className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
             <button
               type="button"
               data-testid="pos-start-quick"
@@ -122,6 +124,17 @@ export function OrderStartWizard({
             >
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ui-info/10 text-ui-info"><Bike className="h-5 w-5" /></span>
               <span><span className="block text-sm font-black text-ui-text">{isAr ? 'دليفري' : 'Delivery'}</span><span className="text-[10px] font-bold text-ui-subtle">{isAr ? 'طلب توصيل' : 'Delivery order'}</span></span>
+            </button>
+            <button
+              type="button"
+              data-testid="pos-start-online"
+              disabled={!onlineEnabled || !can('pos.order.delivery')}
+              onClick={() => startOrder({ orderType: 'online' })}
+              title={!onlineEnabled ? (isAr ? 'فعّل أسعار الأونلاين من إعدادات الفرع أولًا' : 'Enable online pricing in branch settings first') : undefined}
+              className="flex min-h-16 items-center gap-3 rounded-2xl border border-ui-border bg-ui-surface-raised px-4 text-start shadow-ui-xs transition hover:border-ui-primary hover:bg-ui-primary-soft disabled:opacity-50 active:scale-[.98]"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ui-primary-soft text-ui-accent"><Globe2 className="h-5 w-5" /></span>
+              <span><span className="block text-sm font-black text-ui-text">{isAr ? 'أونلاين' : 'Online'}</span><span className="text-[10px] font-bold text-ui-subtle">{!onlineEnabled ? (isAr ? 'يحتاج تفعيل الفرع' : 'Enable per branch') : (isAr ? 'سعر أونلاين' : 'Online price')}</span></span>
             </button>
             <button
               type="button"
