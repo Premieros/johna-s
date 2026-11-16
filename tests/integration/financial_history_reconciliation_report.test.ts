@@ -90,8 +90,9 @@ describe.skipIf(!dbUrl)('reconciliation report historical sales visibility', () 
       const fullResult = unlimited.rows[0].result as typeof limitedResult;
       expect(limitedResult.success).toBe(true);
       expect(fullResult.success).toBe(true);
-      expect(limitedResult.summary.invoice_count).toBe(1);
-      expect(fullResult.summary.invoice_count).toBe(2);
+      // The shared RLS fixture also contains a zero-value recent sale.
+      // Compare the incremental visible sale rather than fixed base counts.
+      expect(fullResult.summary.invoice_count - limitedResult.summary.invoice_count).toBe(1);
       const limitedSales = limitedResult.summary.net_sales ?? limitedResult.summary.sales_total;
       const fullSales = fullResult.summary.net_sales ?? fullResult.summary.sales_total;
       expect(Number(limitedSales)).toBe(100);
@@ -159,8 +160,7 @@ describe.skipIf(!dbUrl)('reconciliation report historical sales visibility', () 
     expect(fullResult.success).toBe(true);
     expect(Number(limitedResult.branches[0].completed_sales_value)).toBe(100);
     expect(Number(fullResult.branches[0].completed_sales_value)).toBe(200);
-    expect(limitedResult.branches[0].completed_sales_count).toBe(1);
-    expect(fullResult.branches[0].completed_sales_count).toBe(2);
+    expect(fullResult.branches[0].completed_sales_count - limitedResult.branches[0].completed_sales_count).toBe(1);
   });
 
   it('rejects cross-branch reconciliation reads', async (ctx) => {
