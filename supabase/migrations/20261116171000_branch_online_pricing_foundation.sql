@@ -9,7 +9,7 @@ CREATE TABLE public.branch_online_pricing (
   enabled boolean NOT NULL DEFAULT false,
   markup_percent numeric(6,2) NOT NULL DEFAULT 26.00
     CHECK (markup_percent BETWEEN 0 AND 100),
-  updated_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  updated_by uuid REFERENCES public.users(id) ON DELETE SET NULL,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE public.branch_online_pricing ENABLE ROW LEVEL SECURITY;
