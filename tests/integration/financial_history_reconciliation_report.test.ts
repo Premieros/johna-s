@@ -163,6 +163,17 @@ describe.skipIf(!dbUrl)('reconciliation report historical sales visibility', () 
     expect(fullResult.branches[0].completed_sales_count - limitedResult.branches[0].completed_sales_count).toBe(1);
   });
 
+  it('denies whole-history treasury financial reconciliation without history.unlimited', async (ctx) => {
+    if (!impersonation) return ctx.skip();
+    const denied = await runAs(client, ids.users.cashier,
+      'SELECT public.get_branch_treasury_day_close_reconciliation($1::uuid, 30) AS result',
+      [ids.branchA]);
+    expect(denied.error).toBeUndefined();
+    expect(denied.rows[0].result).toMatchObject({
+      success: false, error: 'HISTORY_PERMISSION_DENIED',
+    });
+  });
+
   it('rejects cross-branch reconciliation reads', async (ctx) => {
     if (!impersonation) return ctx.skip();
     const result = await runAs(client, ids.users.cashier,
