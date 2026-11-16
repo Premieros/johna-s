@@ -731,7 +731,8 @@
   }
 
   [data-testid="pos-tables-landing-actions"] {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    /* Five direct order shortcuts, including Online, stay on one phone row. */
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
     gap: 0.25rem !important;
   }
 
