@@ -99,6 +99,49 @@ describe.skipIf(!dbUrl)('reconciliation report historical sales visibility', () 
     }
   });
 
+  it('prevents direct reads of old closed-day snapshots', async (ctx) => {
+    if (!impersonation) return ctx.skip();
+    const oldDate = new Date(Date.now() - 30 * 86400000).toISOString().slice(0,10);
+    const recentDate = new Date().toISOString().slice(0,10);
+    await client.query(
+      `INSERT INTO public.daily_closes (branch_id,business_date,report_snapshot)
+       VALUES ($1,$2::date,'{"net_sales":99999}'::jsonb),
+              ($1,$3::date,'{"net_sales":100}'::jsonb)`,
+      [ids.branchA, oldDate, recentDate],
+    );
+    const sql = `SELECT business_date::text FROM public.daily_closes
+      WHERE branch_id=$1 ORDER BY business_date`;
+    const limited = await runAs(client, ids.users.cashier, sql, [ids.branchA]);
+    const unlimited = await runAs(client, ids.users.branch_manager, sql, [ids.branchA]);
+    expect(limited.error).toBeUndefined();
+    expect(unlimited.error).toBeUndefined();
+    expect(limited.rows).toHaveLength(1);
+    expect(unlimited.rows).toHaveLength(2);
+
+    const denied = await runAs(client, ids.users.cashier,
+      'SELECT public.get_day_closing_report($1::uuid,$2::date) AS result',
+      [ids.branchA, oldDate]);
+    expect(denied.error).toBeUndefined();
+    expect(denied.rows[0].result).toMatchObject({
+      success: false, error: 'HISTORY_PERMISSION_DENIED',
+    });
+  });
+
+  it('does not provide full older shift summaries to limited users', async (ctx) => {
+    if (!impersonation) return ctx.skip();
+    await client.query(
+      `UPDATE public.shifts SET opened_at=now()-interval '30 days'
+       WHERE id=$1`, [ids.shiftA],
+    );
+    const denied = await runAs(client, ids.users.cashier,
+      'SELECT public.get_shift_closing_report($1::uuid) AS result',
+      [ids.shiftA]);
+    expect(denied.error).toBeUndefined();
+    expect(denied.rows[0].result).toMatchObject({
+      success: false, error: 'HISTORY_PERMISSION_DENIED',
+    });
+  });
+
   it('rejects cross-branch reconciliation reads', async (ctx) => {
     if (!impersonation) return ctx.skip();
     const result = await runAs(client, ids.users.cashier,
