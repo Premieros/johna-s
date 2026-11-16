@@ -76,16 +76,15 @@ REVOKE ALL ON FUNCTION public._online_order_price(uuid,text,numeric) FROM PUBLIC
 GRANT EXECUTE ON FUNCTION public._online_order_price(uuid,text,numeric)
   TO authenticated,service_role;
 
--- Extend the already established per-type permission model. Online is served
--- with the delivery capability until a distinct permission is introduced.
+-- Extend the existing strict per-order-type capability model. Online uses
+-- independent pos.order.online permission and is never implied by delivery.
 CREATE OR REPLACE FUNCTION public._pos_order_type_allowed(p_type text,p_table_id uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY INVOKER
 SET search_path=public,pg_temp AS $fn$
  SELECT COALESCE(
    p_type IN ('dine_in','takeaway','drive_thru','delivery','online')
    AND (p_table_id IS NULL OR p_type='dine_in')
-   AND public.can_permission('pos.order.' ||
-       CASE WHEN p_type='online' THEN 'delivery' ELSE p_type END),false);
+   AND public.can_permission('pos.order.' || p_type),false);
 $fn$;
 
 COMMIT;
