@@ -128,7 +128,7 @@ export function OrderStartWizard({
             <button
               type="button"
               data-testid="pos-start-online"
-              disabled={!onlineEnabled || !can('pos.order.delivery')}
+              disabled={!onlineEnabled || !can('pos.order.online')}
               onClick={() => startOrder({ orderType: 'online' })}
               title={!onlineEnabled ? (isAr ? 'فعّل أسعار الأونلاين من إعدادات الفرع أولًا' : 'Enable online pricing in branch settings first') : undefined}
               className="flex min-h-16 items-center gap-3 rounded-2xl border border-ui-border bg-ui-surface-raised px-4 text-start shadow-ui-xs transition hover:border-ui-primary hover:bg-ui-primary-soft disabled:opacity-50 active:scale-[.98]"
