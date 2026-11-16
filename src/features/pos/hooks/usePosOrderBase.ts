@@ -36,6 +36,7 @@ export interface UsePosOrderInput {
   activeShift: ActiveShiftInfo | null;
   products: Product[];
   stockMap: Record<string, number>;
+  onlineMarkupPercent?: number;
   rawShortageOnly?: Record<string, boolean>;
   onInventoryChanged?: () => void;
 }
@@ -82,6 +83,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const [paidAmount, setPaidAmount] = useState(0);
 
   const [orderType, setOrderType] = useState<OrderType>('takeaway');
+  const [frozenOnlineMarkup, setFrozenOnlineMarkup] = useState<number | null>(null);
   const [tableId, setTableId] = useState<string | null>(null);
   const [guestCount, setGuestCount] = useState<number | null>(null);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(orderId);
@@ -149,6 +151,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       setTableId(null);
       setGuestCount(null);
       setOrderType('takeaway');
+    setFrozenOnlineMarkup(null);
       setCart(EMPTY_CART);
       setOrderNotes('');
       return;
@@ -189,6 +192,7 @@ export function usePosOrder(input: UsePosOrderInput) {
         setDiscountType('amount');
         setDiscountAmount(Number(order.discount_amount || 0));
         setOrderNotes(order.notes || '');
+        setFrozenOnlineMarkup(order.order_type === 'online' ? (order.online_markup_percent ?? null) : null);
         const hasEffectiveItems = items.some((item) => Number(item.quantity || 0) > 0);
         if (order.table_id && hasEffectiveItems) {
           supabase.from('dining_tables').select('status').eq('id', order.table_id).maybeSingle().then(({ data: tbl }) => {
@@ -222,6 +226,12 @@ export function usePosOrder(input: UsePosOrderInput) {
     return () => { cancelled = true; };
   }, [tableId, branchId, activeTable?.id, activeTable?.branch_id]);
 
+  const effectiveOnlineMarkup = activeOrderId && frozenOnlineMarkup != null
+    ? frozenOnlineMarkup : (input.onlineMarkupPercent ?? 0);
+  const priceForOrder = useCallback((base: number) => orderType === 'online'
+    ? Math.round((Math.max(0, base) * (1 + effectiveOnlineMarkup / 100) + Number.EPSILON) * 100) / 100
+    : base, [orderType, effectiveOnlineMarkup]);
+
   const addToCart = useCallback((
     product: Product,
     quantity = 1,
@@ -236,7 +246,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       product,
       unit_name: 'piece',
       quantity,
-      unit_price: unitPrice ?? product.sale_price,
+      unit_price: priceForOrder(unitPrice ?? product.sale_price),
       discount_amount: discount,
       bonus_quantity: 0,
       modifier_option_ids: modifierOptionIds,
@@ -257,7 +267,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
       return [...prev, incoming];
     });
-  }, [setCart]);
+  }, [setCart, priceForOrder]);
 
   const updateQty = useCallback((lineKey: string, delta: number) => {
     const target = cart.find((i) => cartLineKey(i) === lineKey);
@@ -286,19 +296,20 @@ export function usePosOrder(input: UsePosOrderInput) {
   }, [setCart, cart]);
 
   const replaceCartLine = useCallback((lineKey: string, nextItem: CartItem) => {
+    const pricedItem = { ...nextItem, unit_price: priceForOrder(nextItem.unit_price) };
     setCart((prev) => {
       const withoutOld = prev.filter((i) => cartLineKey(i) !== lineKey);
-      const nextKey = cartLineKey(nextItem);
+      const nextKey = cartLineKey(pricedItem);
       const existing = withoutOld.find((i) => cartLineKey(i) === nextKey);
       if (existing) {
         return withoutOld.map((i) => cartLineKey(i) === nextKey
-          ? { ...i, quantity: i.quantity + nextItem.quantity, discount_amount: i.discount_amount + nextItem.discount_amount }
+          ? { ...i, quantity: i.quantity + pricedItem.quantity, discount_amount: i.discount_amount + pricedItem.discount_amount }
           : i);
       }
-      return [...withoutOld, nextItem];
+      return [...withoutOld, pricedItem];
     });
     return true;
-  }, [setCart]);
+  }, [setCart, priceForOrder]);
 
   const taxRate = effSettings?.tax_enabled ? (effSettings?.tax_rate || 0) : 0;
   const totals = useMemo(
@@ -319,6 +330,10 @@ export function usePosOrder(input: UsePosOrderInput) {
     if (ot === orderType) return;
     if (!perms.canOperateType(ot, ot === 'dine_in' ? tableId : null)) {
       show(isAr ? 'لا تملك صلاحية هذا النوع من الطلبات.' : 'You do not have permission for this order type.', 'error');
+      return;
+    }
+    if ((ot === 'online' || orderType === 'online') && cart.length > 0) {
+      show(isAr ? 'افرغ السلة قبل تغيير تسعير الأونلاين' : 'Clear the cart before changing online pricing', 'error');
       return;
     }
     if (activeOrderNumber) {
@@ -344,7 +359,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       setActiveTable(null);
     }
     setOrderType(ot);
-  }, [perms, orderType, activeOrderNumber, tableId, activeTable, show, t, isAr]);
+  }, [perms, orderType, activeOrderNumber, tableId, activeTable, cart.length, show, t, isAr]);
 
   const performDetach = useCallback(async () => {
     if (activeOrderId) {
