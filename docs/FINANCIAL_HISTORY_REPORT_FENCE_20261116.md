@@ -69,3 +69,6 @@ Exact production pg_get_functiondef anchor checks matched all candidate source p
 - [ ] Verify CI all jobs green.
 - [ ] Review whole-history treasury and diagnostic paths for legitimate access and unintended sale visibility.
 - [ ] Separate release approval, guarded Production apply and authenticated read-only smoke proof.
+
+## Whole-history treasury reconciliation guard
+Production pg_catalog confirms `get_branch_treasury_day_close_reconciliation` returns `cash_sales`, `bank_sales`, `credit_sales`, `net_sales` and historical opening/closing balances from unfiltered journal movements. A full ledger balance cannot be truthfully sampled by invoice percentage. Added candidate `20261116162000_treasury_historical_reconciliation_permission.sql` to require `history.unlimited` for the entire privileged historical treasury reconciliation RPC, with a limited-user denial test. No treasury/posting/close writer is changed. User-facing consequence: limited users must use permission-scoped sales reports for partial historical figures; they cannot open this complete-balance reconciliation.
