@@ -1,6 +1,6 @@
 import type { Product, ProductModifierSnapshot } from './catalog';
 
-export type OrderType = 'dine_in' | 'takeaway' | 'delivery' | 'drive_thru';
+export type OrderType = 'dine_in' | 'takeaway' | 'delivery' | 'drive_thru' | 'online';
 export type DiningTableStatus = 'vacant' | 'occupied' | 'reserved' | 'closed';
 export type OrderStatus = 'open' | 'held' | 'completed' | 'cancelled';
 
