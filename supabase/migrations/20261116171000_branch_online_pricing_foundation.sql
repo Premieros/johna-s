@@ -62,7 +62,8 @@ AS $fn$
 DECLARE v_pct numeric;
 BEGIN
   IF p_order_type IS DISTINCT FROM 'online' THEN
-    RETURN round(GREATEST(COALESCE(p_price,0),0),2);
+    -- Preserve exact legacy fractional precision for non-online orders.
+    RETURN GREATEST(COALESCE(p_price,0),0);
   END IF;
   SELECT markup_percent INTO v_pct
   FROM public.branch_online_pricing
