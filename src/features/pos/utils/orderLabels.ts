@@ -3,7 +3,7 @@ import type { TranslationKey } from '@/lib/i18n';
 
 export interface OrderTypeMeta {
   label: TranslationKey;
-  icon: 'table' | 'car' | 'bike' | 'zap';
+  icon: 'table' | 'car' | 'bike' | 'zap' | 'globe';
   pill: string;
 }
 
@@ -22,6 +22,11 @@ export const ORDER_TYPE_META: Record<OrderType, OrderTypeMeta> = {
     label: 'delivery',
     icon: 'bike',
     pill: 'bg-ui-info/15 text-ui-info border-ui-info/30',
+  },
+  online: {
+    label: 'onlineOrder',
+    icon: 'globe',
+    pill: 'bg-ui-primary-soft text-ui-accent border-ui-primary/30',
   },
   takeaway: {
     label: 'takeaway',
@@ -92,6 +97,7 @@ export function orderContextText(
       return order.table_id && tableById[order.table_id] ? tableById[order.table_id].name : '';
     case 'drive_thru':
       return parseCarNotes(order.notes).plate;
+    case 'online':
     case 'delivery': {
       if (order.customer_id && customerById[order.customer_id]) return customerById[order.customer_id].name;
       return parseDeliveryNotes(order.notes).phone;
