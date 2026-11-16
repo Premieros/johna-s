@@ -1,5 +1,9 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
+## Current active branch — 2026-11-16 — tables landing layout
+- **Current active branch:** `fix/pos-tables-full-width-landing-20261116`. Mandatory log: `docs/POS_TABLES_FULL_WIDTH_LANDING_20261116.md`. Owner explicitly requested: while browsing tables, do not render empty cart area; place order-type controls adjacent to tables in the tables landing area, including Online. Keep existing cart/order/payment when starting or resuming an order. UI-only layout; no schema, pricing, tax, permissions, inventory, printing or POS writer changes. Previous online PR#641 merged, production DB migrations applied; branch activation remains separate. Exact-head Full Verify is release gate.
+
+
 ## Current active branch — 2026-11-16
 - **Current active branch:** `feat/branch-online-order-markup-20261116`. Mandatory active log: `docs/ONLINE_ORDER_MARKUP_20261116.md`. Owner explicitly requested implementing a fifth **online** POS order category with a per-branch configurable markup (default 26% only when enabled), existing branch tax and unchanged base product prices. Candidate changes only; preserve writers, inventory, accounting, printing and historical orders. Sequential single writer. Full Verify and Fresh DB are mandatory before production. Previously planned branch-local-first #638 is paused, not cancelled. The historical financial security branch was merged as PR #640, its production migrations already applied; old Active labels are historical.
 
