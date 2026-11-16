@@ -869,7 +869,10 @@ export function PosWorkspacePage() {
               setPanel(null);
               setMobileOrderOpen(false);
             } : undefined}
-            onStartOnline={perms.canOperateType('online', null) ? () => handleStartOrder({ orderType: 'online' }) : undefined}
+            onStartOnline={perms.canOperateType('online', null) ? () => {
+              window.dispatchEvent(new Event('pos:order-flow-started'));
+              handleStartOrder({ orderType: 'online' });
+            } : undefined}
             onlineEnabled={onlineEnabled}
             onStartDriveThru={perms.canCreateDriveThru ? () => {
               setStartStep('car');
