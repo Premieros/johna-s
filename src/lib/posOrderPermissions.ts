@@ -6,7 +6,7 @@ export const ORDER_TYPE_PERMISSION: Record<OrderType, Permission> = {
   takeaway: 'pos.order.takeaway',
   drive_thru: 'pos.order.drive_thru',
   delivery: 'pos.order.delivery',
-  online: 'pos.order.delivery',
+  online: 'pos.order.online',
 };
 
 /** Unknown types and non-table orders carrying a table binding fail closed. */
