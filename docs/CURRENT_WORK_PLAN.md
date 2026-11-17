@@ -1,5 +1,9 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
+## Current active branch — 2026-11-17 — organization module security coverage phase 2
+- **Current active branch:** `security/organization-module-enforcement-phase2-20261117`. Mandatory log `docs/ORGANIZATION_MODULE_ENFORCEMENT_PHASE2_20261117.md`. User explicitly requested completing outstanding module security. Audit canonical feature keys, extend real permission-backed modules with server and UI guards, regression test two-org isolation and preserve all production defaults. Unsupported/nonexistent modules stay locked with reasons rather than deceptive toggles. No changes to sales/prices/taxes. Single writer, exact-head Full Verify, schema parity and Pages deploy verification are required.
+
+
 ## Current active branch — 2026-11-17 — organization-level controls
 - **Current active branch:** `feat/super-admin-organization-modules-20261117`. Mandatory log `docs/SUPER_ADMIN_ORGANIZATION_MODULES_20261117.md`. Owner requests organization-first Super Admin control: each organization gets its own information/settings and independent enabled modules, with branch-level settings below it. Preserve existing features registry, subscriptions and branches; default current module access must not be changed. Production-only gates after exact-head CI, schema preflight, privilege and module-route enforcement audit; no blanket disable/auto-plan enrollment. Single writer.
 
