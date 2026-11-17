@@ -73,6 +73,37 @@ describe.skipIf(!local)('per-organization module isolation and admin control', (
     expect(after.rows[0].allowed).toBe(true);
   });
 
+  it('enforces an explicitly disabled non-core module in central role permission checks',async () => {
+    if(!canImp)return;
+    const feature='tables';
+    // The fixture owner has POS/table permissions. Ensure a known permission is present.
+    await db.query(`UPDATE public.roles SET permissions=permissions || '["floor_plan.view"]'::jsonb WHERE role='owner'`);
+    const baseline=await runAs(db,ids.users.owner,
+      'SELECT public.can_permission($1) allowed',['floor_plan.view']);
+    expect(baseline.rows[0].allowed).toBe(true);
+
+    const deny=await runAsPersist(db,ids.users.super_admin,
+      'SELECT public.super_admin_set_organization_module($1,$2,false) result',[orgA,feature]);
+    expect(deny.rows[0].result).toMatchObject({success:true});
+    const restricted=await runAs(db,ids.users.owner,
+      'SELECT public.can_permission($1) allowed',['floor_plan.view']);
+    expect(restricted.rows[0].allowed).toBe(false);
+    const disabled=await runAs(db,ids.users.owner,
+      'SELECT public.get_my_disabled_organization_modules() AS modules');
+    expect(disabled.rows[0].modules).toContain(feature);
+
+    const other=await runAs(db,ids.users.cashier_b,
+      'SELECT public.get_my_disabled_organization_modules() AS modules');
+    expect(other.rows[0].modules).not.toContain(feature);
+
+    const reset=await runAsPersist(db,ids.users.super_admin,
+      'SELECT public.super_admin_reset_organization_module($1,$2) result',[orgA,feature]);
+    expect(reset.rows[0].result).toMatchObject({success:true});
+    const restored=await runAs(db,ids.users.owner,
+      'SELECT public.can_permission($1) allowed',['floor_plan.view']);
+    expect(restored.rows[0].allowed).toBe(true);
+  });
+
   it('keeps organization profile independent of other organization names',async () => {
     if(!canImp)return;
     const old=await db.query<{name:string}>('SELECT name FROM public.organizations WHERE id=$1',[orgB]);
