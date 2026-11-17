@@ -6,7 +6,7 @@ const utilities = readFileSync('src/components/PageUtilityControls.tsx', 'utf8')
 
 describe('pricing workspace responsive layout', () => {
   it('keeps import, export and refresh grouped outside the page heading', () => {
-    expect(pricing).toContain('data-testid="pricing-actions-panel"');
+    expect(pricing).toContain('testId="pricing-actions-panel"');
     expect(pricing).toContain('data-testid="pricing-file-actions"');
     expect(pricing).toContain('استيراد الأسعار');
     expect(pricing).toContain('تصدير Excel');
