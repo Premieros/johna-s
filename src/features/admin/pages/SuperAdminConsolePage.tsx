@@ -11,7 +11,6 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
-  Store,
   Users,
   XCircle,
   UserPlus,
@@ -52,7 +51,6 @@ type SuperTab =
   | 'tenants'
   | 'support'
   | 'system_controls'
-  | 'general'
   | 'branches_override'
   | 'roles'
   | 'users_audit'
@@ -67,12 +65,15 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
   const { lang } = useLanguage();
   const { show } = useToast();
   const ar = lang === 'ar';
-  const { settings, branchSettingsMap, save, saveBranchSettings } = useSettings();
+  const { branchSettingsMap, saveBranchSettings } = useSettings();
   const { branches } = useBranches();
 
   const queryTab = searchParams.get('tab') as SuperTab | null;
 
-  const [activeTab, setActiveTab] = useState<SuperTab>(defaultTab || queryTab || 'tenants');
+  const initialTab = defaultTab || queryTab || 'tenants';
+  // Historical deep links to the removed global operational editor go to the
+  // new branch-specific editor, never to a global save form.
+  const [activeTab, setActiveTab] = useState<SuperTab>(initialTab === 'general' ? 'branches_override' : initialTab);
 
   // Tenants state
   const [tenants, setTenants] = useState<TenantStats[]>([]);
@@ -84,12 +85,9 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
   const [loadingUserCreationToggle, setLoadingUserCreationToggle] = useState<boolean>(false);
   const [userCreationAudit, setUserCreationAudit] = useState<AuditLogRow[]>([]);
 
-  // Enterprise Store Settings state
-  const [generalForm, setGeneralForm] = useState<Record<string, string | number | null | undefined>>({});
-  const [savingGeneral, setSavingGeneral] = useState(false);
-
   // Branch Specific Customizations state
-  const [targetBranchId, setTargetBranchId] = useState<string>(branches[0]?.id || '');
+  const [targetBranchId, setTargetBranchId] = useState<string>('');
+  const [branchFormLoadedFor, setBranchFormLoadedFor] = useState<string>('');
   const [branchForm, setBranchForm] = useState<Record<string, string | number | null | undefined>>({});
   const [savingBranchCustom, setSavingBranchCustom] = useState(false);
 
@@ -179,29 +177,17 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
   // ─────────────────────────────────────────────────────────────
   // 4. Initial Settings Hydration
   // ─────────────────────────────────────────────────────────────
+  // Branch lists arrive asynchronously; require an explicit, valid branch
+  // target, not a fall-through that can accidentally edit an unrelated branch.
   useEffect(() => {
-    if (settings) {
-      setGeneralForm({
-        store_name: settings.store_name || '',
-        store_address: settings.store_address || '',
-        store_phone: settings.store_phone || '',
-        logo_url: settings.logo_url || '',
-        currency: settings.currency || 'EGP',
-        tax_rate: settings.tax_rate ?? 14,
-        tax_enabled: settings.tax_enabled ? '1' : '0',
-        receipt_width_mm: settings.receipt_width_mm || 80,
-        receipt_copies: settings.receipt_copies || 1,
-        receipt_show_tax: settings.receipt_show_tax ? 1 : 0,
-        receipt_show_qr: settings.receipt_show_qr ? 1 : 0,
-        receipt_auto_print: settings.receipt_auto_print ? 1 : 0,
-        receipt_header: settings.receipt_header || '',
-        receipt_footer: settings.receipt_footer || '',
-        pos_default_payment_method: settings.pos_default_payment_method || 'cash',
-        pos_barcode_autofocus: settings.pos_barcode_autofocus ? 1 : 0,
-        low_stock_threshold: settings.low_stock_threshold ?? 5,
-      });
+    if (branches.length === 0) {
+      setTargetBranchId('');
+      return;
     }
-  }, [settings]);
+    if (!branches.some((branch) => branch.id === targetBranchId)) {
+      setTargetBranchId(branches[0].id);
+    }
+  }, [branches, targetBranchId]);
 
   useEffect(() => {
     if (targetBranchId) {
@@ -214,7 +200,12 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
         tax_enabled: row?.tax_enabled != null ? (row.tax_enabled ? '1' : '0') : null,
         currency: row?.currency ?? '',
         low_stock_threshold: row?.low_stock_threshold ?? null,
+        business_day_mode: row?.business_day_mode ?? 'fixed_time',
+        business_day_start: row?.business_day_start ?? '00:00',
+        business_day_end: row?.business_day_end ?? '00:00',
+        auto_close_shift_at_day_end: row?.auto_close_shift_at_day_end ? '1' : '0',
       });
+      setBranchFormLoadedFor(targetBranchId);
     }
   }, [targetBranchId, branchSettingsMap]);
 
@@ -238,42 +229,9 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
     }
   };
 
-  const handleSaveGeneral = async () => {
-    setSavingGeneral(true);
-    try {
-      const ok = await save({
-        store_name: String(generalForm.store_name || ''),
-        store_address: String(generalForm.store_address || ''),
-        store_phone: String(generalForm.store_phone || ''),
-        logo_url: String(generalForm.logo_url || ''),
-        currency: String(generalForm.currency || 'EGP'),
-        tax_rate: Number(generalForm.tax_rate) || 0,
-        tax_enabled: generalForm.tax_enabled === '1',
-        receipt_width_mm: Number(generalForm.receipt_width_mm) || 80,
-        receipt_copies: Number(generalForm.receipt_copies) || 1,
-        receipt_show_tax: Boolean(generalForm.receipt_show_tax),
-        receipt_show_qr: Boolean(generalForm.receipt_show_qr),
-        receipt_auto_print: Boolean(generalForm.receipt_auto_print),
-        receipt_header: String(generalForm.receipt_header || ''),
-        receipt_footer: String(generalForm.receipt_footer || ''),
-        pos_default_payment_method: String(generalForm.pos_default_payment_method || 'cash'),
-        pos_barcode_autofocus: Boolean(generalForm.pos_barcode_autofocus),
-        low_stock_threshold: Number(generalForm.low_stock_threshold) || 5,
-      });
-      if (!ok) {
-        show(ar ? 'فشل حفظ الإعدادات المركزية. لم يتم تطبيق التغيير.' : 'Failed to save enterprise settings. No change was applied.', 'error');
-        return;
-      }
-      show(ar ? 'تم حفظ الإعدادات المركزية بنجاح' : 'Enterprise settings saved', 'success');
-    } catch {
-      show(ar ? 'فشل حفظ الإعدادات المركزية' : 'Failed to save enterprise settings', 'error');
-    } finally {
-      setSavingGeneral(false);
-    }
-  };
-
   const handleSaveBranchCustom = async () => {
-    if (!targetBranchId) return;
+    if (!targetBranchId || !branches.some((branch) => branch.id === targetBranchId)
+        || branchFormLoadedFor !== targetBranchId || savingBranchCustom) return;
     setSavingBranchCustom(true);
     try {
       const ok = await saveBranchSettings(targetBranchId, {
@@ -284,6 +242,10 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
         tax_rate: branchForm.tax_rate != null ? Number(branchForm.tax_rate) : null,
         tax_enabled: branchForm.tax_enabled != null ? branchForm.tax_enabled === '1' : null,
         low_stock_threshold: branchForm.low_stock_threshold != null ? Number(branchForm.low_stock_threshold) : null,
+        business_day_mode: String(branchForm.business_day_mode || 'fixed_time') as 'fixed_time' | 'first_last_shift',
+        business_day_start: String(branchForm.business_day_start || '00:00'),
+        business_day_end: String(branchForm.business_day_end || '00:00'),
+        auto_close_shift_at_day_end: branchForm.auto_close_shift_at_day_end === '1',
       });
       if (!ok) {
         show(ar ? 'فشل حفظ تخصيصات الفرع. لم يتم تطبيق التغيير.' : 'Failed to save branch customizations. No change was applied.', 'error');
@@ -348,8 +310,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
     { key: 'tenants', label: ar ? 'المستأجرون والمنظمات' : 'Tenants & Organizations', icon: <Building2 className="w-4 h-4" /> },
     { key: 'support', label: ar ? 'دعم العملاء' : 'Customer Support', icon: <Headphones className="w-4 h-4" /> },
     { key: 'system_controls', label: ar ? 'التحكم في النظام ومستخدمي المنصة' : 'System Controls & Users', icon: <Sliders className="w-4 h-4" /> },
-    { key: 'general', label: ar ? 'إعدادات المنشأة والمتجر المركزية' : 'Enterprise Settings', icon: <Store className="w-4 h-4" /> },
-    { key: 'branches_override', label: ar ? 'تخصيصات الفروع' : 'Branch Overrides', icon: <SlidersHorizontal className="w-4 h-4" /> },
+    { key: 'branches_override', label: ar ? 'إعدادات كل فرع' : 'Per-Branch Settings', icon: <SlidersHorizontal className="w-4 h-4" /> },
     { key: 'roles', label: ar ? 'مصفوفة الأدوار والصلاحيات' : 'RBAC Roles & Matrix', icon: <ShieldCheck className="w-4 h-4" /> },
     { key: 'users_audit', label: ar ? 'المستخدمون وسجل التدقيق' : 'Users & Audit Log', icon: <Users className="w-4 h-4" /> },
     { key: 'health', label: ar ? 'صحة وتشخيص النظام' : 'System Diagnostics', icon: <Activity className="w-4 h-4" /> },
@@ -638,114 +599,8 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
       )}
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* TAB 3: إعدادات المنشأة والمتجر المركزية (Global Settings)     */}
-      {/* ───────────────────────────────────────────────────────────── */}
-      {activeTab === 'general' && (
-        <div className="space-y-5 max-w-4xl animate-fade-in">
-          <Card className="p-6 space-y-6">
-            <div>
-              <h3 className="text-lg font-black text-ui-text">{ar ? 'بيانات المنشأة والمقر الرئيسي' : 'Master Enterprise Information'}</h3>
-              <p className="text-xs text-ui-subtle">{ar ? 'الإعدادات العامة الافتراضية المطبقة على النظام بالكامل' : 'Global defaults applied across all modules and branches'}</p>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Input
-                label={ar ? 'اسم المتجر / المنشأة' : 'Store / Company Name'}
-                value={generalForm.store_name || ''}
-                onChange={(e) => setGeneralForm({ ...generalForm, store_name: e.target.value })}
-              />
-              <Input
-                label={ar ? 'رقم الهاتف الرئيسي' : 'Main Contact Phone'}
-                value={generalForm.store_phone || ''}
-                onChange={(e) => setGeneralForm({ ...generalForm, store_phone: e.target.value })}
-              />
-              <div className="sm:col-span-2">
-                <Input
-                  label={ar ? 'عنوان المقر الرئيسي' : 'Headquarters Address'}
-                  value={generalForm.store_address || ''}
-                  onChange={(e) => setGeneralForm({ ...generalForm, store_address: e.target.value })}
-                />
-              </div>
-              <Input
-                label={ar ? 'رابط شعار المنشأة (Image URL)' : 'Logo Image URL'}
-                value={generalForm.logo_url || ''}
-                onChange={(e) => setGeneralForm({ ...generalForm, logo_url: e.target.value })}
-                placeholder="https://..."
-              />
-              <Input
-                label={ar ? 'العملة الافتراضية' : 'Default Currency'}
-                value={generalForm.currency || ''}
-                onChange={(e) => setGeneralForm({ ...generalForm, currency: e.target.value })}
-              />
-            </div>
-
-            <div className="pt-4 border-t border-ui-border">
-              <h4 className="font-bold text-ui-text mb-3">{ar ? 'إعدادات نقطة البيع والضريبة' : 'POS & Tax Configuration'}</h4>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Select
-                  label={ar ? 'طريقة الدفع الافتراضية' : 'Default Payment Method'}
-                  value={generalForm.pos_default_payment_method || 'cash'}
-                  onChange={(e) => setGeneralForm({ ...generalForm, pos_default_payment_method: e.target.value })}
-                  options={[
-                    { value: 'cash', label: ar ? 'نقدي (Cash)' : 'Cash' },
-                    { value: 'card', label: ar ? 'بطاقة (Card)' : 'Card' },
-                    { value: 'transfer', label: ar ? 'تحويل بنكي / InstaPay' : 'Transfer' },
-                    { value: 'credit', label: ar ? 'آجل (Credit)' : 'Credit' },
-                  ]}
-                />
-                <Input
-                  label={ar ? 'نسبة الضريبة الافتراضية (%)' : 'Default Tax Rate (%)'}
-                  type="number"
-                  step="0.1"
-                  value={generalForm.tax_rate ?? 14}
-                  onChange={(e) => setGeneralForm({ ...generalForm, tax_rate: parseFloat(e.target.value) || 0 })}
-                />
-                <div className="space-y-1">
-                  <Select
-                    label={ar ? 'حالة الضريبة الافتراضية' : 'Default Tax Status'}
-                    value={generalForm.tax_enabled || '1'}
-                    onChange={(e) => setGeneralForm({ ...generalForm, tax_enabled: e.target.value })}
-                    options={[
-                      { value: '1', label: ar ? 'مفعلة' : 'Enabled' },
-                      { value: '0', label: ar ? 'معطلة' : 'Disabled' },
-                    ]}
-                  />
-                  <p className="text-[11px] text-ui-subtle">
-                    {ar ? 'هذا هو الافتراضي للمنشأة. أي فرع لديه إعداد ضريبة مستقل سيستخدم إعداد الفرع حتى يتم ضبطه على «استخدام الافتراضي».' : 'This is the enterprise default. A branch tax override takes priority until that branch is set to inherit the default.'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-ui-border">
-              <h4 className="font-bold text-ui-text mb-3">{ar ? 'إعدادات الفاتورة والطباعة' : 'Receipt & Printer Defaults'}</h4>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Textarea
-                  label={ar ? 'ترويسة الفاتورة' : 'Receipt Header'}
-                  value={generalForm.receipt_header || ''}
-                  onChange={(e) => setGeneralForm({ ...generalForm, receipt_header: e.target.value })}
-                  rows={2}
-                />
-                <Textarea
-                  label={ar ? 'تذييل الفاتورة' : 'Receipt Footer'}
-                  value={generalForm.receipt_footer || ''}
-                  onChange={(e) => setGeneralForm({ ...generalForm, receipt_footer: e.target.value })}
-                  rows={2}
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-4 border-t border-ui-border">
-              <Button onClick={() => void handleSaveGeneral()} disabled={savingGeneral}>
-                {savingGeneral ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                <span>{ar ? 'حفظ الإعدادات المركزية' : 'Save Enterprise Settings'}</span>
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* ───────────────────────────────────────────────────────────── */}
+      {/* Every operational setting in this console is explicitly branch-scoped.
+          Shared platform/tenant/RBAC controls remain in their own tabs. */}
       {/* TAB 4: تخصيصات الفروع والبيانات التجريبية                     */}
       {/* ───────────────────────────────────────────────────────────── */}
       {activeTab === 'branches_override' && (
@@ -753,21 +608,30 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
           <Card className="p-6 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-ui-border">
               <div>
-                <h3 className="text-lg font-black text-ui-text">{ar ? 'تخصيصات الفرع المحدد' : 'Branch Specific Settings'}</h3>
-                <p className="text-xs text-ui-subtle">{ar ? 'تجاوز الإعدادات العامة لفرع معين (مثل شعار مخصص أو ترويسة فاتورة مختلفة)' : 'Override general settings for a specific branch'}</p>
+                <h3 className="text-lg font-black text-ui-text">{ar ? 'إعدادات الفرع المحدد' : 'Selected Branch Settings'}</h3>
+                <p className="text-xs text-ui-subtle">{ar ? 'اختر الفرع؛ كل تعديل يُحفظ لهذا الفرع فقط ولا يغيّر إعدادات الفروع الأخرى.' : 'Choose a branch. Every change is saved only to that branch; other branches remain unchanged.'}</p>
               </div>
 
               <div className="w-64">
                 <Select
-                  label={ar ? 'اختر الفرع المراد تخصيصه' : 'Select Branch'}
+                  label={ar ? 'الفرع الذي تريد تعديل إعداداته' : 'Branch to configure'}
                   value={targetBranchId}
-                  onChange={(e) => setTargetBranchId(e.target.value)}
+                  onChange={(e) => {
+                    setBranchFormLoadedFor('');
+                    setTargetBranchId(e.target.value);
+                  }}
                   options={branches.map((b) => ({ value: b.id, label: b.name }))}
                 />
               </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2 rounded-xl border border-ui-border bg-ui-page-alt px-4 py-3 text-sm font-semibold text-ui-text" data-testid="super-admin-selected-branch">
+                {branches.find((branch) => branch.id === targetBranchId)?.name || (ar ? 'اختر فرعًا' : 'Select a branch')}
+                <span className="block mt-1 text-xs font-normal text-ui-subtle">
+                  {ar ? 'التغييرات التالية تخص هذا الفرع فقط.' : 'The following settings affect only this branch.'}
+                </span>
+              </div>
               <Input
                 label={ar ? 'رابط شعار مخصص للفرع' : 'Custom Branch Logo URL'}
                 value={branchForm.logo_url || ''}
@@ -775,12 +639,12 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
                 placeholder="https://..."
               />
               <Input
-                label={ar ? 'العملة الخاصة بالفرع' : 'Branch Currency'}
+                label={ar ? 'عملة الفرع' : 'Branch Currency'}
                 value={branchForm.currency || ''}
                 onChange={(e) => setBranchForm({ ...branchForm, currency: e.target.value })}
               />
               <Select
-                label={ar ? 'حالة ضريبة الفرع' : 'Branch Tax Status'}
+                label={ar ? 'ضريبة الفرع (الموروث يعرض القيمة القديمة فقط)' : 'Branch Tax (inherit uses legacy fallback)'}
                 value={branchForm.tax_enabled == null ? '' : String(branchForm.tax_enabled)}
                 onChange={(e) => setBranchForm({ ...branchForm, tax_enabled: e.target.value || null })}
                 options={[
@@ -796,6 +660,42 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
                 value={branchForm.tax_rate ?? ''}
                 onChange={(e) => setBranchForm({ ...branchForm, tax_rate: e.target.value === '' ? null : Number(e.target.value) })}
                 placeholder={ar ? 'فارغ = استخدام النسبة الافتراضية' : 'Blank = inherit default rate'}
+              />
+              <Input
+                label={ar ? 'حد التنبيه للمخزون في الفرع' : 'Branch Low-Stock Alert Threshold'}
+                type="number" min="0" step="1"
+                value={branchForm.low_stock_threshold ?? ''}
+                onChange={(e) => setBranchForm({ ...branchForm, low_stock_threshold: e.target.value === '' ? null : Number(e.target.value) })}
+              />
+              <Select
+                label={ar ? 'طريقة حساب اليوم المالي' : 'Business Day Mode'}
+                value={branchForm.business_day_mode || 'fixed_time'}
+                onChange={(e) => setBranchForm({ ...branchForm, business_day_mode: e.target.value })}
+                options={[
+                  { value: 'fixed_time', label: ar ? 'مواعيد ثابتة' : 'Fixed Hours' },
+                  { value: 'first_last_shift', label: ar ? 'من أول شفت إلى آخر شفت' : 'First to Last Shift' },
+                ]}
+              />
+              <Input
+                label={ar ? 'بداية اليوم المالي' : 'Business Day Start'}
+                type="time"
+                value={branchForm.business_day_start || '00:00'}
+                onChange={(e) => setBranchForm({ ...branchForm, business_day_start: e.target.value })}
+              />
+              <Input
+                label={ar ? 'نهاية اليوم المالي' : 'Business Day End'}
+                type="time"
+                value={branchForm.business_day_end || '00:00'}
+                onChange={(e) => setBranchForm({ ...branchForm, business_day_end: e.target.value })}
+              />
+              <Select
+                label={ar ? 'إغلاق الشفت تلقائيًا للفرع' : 'Auto-close Branch Shift'}
+                value={branchForm.auto_close_shift_at_day_end || '0'}
+                onChange={(e) => setBranchForm({ ...branchForm, auto_close_shift_at_day_end: e.target.value })}
+                options={[
+                  { value: '0', label: ar ? 'معطّل' : 'Disabled' },
+                  { value: '1', label: ar ? 'مفعّل بشرط عدم وجود طلبات مفتوحة' : 'Enabled when no open orders' },
+                ]}
               />
               <Textarea
                 label={ar ? 'ترويسة فاتورة الفرع' : 'Branch Receipt Header'}
@@ -813,9 +713,9 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
 
             <div className="flex justify-end items-center pt-4 border-t border-ui-border">
 
-              <Button onClick={() => void handleSaveBranchCustom()} disabled={savingBranchCustom}>
+              <Button data-testid="super-admin-save-branch-settings" onClick={() => void handleSaveBranchCustom()} disabled={savingBranchCustom || !targetBranchId || branchFormLoadedFor !== targetBranchId}>
                 {savingBranchCustom ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                <span>{ar ? 'حفظ تخصيصات الفرع' : 'Save Branch Customizations'}</span>
+                <span>{ar ? 'حفظ إعدادات هذا الفرع فقط' : 'Save This Branch Only'}</span>
               </Button>
             </div>
           </Card>
