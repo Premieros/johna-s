@@ -31,6 +31,7 @@ import { DesignSearch } from '@/components/design/DesignSearch';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/PageHeader';
 import { BranchPulsePanel } from '../components/BranchPulsePanel';
+import { OrganizationControlsPanel } from '../components/OrganizationControlsPanel';
 import { Input, Textarea, Select } from '@/components/Input';
 import { Modal } from '@/components/Modal';
 import { PublicOrganizationRegistrationControl } from '../components/PublicOrganizationRegistrationControl';
@@ -78,6 +79,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
 
   // Tenants state
   const [tenants, setTenants] = useState<TenantStats[]>([]);
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(null);
   const [loadingTenants, setLoadingTenants] = useState(false);
   const [tenantLoadFailed, setTenantLoadFailed] = useState(false);
 
@@ -456,6 +458,13 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
                         <Button
                           size="sm"
                           variant="outline"
+                          onClick={() => setSelectedOrganizationId(t.organization_id)}
+                        >
+                          {ar ? 'إدارة المنظمة' : 'Manage'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
                           onClick={() => void toggleOrgStatus(t.organization_id, t.is_active)}
                         >
                           {t.is_active ? (ar ? 'تعطيل' : 'Disable') : (ar ? 'تفعيل' : 'Enable')}
@@ -467,6 +476,15 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
               </table>
             </div>
           </Card>
+          {selectedOrganizationId && tenants.some((item) => item.organization_id === selectedOrganizationId) && (
+            <OrganizationControlsPanel
+              key={selectedOrganizationId}
+              organizationId={selectedOrganizationId}
+              organizationName={tenants.find((item) => item.organization_id === selectedOrganizationId)!.organization_name}
+              isAr={ar}
+              onSaved={() => { void loadTenants(); }}
+            />
+          )}
         </div>
       )}
 
