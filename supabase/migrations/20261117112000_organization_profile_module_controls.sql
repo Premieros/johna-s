@@ -147,7 +147,7 @@ BEGIN
   INTO v_def;
   v_needle:=E'BEGIN\n  RETURN jsonb_build_object(';
   IF position(v_needle in v_def)=0
-    OR position("'source', 'direct_access'" in v_def)=0
+    OR position('direct_access' in v_def)=0
     OR position('organization_feature_overrides' in v_def)>0 THEN
     RAISE EXCEPTION 'ORGANIZATION_FEATURE_RESOLVER_DRIFT';
   END IF;
