@@ -21,3 +21,12 @@ Complete outstanding security wiring for organization module controls in the Sup
 2. Inspect import/export pathways and consider separate authorization for actual file import/export operations. Do not claim full coverage if raw table APIs remain accessible.
 3. Make Super Admin show specific unsupported reasons for remaining features rather than misleading generic labels.
 4. Exact-head Full Verify before merge; only deploy migration after merge, with post-apply production query and GitHub Pages check.
+
+## Implemented in this branch
+- TypeScript permission-to-feature mapping now treats `reports.costing` as `costing` and `reports.financial` as `advanced_reports`, instead of the general `reports` module; all unrelated permissions remain unchanged.
+- A default-preserving additive SQL migration updates the authoritative `_permission_feature_key` used by `can_permission`, and extends the Super Admin RPC allowlist for these two keys; core/system locks and existing audit remain intact.
+- Integration tests prove the Super Admin can disable each key for organization A, while organization B and `reports.view` remain allowed, followed by reset.
+- The organization editor now provides concrete bilingual explanations for the seven still-unenforced registry keys instead of a generic message. It does not expose fake switches for inapplicable/unprotected capabilities.
+- Security contract tests verify mapping parity and that unsupported controls stay disabled.
+- **Remaining boundaries:** `ai_assistant`, `api_access`, `customer_display` have no standalone application feature implementation; `multi_branch` and `units` share existing authorization with other modules; `excel_import` and `excel_export` are client-side pipelines without dedicated server operation boundaries. Claiming complete, bypass-proof access controls for these keys without new backend workflows would be misleading. They remain unavailable pending implementation. Existing disabled modules may have legacy direct-data API gaps; separate broad RLS/RPC inventory is still needed.
+- No business data was changed. No production migration until an exact-head Full Verify passes.
