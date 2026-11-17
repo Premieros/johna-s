@@ -15,3 +15,18 @@ Super Admin console's **global settings editor** is the problem (not the Online 
 
 ## Gate
 Draft PR only until CI green. No production migrations required for UI-only change. Pages deployment requires success on merged main after Full Verify.
+
+## Implementation candidate
+- Removed `general` operational editor and direct `save()` to shared settings from Super Admin dashboard. Historic `?tab=general` routes to the branch editor.
+- Renamed the former Branch Overrides tab to **إعدادات كل فرع / Per-Branch Settings** with branch selection, current branch identification and save button explicitly scoped to selected `branch_id`.
+- Branch data hydration and save guard avoid submitting forms against another branch before switching completes.
+- Branch fields cover receipt logo/text, currency, tax rate/status, low-stock threshold, business-day type/start/end and auto-shift-close.
+- Database schema already supports all those fields in `branch_settings` (verified via read-only production column catalog), and branch settings RLS restricts reads/writes by branch and permission. No SQL migration required. No role grants, accounting or product changes.
+- Existing shared fallback settings and branch name/address/phone are maintained elsewhere in Premier. Removing every enterprise fallback from all modules would require separate dependent-module audit; this task removes the Super Admin *global editor* and enforces per-branch editing.
+- Added source contract tests for absence of global-save UI, deep link fallback and explicit target-branch save.
+
+## Release gate
+- [ ] Exact-head Full Verify green
+- [ ] Merge into main via head fence
+- [ ] Main Verify green
+- [ ] GitHub Pages deployment success confirmed
