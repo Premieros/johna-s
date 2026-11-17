@@ -39,6 +39,13 @@ describe.skipIf(!local)('per-organization module isolation and admin control', (
     expect(r.rows[0]).toMatchObject({a:true,b:true});
   });
 
+  it('preserves a branch cashier\'s default feature access when no organization override exists',async () => {
+    if(!canImp)return;
+    const view=await runAs(db,ids.users.cashier,
+      `SELECT public.get_feature_access($1,$2::uuid) result`,[featureKey,ids.branchA]);
+    expect(view.rows[0].result).toMatchObject({allowed:true});
+  });
+
   it('does not let a regular organization member or branch owner change another organization',async () => {
     if(!canImp)return;
     const res=await runAs(db,ids.users.owner,`SELECT public.super_admin_set_organization_module($1,$2,false) result`,
