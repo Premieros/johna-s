@@ -93,6 +93,18 @@ BEGIN
   IF v_feature_id IS NULL THEN
     RETURN jsonb_build_object('success',false,'error','FEATURE_NOT_FOUND');
   END IF;
+  -- Do not advertise an ineffective entitlement switch: only canonical
+  -- permission-mapped modules are configurable until service/route enforcement
+  -- for other feature keys is implemented and verified.
+  IF p_feature_key NOT IN (
+    'kds','delivery','pos','tables','stock_counts','transfers','inventory',
+    'warehouse_management','recipes','manufacturing','waste_management',
+    'purchases','customers','suppliers','reports','accounting',
+    'shift_management','audit_logs','advanced_permissions',
+    'branch_management','employees'
+  ) THEN
+    RETURN jsonb_build_object('success',false,'error','MODULE_ENFORCEMENT_NOT_READY');
+  END IF;
   -- Mandatory/core capabilities cannot be disabled by an accidental toggle.
   IF v_system AND NOT p_enabled THEN
     RETURN jsonb_build_object('success',false,'error','SYSTEM_MODULE_LOCKED');
