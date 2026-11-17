@@ -1,5 +1,9 @@
 # CURRENT WORK PLAN — johna-s — SOURCE OF TRUTH
 
+## Current active branch — 2026-11-17 — organization-level controls
+- **Current active branch:** `feat/super-admin-organization-modules-20261117`. Mandatory log `docs/SUPER_ADMIN_ORGANIZATION_MODULES_20261117.md`. Owner requests organization-first Super Admin control: each organization gets its own information/settings and independent enabled modules, with branch-level settings below it. Preserve existing features registry, subscriptions and branches; default current module access must not be changed. Production-only gates after exact-head CI, schema preflight, privilege and module-route enforcement audit; no blanket disable/auto-plan enrollment. Single writer.
+
+
 ## Current active branch — 2026-11-17 — Super Admin per-branch settings
 - **Current active branch:** `fix/super-admin-branch-specific-settings-20261117`; mandatory log `docs/SUPER_ADMIN_BRANCH_SETTINGS_20261117.md`. User clarified scope: **Super Admin dashboard**, NOT online pricing. Remove the global operational settings editor from Super Admin and let Super Admin choose each branch and edit its own receipt branding, tax, currency, stock threshold and existing branch operational settings, writing only that branch; do not write the enterprise-wide settings row. Preserve central tenant/RBAC/security controls and existing branch settings; no business-data writes. Exact-head CI required before merge/release.
 
