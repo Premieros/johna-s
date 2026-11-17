@@ -175,4 +175,94 @@ BEGIN
   EXECUTE replace(v_def,v_needle,v_guard);
 END;
 $patch$;
+
+-- Central permission gates must reflect explicit organization denials.
+-- Existing role permissions remain unchanged if no organization override exists.
+CREATE FUNCTION public._permission_feature_key(p_permission text)
+RETURNS text LANGUAGE sql IMMUTABLE SET search_path=public,pg_temp
+AS $fn$
+ SELECT CASE
+  WHEN p_permission LIKE 'pos.kds_%' THEN 'kds'
+  WHEN p_permission='pos.order.delivery' THEN 'delivery'
+  WHEN p_permission LIKE 'pos.%' THEN 'pos'
+  WHEN p_permission LIKE 'floor_plan.%' THEN 'tables'
+  WHEN p_permission LIKE 'inventory.count.%' THEN 'stock_counts'
+  WHEN p_permission LIKE 'inventory.transfer.%' THEN 'transfers'
+  WHEN p_permission LIKE 'inventory.%' THEN 'inventory'
+  WHEN p_permission LIKE 'raw_materials.%' OR p_permission LIKE 'components.%' THEN 'inventory'
+  WHEN p_permission LIKE 'warehouses.%' THEN 'warehouse_management'
+  WHEN p_permission LIKE 'recipes.%' THEN 'recipes'
+  WHEN p_permission LIKE 'production.%' THEN 'manufacturing'
+  WHEN p_permission LIKE 'waste.%' THEN 'waste_management'
+  WHEN p_permission LIKE 'purchases.%' OR p_permission LIKE 'procurement.%' THEN 'purchases'
+  WHEN p_permission LIKE 'customers.%' THEN 'customers'
+  WHEN p_permission LIKE 'suppliers.%' THEN 'suppliers'
+  WHEN p_permission LIKE 'reports.%' THEN 'reports'
+  WHEN p_permission LIKE 'accounts.%' OR p_permission LIKE 'accounting.%'
+    OR p_permission LIKE 'expenses.%' THEN 'accounting'
+  WHEN p_permission LIKE 'shifts.%' THEN 'shift_management'
+  WHEN p_permission LIKE 'audit.%' THEN 'audit_logs'
+  WHEN p_permission LIKE 'roles.%' THEN 'advanced_permissions'
+  WHEN p_permission LIKE 'branches.%' THEN 'branch_management'
+  WHEN p_permission LIKE 'users.%' THEN 'employees'
+  WHEN p_permission LIKE 'sales.%' OR p_permission LIKE 'refunds.%' THEN 'pos'
+  ELSE NULL END;
+$fn$;
+REVOKE ALL ON FUNCTION public._permission_feature_key(text) FROM PUBLIC,anon,authenticated;
+
+-- Permission checks are used by numerous authoritative POS and ERP writers.
+-- This function retains the existing role check; it only excludes a permission
+-- when the current user's own organization has explicitly disabled its module.
+CREATE OR REPLACE FUNCTION public.can_permission(p_permission text)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path TO public,pg_temp
+AS $fn$
+ SELECT public.is_pos_admin()
+ OR (
+   EXISTS (
+     SELECT 1 FROM public.users u
+     JOIN public.roles r ON r.role=u.role AND r.is_active=true
+     WHERE u.id=auth.uid() AND u.is_active=true
+       AND COALESCE(r.permissions,'[]'::jsonb) ? p_permission
+   )
+   AND NOT EXISTS (
+     SELECT 1
+     FROM public.organization_feature_overrides o
+     JOIN public.features f ON f.id=o.feature_id
+     WHERE f.key=public._permission_feature_key(p_permission)
+       AND o.enabled=false
+       AND o.organization_id=COALESCE(
+         (SELECT b.organization_id FROM public.users u
+          JOIN public.branches b ON b.id=u.branch_id WHERE u.id=auth.uid()),
+         (SELECT om.organization_id FROM public.organization_members om
+          WHERE om.user_id=auth.uid() AND om.is_active=true
+          ORDER BY om.organization_id LIMIT 1)
+       )
+   )
+ );
+$fn$;
+
+-- Client UI uses this read-only list to hide unavailable module entry points.
+-- Resolve the organization from the authenticated user's assigned branch or
+-- membership, never from an unverified organization id supplied by the client.
+CREATE FUNCTION public.get_my_disabled_organization_modules()
+RETURNS text[] LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path TO public,pg_temp
+AS $fn$
+ SELECT COALESCE(array_agg(f.key ORDER BY f.key),'{}'::text[])
+ FROM public.organization_feature_overrides o
+ JOIN public.features f ON f.id=o.feature_id
+ WHERE auth.uid() IS NOT NULL AND NOT public.is_pos_admin()
+   AND o.enabled=false
+   AND o.organization_id=COALESCE(
+     (SELECT b.organization_id FROM public.users u
+      JOIN public.branches b ON b.id=u.branch_id WHERE u.id=auth.uid()),
+     (SELECT om.organization_id FROM public.organization_members om
+      WHERE om.user_id=auth.uid() AND om.is_active=true
+      ORDER BY om.organization_id LIMIT 1)
+   );
+$fn$;
+REVOKE ALL ON FUNCTION public.get_my_disabled_organization_modules() FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.get_my_disabled_organization_modules() TO authenticated;
+
 COMMIT;
