@@ -104,11 +104,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       (orgSettingsRes.error ? [] : (orgSettingsRes.data || [])).map((row) =>
         [row.organization_id, {
           phone: row.phone, address: row.address, logo_url: row.logo_url, currency: row.currency,
-        }]
+        }] as const
       ),
     );
     const orgNames = new Map<string, string>(
-      (orgRes.error ? [] : (orgRes.data || [])).map((row) => [row.id, row.name]),
+      (orgRes.error ? [] : (orgRes.data || [])).map((row) => [row.id, row.name] as const),
     );
     const byBranch: Record<string, OrganizationDefaults> = {};
     if (!branchRes.error) {
