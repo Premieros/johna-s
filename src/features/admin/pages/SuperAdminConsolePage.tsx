@@ -68,9 +68,9 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
   const { branchSettingsMap, saveBranchSettings } = useSettings();
   const { branches } = useBranches();
 
-  const queryTab = searchParams.get('tab') as SuperTab | null;
+  const queryTab = searchParams.get('tab') as SuperTab | 'general' | null;
 
-  const initialTab = defaultTab || queryTab || 'tenants';
+  const initialTab: SuperTab | 'general' = defaultTab || queryTab || 'tenants';
   // Historical deep links to the removed global operational editor go to the
   // new branch-specific editor, never to a global save form.
   const [activeTab, setActiveTab] = useState<SuperTab>(initialTab === 'general' ? 'branches_override' : initialTab);
@@ -239,10 +239,10 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
         receipt_footer: branchForm.receipt_footer ? String(branchForm.receipt_footer) : null,
         logo_url: branchForm.logo_url ? String(branchForm.logo_url) : null,
         currency: branchForm.currency ? String(branchForm.currency) : null,
-        tax_rate: branchForm.tax_rate != null ? Number(branchForm.tax_rate) : null,
-        tax_enabled: branchForm.tax_enabled != null ? branchForm.tax_enabled === '1' : null,
+        tax_rate: branchForm.tax_rate != null ? Number(branchForm.tax_rate) : 0,
+        tax_enabled: branchForm.tax_enabled === '1',
         low_stock_threshold: branchForm.low_stock_threshold != null ? Number(branchForm.low_stock_threshold) : null,
-        business_day_mode: String(branchForm.business_day_mode || 'fixed_time') as 'fixed_time' | 'first_last_shift',
+        business_day_mode: String(branchForm.business_day_mode || 'fixed_time') as 'fixed_time' | 'shift_span',
         business_day_start: String(branchForm.business_day_start || '00:00'),
         business_day_end: String(branchForm.business_day_end || '00:00'),
         auto_close_shift_at_day_end: branchForm.auto_close_shift_at_day_end === '1',
@@ -644,11 +644,10 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
                 onChange={(e) => setBranchForm({ ...branchForm, currency: e.target.value })}
               />
               <Select
-                label={ar ? 'ضريبة الفرع (الموروث يعرض القيمة القديمة فقط)' : 'Branch Tax (inherit uses legacy fallback)'}
-                value={branchForm.tax_enabled == null ? '' : String(branchForm.tax_enabled)}
-                onChange={(e) => setBranchForm({ ...branchForm, tax_enabled: e.target.value || null })}
+                label={ar ? 'حالة ضريبة هذا الفرع' : 'This Branch Tax Status'}
+                value={branchForm.tax_enabled == null ? '0' : String(branchForm.tax_enabled)}
+                onChange={(e) => setBranchForm({ ...branchForm, tax_enabled: e.target.value })}
                 options={[
-                  { value: '', label: ar ? 'استخدام الإعداد الافتراضي للمنشأة' : 'Inherit enterprise default' },
                   { value: '1', label: ar ? 'مفعلة لهذا الفرع' : 'Enabled for this branch' },
                   { value: '0', label: ar ? 'معطلة لهذا الفرع' : 'Disabled for this branch' },
                 ]}
@@ -673,7 +672,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
                 onChange={(e) => setBranchForm({ ...branchForm, business_day_mode: e.target.value })}
                 options={[
                   { value: 'fixed_time', label: ar ? 'مواعيد ثابتة' : 'Fixed Hours' },
-                  { value: 'first_last_shift', label: ar ? 'من أول شفت إلى آخر شفت' : 'First to Last Shift' },
+                  { value: 'shift_span', label: ar ? 'من أول شفت إلى آخر شفت' : 'First to Last Shift' },
                 ]}
               />
               <Input
