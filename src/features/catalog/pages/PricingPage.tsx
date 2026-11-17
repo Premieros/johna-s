@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BadgeDollarSign, Boxes, Download, Package, RefreshCw, Save, Upload } from 'lucide-react';
+import { ArrowDown, ArrowUp, BadgeDollarSign, Boxes, Download, Package, RefreshCw, Save, Upload } from 'lucide-react';
 import { costing } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -97,6 +97,7 @@ export function PricingPage() {
   const loadRequest = useRef(0);
   const [savingId, setSavingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [importing, setImporting] = useState(false);
   const busy = loading || importing || savingId !== null;
@@ -420,29 +421,37 @@ export function PricingPage() {
       <DesignPageHeader
         title={ar ? 'التسعير' : 'Pricing'}
         subtitle={ar
-          ? `تسعير الخامات ومجموعات المكونات والمنتجات داخل ${branchName}. التكلفة الحالية بآخر سعر معروف من الشراء أو الجرد أو التسعير، مع حفظ تكلفة FIFO الفعلية للحركات.`
-          : `Manage pricing for ${branchName}. Current estimates use the latest known purchase, count or pricing price. Actual FIFO movements retain their recorded costs.`}
-        actions={(
-          <div className="flex flex-wrap items-center gap-2">
+          ? `إدارة أسعار الخامات والمكونات والمنتجات — ${branchName}`
+          : `Manage raw material, component and product prices — ${branchName}`}
+      />
+
+      <DesignPanel testId="pricing-actions-panel">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2" data-testid="pricing-file-actions">
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
               aria-label={ar ? 'ملف استيراد الأسعار' : 'Pricing import file'}
               onChange={(event) => {
                 void selectImport(event.target.files?.[0]);
                 event.target.value = '';
               }} />
-            <Button size="sm" variant="secondary" onClick={() => void exportPrices()} disabled={!branchId || busy}>
-              <Download className="h-4 w-4" />{ar ? 'تصدير Excel' : 'Export Excel'}
-            </Button>
             {allowedToEdit && <Button size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()} disabled={!branchId || busy}>
-              <Upload className="h-4 w-4" />{ar ? 'استيراد الأسعار' : 'Import prices'}
+              <Upload className="h-4 w-4 shrink-0" />{ar ? 'استيراد الأسعار' : 'Import prices'}
             </Button>}
+            <Button size="sm" variant="secondary" onClick={() => void exportPrices()} disabled={!branchId || busy}>
+              <Download className="h-4 w-4 shrink-0" />{ar ? 'تصدير Excel' : 'Export Excel'}
+            </Button>
             <Button size="sm" variant="secondary" onClick={() => void load()} disabled={busy}>
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 shrink-0 ${loading ? 'animate-spin' : ''}`} />
               {ar ? 'تحديث' : 'Refresh'}
             </Button>
           </div>
-        )}
-      />
+          <p className="max-w-md text-xs leading-5 text-ui-muted">
+            {ar
+              ? 'التكلفة الحالية تعتمد على آخر سعر معروف. لا يتغير تقييم مخزون FIFO التاريخي.'
+              : 'Current costs use the latest known price. Historical FIFO inventory valuation is preserved.'}
+          </p>
+        </div>
+      </DesignPanel>
 
       <div className="flex flex-wrap gap-2" data-testid="pricing-tabs">
         {visibleTabs.map((key) => (
@@ -486,8 +495,22 @@ export function PricingPage() {
             testId="pricing-search"
             className="flex-1"
           />
-          <div className="shrink-0 rounded-xl border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-muted">
-            {ar ? `${currentCount} عنصر` : `${currentCount} items`}
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="rounded-xl border border-ui-border bg-ui-page-alt px-3 py-2 text-sm text-ui-muted">
+              {ar ? `${currentCount} عنصر` : `${currentCount} items`}
+            </div>
+            <div className="flex items-center gap-1" data-testid="pricing-table-navigation">
+              <button type="button" onClick={() => tableScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-ui-border bg-ui-surface text-ui-muted hover:bg-ui-page-alt"
+                aria-label={ar ? 'أول جدول الأسعار' : 'Top of pricing table'} title={ar ? 'أول الجدول' : 'Top of table'}>
+                <ArrowUp className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => tableScrollRef.current?.scrollTo({ top: tableScrollRef.current.scrollHeight, behavior: 'smooth' })}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-ui-border bg-ui-surface text-ui-muted hover:bg-ui-page-alt"
+                aria-label={ar ? 'آخر جدول الأسعار' : 'Bottom of pricing table'} title={ar ? 'آخر الجدول' : 'Bottom of table'}>
+                <ArrowDown className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
       </DesignPanel>
@@ -498,7 +521,7 @@ export function PricingPage() {
         ) : loading ? (
           <div className="py-12 text-center text-sm text-ui-muted">{ar ? 'جاري تحميل الأسعار...' : 'Loading prices...'}</div>
         ) : (
-          <div className="max-h-[65vh] overflow-auto rounded-xl border border-ui-border">
+          <div ref={tableScrollRef} className="max-h-[65vh] overflow-auto rounded-xl border border-ui-border">
             <table className="w-full min-w-[760px] border-collapse text-sm">
               <thead className="sticky top-0 z-10 bg-ui-surface-raised text-ui-muted shadow-ui-xs">
                 <tr>
