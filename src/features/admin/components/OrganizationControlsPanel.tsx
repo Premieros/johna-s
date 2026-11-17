@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/api';
 import { Button } from '@/components/Button';
+import { ENFORCED_ORGANIZATION_MODULE_KEYS } from '@/lib/permissionFeatureKey';
 
 type Feature = { id: string; key: string; name: string; category: string; is_system: boolean };
 type OrgSettings = {
@@ -143,10 +144,13 @@ export function OrganizationControlsPanel({
               {features.map((feature) => {
                 const value = overrides[feature.id];
                 const selected = value === undefined ? 'default' : value ? 'on' : 'off';
+                const supported = ENFORCED_ORGANIZATION_MODULE_KEYS.has(feature.key);
                 return (
                   <label key={feature.id} className="flex items-center justify-between gap-3 rounded-xl border border-ui-border p-3 text-sm">
-                    <span className="min-w-0"><strong className="block text-ui-text">{feature.name}</strong><span className="text-xs text-ui-subtle">{feature.key}</span></span>
-                    <select value={selected} disabled={!!busyFeature || !!error}
+                    <span className="min-w-0"><strong className="block text-ui-text">{feature.name}</strong><span className="text-xs text-ui-subtle">{feature.key}</span>
+                      {!supported && <span className="block text-xs text-ui-warning">{isAr ? 'التحكم غير متاح حتى استكمال ربط الأمان' : 'Control unavailable until enforcement is complete'}</span>}
+                    </span>
+                    <select value={selected} disabled={!supported || !!busyFeature || !!error}
                       aria-label={feature.key}
                       onChange={(e) => void setFeature(feature,e.target.value as 'default'|'on'|'off')}
                       className="max-w-32 rounded-lg border border-ui-border bg-ui-page p-2 text-ui-text">
