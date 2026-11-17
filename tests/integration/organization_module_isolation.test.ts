@@ -43,6 +43,16 @@ describe.skipIf(!local)('per-organization module isolation and admin control', (
     expect(view.rows[0].result).toMatchObject({allowed:true});
   });
 
+  it('rejects unprotected module toggles rather than giving a false disabled status',async () => {
+    if(!canImp)return;
+    const result=await runAs(db,ids.users.super_admin,
+      'SELECT public.super_admin_set_organization_module($1,$2,false) result',
+      [orgA,'ai_assistant']);
+    expect(result.rows[0].result).toMatchObject({
+      success:false,error:'MODULE_ENFORCEMENT_NOT_READY',
+    });
+  });
+
   it('does not let a regular organization member or branch owner change another organization',async () => {
     if(!canImp)return;
     const res=await runAs(db,ids.users.owner,`SELECT public.super_admin_set_organization_module($1,$2,false) result`,
