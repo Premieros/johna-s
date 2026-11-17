@@ -154,7 +154,12 @@ BEGIN
   v_guard:=$guard$BEGIN
   IF p_tenant_id IS NOT NULL AND auth.uid() IS NOT NULL
      AND NOT public.is_platform_admin()
-     AND NOT public.user_can_access_organization(p_tenant_id) THEN
+     AND NOT public.user_can_access_organization(p_tenant_id)
+     AND NOT EXISTS (
+       SELECT 1 FROM public.branches b
+       WHERE b.id=p_branch_id AND b.organization_id=p_tenant_id
+         AND public.user_may_access_branch(b.id)
+     ) THEN
     RETURN jsonb_build_object('allowed',false,'reason','ORGANIZATION_ACCESS_DENIED');
   END IF;
   IF NOT public.is_platform_admin() AND p_tenant_id IS NOT NULL AND EXISTS (
