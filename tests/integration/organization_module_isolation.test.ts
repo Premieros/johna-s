@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
-import { randomUUID } from 'node:crypto';
 import { getDbUrl, openDb } from './db';
 import { canImpersonate, runAs, runAsPersist, seedRlsFixture, type RlsIds } from './rls';
 
@@ -24,9 +23,7 @@ describe.skipIf(!local)('per-organization module isolation and admin control', (
     );
     orgA=q.rows.find(x=>x.id===ids.branchA)!.organization_id;
     orgB=q.rows.find(x=>x.id===ids.branchB)!.organization_id;
-    featureKey='org-module-'+randomUUID();
-    await db.query(`INSERT INTO public.features(key,name,category,is_active,is_system)
-      VALUES ($1,'Organization Test Module','management',true,false)`,[featureKey]);
+    featureKey='tables';
   });
   afterAll(async () => {
     if(db){await db.query('ROLLBACK').catch(()=>{});await db.end();}
