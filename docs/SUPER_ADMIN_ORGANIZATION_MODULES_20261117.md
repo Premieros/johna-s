@@ -23,3 +23,10 @@ Premier Super Admin must control **organizations**, each with independent settin
 5. Maintain precedence: platform admin > explicitly disabled organization module > ordinary currently allowed behavior. No organizational auto-enablement of modules for a different tenant. Keep branch settings independent.
 
 No production writes or migrations without exact-head Verify, fresh DB, and explicit release preflight. Avoid enabling or disabling any existing org module automatically.
+
+## Candidate implementation
+- `20261117112000_organization_profile_module_controls.sql`: opt-in organization profile and feature override tables, tenant-scoped RLS read access, super-admin-only audited RPCs. The resolver keeps existing default direct allow for organizations without explicit override and denies explicitly disabled non-core modules for that exact organization.
+- `OrganizationControlsPanel.tsx`: from organizations directory, manage selected organization's name, phone, address, logo, currency; display canonical module catalog and choose Default / Enabled / Disabled. Core system features cannot be disabled. Controlled selectors avoid stale organization data.
+- New integration test covers non-admin denial, tenant A/B isolation, reset to default and independent organization profile. Unit contract covers no updates to branch settings or global plan features.
+- **Remaining scope/security limitation:** existing application routes and privileged business RPCs do not universally enforce feature-access functions. The per-organization deny is authoritative **where the resolver is called**; full application route and API containment requires a separate audited module-to-route/operation implementation. Do not promise that all users are locked out by this UI before that integration.
+- No organization was enabled/disabled or reassigned and no production migration was run.
