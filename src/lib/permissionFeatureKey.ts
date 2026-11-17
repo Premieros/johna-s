@@ -21,6 +21,8 @@ export function permissionFeatureKey(permission: Permission | string): string | 
   if (permission.startsWith('purchases.') || permission.startsWith('procurement.')) return 'purchases';
   if (permission.startsWith('customers.')) return 'customers';
   if (permission.startsWith('suppliers.')) return 'suppliers';
+  if (permission === 'reports.costing') return 'costing';
+  if (permission === 'reports.financial') return 'advanced_reports';
   if (permission.startsWith('reports.')) return 'reports';
   if (permission.startsWith('accounts.') || permission.startsWith('accounting.') || permission.startsWith('expenses.')) return 'accounting';
   if (permission.startsWith('shifts.')) return 'shift_management';
