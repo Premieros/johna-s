@@ -88,13 +88,15 @@ export async function updateManufacturedPricing(params: {
   costPrice: number;
   salePrice: number;
 }): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('inventory_units')
     .update({ cost_price: params.costPrice, sale_price: params.salePrice })
     .eq('id', params.id)
     .eq('branch_id', params.branchId)
-    .eq('unit_type', 'manufactured');
+    .eq('unit_type', 'manufactured')
+    .select('id');
   if (error) throw error;
+  if (data?.length !== 1) throw new Error('Manufactured pricing update did not affect exactly one authorized row');
 }
 
 export async function updateProductPricing(params: {
@@ -104,7 +106,7 @@ export async function updateProductPricing(params: {
   salePrice: number;
   wholesalePrice: number;
 }): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('products')
     .update({
       cost_price: params.costPrice,
@@ -112,6 +114,8 @@ export async function updateProductPricing(params: {
       wholesale_price: params.wholesalePrice,
     })
     .eq('id', params.id)
-    .eq('branch_id', params.branchId);
+    .eq('branch_id', params.branchId)
+    .select('id');
   if (error) throw error;
+  if (data?.length !== 1) throw new Error('Product pricing update did not affect exactly one authorized row');
 }
