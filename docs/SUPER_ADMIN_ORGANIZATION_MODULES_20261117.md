@@ -30,3 +30,13 @@ No production writes or migrations without exact-head Verify, fresh DB, and expl
 - New integration test covers non-admin denial, tenant A/B isolation, reset to default and independent organization profile. Unit contract covers no updates to branch settings or global plan features.
 - **Remaining scope/security limitation:** existing application routes and privileged business RPCs do not universally enforce feature-access functions. The per-organization deny is authoritative **where the resolver is called**; full application route and API containment requires a separate audited module-to-route/operation implementation. Do not promise that all users are locked out by this UI before that integration.
 - No organization was enabled/disabled or reassigned and no production migration was run.
+
+## Enforced access integration — candidate
+- The canonical permission→module map (`src/lib/permissionFeatureKey.ts`) is consumed by `useCan()` so protected routes and menu entries become unavailable to non-platform users when their organization explicitly disables a mapped module.
+- The same mapping has a SQL counterpart `_permission_feature_key`. `can_permission`, the backend permission predicate used by many RLS policies and privileged POS/ERP RPCs, now denies a mapped permission when its organization module is explicitly off. No-override organization behavior remains unchanged.
+- `get_my_disabled_organization_modules()` determines the caller's organization server-side, never trusting an arbitrary client-supplied tenant ID.
+- Mapping includes POS, delivery, KDS, tables, inventory, counts, transfers, warehouses, recipes, manufacturing, waste, purchases, customers, suppliers, reports, accounting, shifts, audit, advanced permissions, branches, employees.
+- Non-mapped catalog features (AI assistant, API access, units, import/export feature-level entitlements, costing and similar) are DISPLAYED but disabled in the editor with an enforcement-not-ready explanation. The server also rejects such writes as MODULE_ENFORCEMENT_NOT_READY. This prevents a misleading no-op switch.
+- `tests/integration/organization_module_isolation.test.ts` exercises tenant A/B behavior, non-super-admin denial, disabled-module role permission denial, current-user feature list, reset and unsupported-module rejection.
+- This is **not** a security proof that all business endpoints for all 30 modules are universally guarded. Some direct table insert/update RLS policies and security-definer entrypoints do not yet delegate to `can_permission`; these must be audited before claiming total module restriction.
+- All current organizations have no new overrides. Core/system module disabling remains protected.
