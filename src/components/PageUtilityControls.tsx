@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp, MoreHorizontal, Search } from 'lucide-react';
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useLanguage } from '@/context/LanguageContext';
 
 function isVisible(element: HTMLElement) {
@@ -10,6 +11,7 @@ function isVisible(element: HTMLElement) {
 
 export function PageUtilityControls() {
   const { lang } = useLanguage();
+  const location = useLocation();
   const [open, setOpen] = useState(false);
   const ar = lang === 'ar';
 
@@ -30,6 +32,9 @@ export function PageUtilityControls() {
     setOpen(false);
     window.dispatchEvent(new Event('premier:open-command-palette'));
   };
+
+  // Pricing already has its search and table scroll controls inline; avoid overlaying editable prices.
+  if (location.pathname === '/pricing') return null;
 
   return (
     <div
