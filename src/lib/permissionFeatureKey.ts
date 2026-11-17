@@ -1,4 +1,4 @@
-import type { Permission } from './permissionDefs';
+import { ALL_PERMISSIONS, type Permission } from './permissionDefs';
 
 /**
  * The feature registry is the canonical module taxonomy. This mapping is
@@ -31,3 +31,8 @@ export function permissionFeatureKey(permission: Permission | string): string | 
   if (permission.startsWith('sales.') || permission.startsWith('refunds.')) return 'pos';
   return null;
 }
+
+/** Only modules with an actual permission gate may be edited in Super Admin. */
+export const ENFORCED_ORGANIZATION_MODULE_KEYS: ReadonlySet<string> = new Set(
+  ALL_PERMISSIONS.map(permissionFeatureKey).filter((key): key is string => key !== null)
+);
