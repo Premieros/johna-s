@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BadgeDollarSign, Boxes, Package, RefreshCw, Save } from 'lucide-react';
+import { BadgeDollarSign, Boxes, Download, Package, RefreshCw, Save, Upload } from 'lucide-react';
 import { costing } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
@@ -13,6 +13,15 @@ import { formatNumber } from '@/lib/format';
 import { loadPricingRows, updateManufacturedPricing, updateProductPricing } from '../services/pricingData';
 
 type PricingTab = 'raw' | 'manufactured' | 'products';
+type PriceField = 'default_cost' | 'cost_price' | 'sale_price' | 'wholesale_price';
+type ImportEntry = { id: string; name: string; prices: Partial<Record<PriceField, number>> };
+type ImportPreview = { tab: PricingTab; branchId: string; entries: ImportEntry[]; errors: string[] };
+
+const pricingFields: Record<PricingTab, PriceField[]> = {
+  raw: ['default_cost'],
+  manufactured: ['cost_price', 'sale_price'],
+  products: ['cost_price', 'sale_price', 'wholesale_price'],
+};
 
 type RawPriceRow = {
   id: string;
@@ -87,6 +96,12 @@ export function PricingPage() {
   const [loading, setLoading] = useState(false);
   const loadRequest = useRef(0);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [importing, setImporting] = useState(false);
+  const busy = loading || importing || savingId !== null;
+
+  useEffect(() => { setPreview(null); }, [tab, branchId]);
 
   const branchName = branches.find((branch) => branch.id === branchId)?.name || (ar ? 'الفرع الحالي' : 'Current branch');
 
@@ -254,6 +269,122 @@ export function PricingPage() {
     setSavingId(null);
   }
 
+
+  const rowsForTab = tab === 'raw' ? rawRows : tab === 'manufactured' ? manufacturedRows : productRows;
+  const allowedToEdit = tab === 'products' ? canProductsEdit : canRawEdit;
+
+  async function exportPrices() {
+    if (!branchId || loading) return;
+    try {
+      const XLSX = await import('xlsx');
+      const sheetRows = rowsForTab.map((row) => {
+        const fields = pricingFields[tab];
+        const record: Record<string, string | number> = {
+          id: row.id,
+          branch_id: branchId,
+          code: ('sku' in row ? row.sku : row.code) || '',
+          name: row.name,
+        };
+        for (const field of fields) record[field] = safePrice((row as unknown as Record<string, number | null>)[field]);
+        return record;
+      });
+      const worksheet = XLSX.utils.json_to_sheet(sheetRows, { header: ['id', 'branch_id', 'code', 'name', ...pricingFields[tab]] });
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(book, worksheet, 'Pricing');
+      XLSX.writeFile(book, `pricing-${tab}-${branchId}.xlsx`);
+    } catch (error) {
+      show(error instanceof Error ? error.message : (ar ? 'تعذر تصدير الأسعار' : 'Could not export prices'), 'error');
+    }
+  }
+
+  async function selectImport(file: File | undefined) {
+    if (!file || !branchId || !allowedToEdit) return;
+    setPreview(null);
+    try {
+      const XLSX = await import('xlsx');
+      const workbook = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      if (!firstSheet) throw Error(ar ? 'الملف فارغ' : 'Empty workbook');
+      const records = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: '' });
+      if (!records.length) throw Error(ar ? 'الملف لا يحتوي على أسعار' : 'No pricing rows in file');
+      const errors: string[] = [];
+      const entries: ImportEntry[] = [];
+      const seen = new Set<string>();
+      const rowMap = new Map(rowsForTab.map((row) => [row.id, row]));
+      const fields = pricingFields[tab];
+      for (const field of ['id', 'branch_id', ...fields]) {
+        if (!Object.prototype.hasOwnProperty.call(records[0], field)) {
+          errors.push(ar ? `عمود مطلوب مفقود: ${field}` : `Missing required column: ${field}`);
+        }
+      }
+      if (!errors.length) records.forEach((record, index) => {
+        const line = index + 2;
+        const id = String(record.id ?? '').trim();
+        const row = rowMap.get(id);
+        if (!id || !row || seen.has(id) || String(record.branch_id ?? '').trim() !== branchId) {
+          errors.push(ar ? `صف ${line}: معرف مكرر أو غير موجود في الفرع المحدد` : `Row ${line}: duplicate or unknown ID/branch`);
+          return;
+        }
+        seen.add(id);
+        const prices: Partial<Record<PriceField, number>> = {};
+        for (const field of fields) {
+          const input = record[field];
+          const number = typeof input === 'number' ? input : Number(String(input).trim());
+          if (input === '' || !Number.isFinite(number) || number < 0) {
+            errors.push(ar ? `صف ${line}: سعر غير صالح في ${field}` : `Row ${line}: invalid ${field}`);
+          } else prices[field] = number;
+        }
+        if (fields.every((field) => prices[field] !== undefined)) {
+          const changed = fields.some((field) => prices[field] !== safePrice((row as unknown as Record<string, number | null>)[field]));
+          if (changed) entries.push({ id, name: row.name, prices });
+        }
+      });
+      setPreview({ tab, branchId, entries, errors });
+    } catch (error) {
+      show(error instanceof Error ? error.message : (ar ? 'تعذر قراءة الملف' : 'Unable to read file'), 'error');
+    }
+  }
+
+  async function applyImport() {
+    if (!preview || preview.errors.length || !preview.entries.length || !branchId ||
+        preview.branchId !== branchId || preview.tab !== tab || !allowedToEdit || busy) return;
+    setImporting(true);
+    let completed = 0;
+    try {
+      for (const entry of preview.entries) {
+        if (tab === 'raw') {
+          const result = await costing.setRawMaterialPrice({
+            p_raw_material_id: entry.id, p_branch_id: branchId,
+            p_unit_cost: entry.prices.default_cost!,
+            p_note: 'Pricing workbook import',
+          });
+          if (result.error || !result.data?.success) throw Error(result.error?.message || result.data?.error || 'Raw price update failed');
+          await logAudit('update', 'raw_materials', entry.id, { pricing_import: entry.prices });
+        } else if (tab === 'manufactured') {
+          await updateManufacturedPricing({
+            id: entry.id, branchId,
+            costPrice: entry.prices.cost_price!, salePrice: entry.prices.sale_price!,
+          });
+          await logAudit('update', 'inventory_units', entry.id, { pricing_import: entry.prices });
+        } else {
+          await updateProductPricing({
+            id: entry.id, branchId, costPrice: entry.prices.cost_price!,
+            salePrice: entry.prices.sale_price!, wholesalePrice: entry.prices.wholesale_price!,
+          });
+          await logAudit('update', 'products', entry.id, { pricing_import: entry.prices });
+        }
+        completed += 1;
+      }
+      show(ar ? `تم استيراد ${completed} سعر بنجاح` : `Updated ${completed} pricing rows`, 'success');
+    } catch (error) {
+      show(`${ar ? 'توقف الاستيراد بعد' : 'Import stopped after'} ${completed}/${preview.entries.length}: ${error instanceof Error ? error.message : String(error)}`, 'error');
+    } finally {
+      setPreview(null);
+      setImporting(false);
+      await load();
+    }
+  }
+
   const priceInput = (
     value: number,
     onChange: (value: number) => void,
@@ -292,10 +423,24 @@ export function PricingPage() {
           ? `تسعير الخامات ومجموعات المكونات والمنتجات داخل ${branchName}. التكلفة الحالية بآخر سعر معروف من الشراء أو الجرد أو التسعير، مع حفظ تكلفة FIFO الفعلية للحركات.`
           : `Manage pricing for ${branchName}. Current estimates use the latest known purchase, count or pricing price. Actual FIFO movements retain their recorded costs.`}
         actions={(
-          <Button size="sm" variant="secondary" onClick={load} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            {ar ? 'تحديث' : 'Refresh'}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
+              aria-label={ar ? 'ملف استيراد الأسعار' : 'Pricing import file'}
+              onChange={(event) => {
+                void selectImport(event.target.files?.[0]);
+                event.target.value = '';
+              }} />
+            <Button size="sm" variant="secondary" onClick={() => void exportPrices()} disabled={!branchId || busy}>
+              <Download className="h-4 w-4" />{ar ? 'تصدير Excel' : 'Export Excel'}
+            </Button>
+            {allowedToEdit && <Button size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()} disabled={!branchId || busy}>
+              <Upload className="h-4 w-4" />{ar ? 'استيراد الأسعار' : 'Import prices'}
+            </Button>}
+            <Button size="sm" variant="secondary" onClick={() => void load()} disabled={busy}>
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              {ar ? 'تحديث' : 'Refresh'}
+            </Button>
+          </div>
         )}
       />
 
@@ -312,6 +457,24 @@ export function PricingPage() {
           </button>
         ))}
       </div>
+
+      {preview && <DesignPanel testId="pricing-import-preview">
+        <div className="space-y-3 text-sm">
+          <p className="font-bold text-ui-text">{ar ? 'مراجعة استيراد الأسعار' : 'Review pricing import'}</p>
+          <p>{ar ? `الأسعار المتغيرة: ${preview.entries.length} • الأخطاء: ${preview.errors.length}` : `Changed rows: ${preview.entries.length} • Errors: ${preview.errors.length}`}</p>
+          {preview.errors.length > 0 && <ul className="max-h-40 list-disc overflow-auto ps-5 text-ui-danger">
+            {preview.errors.slice(0, 30).map((message, i) => <li key={i}>{message}</li>)}
+          </ul>}
+          {preview.entries.length > 0 && <p className="text-ui-muted">{preview.entries.slice(0, 5).map((entry) => entry.name).join('، ')}{preview.entries.length > 5 ? '…' : ''}</p>}
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => void applyImport()} disabled={busy || preview.errors.length > 0 || preview.entries.length === 0}>
+              {importing ? (ar ? 'جارٍ الاستيراد...' : 'Importing...') : (ar ? 'تأكيد تحديث الأسعار' : 'Confirm price updates')}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => setPreview(null)} disabled={importing}>{ar ? 'إلغاء' : 'Cancel'}</Button>
+          </div>
+          <p className="text-xs text-ui-muted">{ar ? 'يتم التحديث بالمعرّف داخل الفرع الحالي فقط. لا تُضاف أصناف جديدة، ويُرفض الملف بالكامل عند وجود أخطاء.' : 'Matches existing IDs in the selected branch only. No new items are added. Any validation error blocks import.'}</p>
+        </div>
+      </DesignPanel>}
 
       <DesignPanel testId="pricing-search-panel">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
