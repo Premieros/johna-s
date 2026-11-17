@@ -111,6 +111,42 @@ describe.skipIf(!local)('per-organization module isolation and admin control', (
     expect(restored.rows[0].allowed).toBe(true);
   });
 
+  it('independently gates costing and advanced reports without disabling basic reports or other organizations', async () => {
+    if (!canImp) return;
+    await db.query(`UPDATE public.roles SET permissions = permissions ||
+      '["reports.view","reports.costing","reports.financial"]'::jsonb WHERE role='owner'`);
+    for (const [module,permission] of [
+      ['costing','reports.costing'],['advanced_reports','reports.financial'],
+    ] as const) {
+      const before=await runAs(db,ids.users.owner,
+        'SELECT public.can_permission($1) allowed',[permission]);
+      expect(before.rows[0].allowed).toBe(true);
+
+      const disabled=await runAsPersist(db,ids.users.super_admin,
+        'SELECT public.super_admin_set_organization_module($1,$2,false) result',[orgA,module]);
+      expect(disabled.rows[0].result).toMatchObject({success:true});
+
+      const denied=await runAs(db,ids.users.owner,
+        'SELECT public.can_permission($1) allowed',[permission]);
+      expect(denied.rows[0].allowed).toBe(false);
+      const basic=await runAs(db,ids.users.owner,
+        'SELECT public.can_permission($1) allowed',['reports.view']);
+      expect(basic.rows[0].allowed).toBe(true);
+      const other=await db.query(`SELECT
+        (public.resolve_feature_access($1::uuid,NULL,$3,NULL)->>'allowed')::boolean a,
+        (public.resolve_feature_access($2::uuid,NULL,$3,NULL)->>'allowed')::boolean b`,
+        [orgA,orgB,module]);
+      expect(other.rows[0]).toMatchObject({a:false,b:true});
+
+      const reset=await runAsPersist(db,ids.users.super_admin,
+        'SELECT public.super_admin_reset_organization_module($1,$2) result',[orgA,module]);
+      expect(reset.rows[0].result).toMatchObject({success:true});
+      const restored=await runAs(db,ids.users.owner,
+        'SELECT public.can_permission($1) allowed',[permission]);
+      expect(restored.rows[0].allowed).toBe(true);
+    }
+  });
+
   it('keeps organization profile independent of other organization names',async () => {
     if(!canImp)return;
     const old=await db.query<{name:string}>('SELECT name FROM public.organizations WHERE id=$1',[orgB]);
