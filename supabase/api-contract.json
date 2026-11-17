@@ -1622,6 +1622,7 @@
     "dining_areas",
     "dining_tables",
     "expenses",
+    "features",
     "inventory",
     "inventory_movements",
     "inventory_unit_batches",
