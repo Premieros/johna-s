@@ -330,7 +330,7 @@ export function PricingPage() {
         for (const field of fields) {
           const input = record[field];
           const number = typeof input === 'number' ? input : Number(String(input).trim());
-          if (input === '' || !Number.isFinite(number) || number < 0) {
+          if (input === '' || !Number.isFinite(number) || number < 0 || (tab === 'raw' && field === 'default_cost' && number === 0 && number !== safePrice((row as unknown as Record<string, number | null>)[field]))) {
             errors.push(ar ? `صف ${line}: سعر غير صالح في ${field}` : `Row ${line}: invalid ${field}`);
           } else prices[field] = number;
         }
