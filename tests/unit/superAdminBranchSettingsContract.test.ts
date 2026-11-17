@@ -1,10 +1,9 @@
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const page = readFileSync(fileURLToPath(
-  new URL('../../src/features/admin/pages/SuperAdminConsolePage.tsx', import.meta.url)
-), 'utf8');
+const page = readFileSync(resolve(process.cwd(),
+  'src/features/admin/pages/SuperAdminConsolePage.tsx'), 'utf8');
 
 describe('Super Admin operational settings are branch-specific', () => {
   it('removes global operational settings editor and its shared-row save path', () => {
