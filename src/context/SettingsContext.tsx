@@ -10,17 +10,35 @@ import { nextCairoClockInstant } from '../lib/businessTime';
 
 export type EffectiveSettings = Settings;
 
-export function mergeEffectiveSettings(global: Settings, branch?: BranchSettings | null): Settings {
-  if (!branch) return global;
-  return {
+export interface OrganizationDefaults {
+  name?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  logo_url?: string | null;
+  currency?: string | null;
+}
+
+export function mergeEffectiveSettings(
+  global: Settings, branch?: BranchSettings | null, organization?: OrganizationDefaults | null,
+): Settings {
+  const base: Settings = organization ? {
     ...global,
-    currency: branch.currency ?? global.currency,
-    tax_rate: branch.tax_rate ?? global.tax_rate,
-    tax_enabled: branch.tax_enabled ?? global.tax_enabled,
-    receipt_header: branch.receipt_header ?? global.receipt_header,
-    receipt_footer: branch.receipt_footer ?? global.receipt_footer,
-    logo_url: branch.logo_url ?? global.logo_url,
-    low_stock_threshold: branch.low_stock_threshold ?? global.low_stock_threshold,
+    store_name: organization.name || global.store_name,
+    store_phone: organization.phone ?? global.store_phone,
+    store_address: organization.address ?? global.store_address,
+    logo_url: organization.logo_url ?? global.logo_url,
+    currency: organization.currency ?? global.currency,
+  } : global;
+  if (!branch) return base;
+  return {
+    ...base,
+    currency: branch.currency ?? base.currency,
+    tax_rate: branch.tax_rate ?? base.tax_rate,
+    tax_enabled: branch.tax_enabled ?? base.tax_enabled,
+    receipt_header: branch.receipt_header ?? base.receipt_header,
+    receipt_footer: branch.receipt_footer ?? base.receipt_footer,
+    logo_url: branch.logo_url ?? base.logo_url,
+    low_stock_threshold: branch.low_stock_threshold ?? base.low_stock_threshold,
   };
 }
 
@@ -39,6 +57,7 @@ const SettingsContext = createContext<SettingsContextValue | undefined>(undefine
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [branchSettingsMap, setBranchSettingsMap] = useState<Record<string, BranchSettings>>({});
+  const [organizationDefaultsByBranch, setOrganizationDefaultsByBranch] = useState<Record<string, OrganizationDefaults>>({});
   const [loading, setLoading] = useState(true);
   const { applySystemTheme } = useTheme();
   const { applySystemLang } = useLanguage();
@@ -50,12 +69,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     if (!sessionUserId) {
       setSettings(null);
       setBranchSettingsMap({});
+      setOrganizationDefaultsByBranch({});
       setLoading(false);
       return;
     }
-    const [sRes, bRes] = await Promise.all([
+    const [sRes, bRes, branchRes, orgSettingsRes, orgRes] = await Promise.all([
       supabase.from('settings').select('*').maybeSingle(),
       supabase.from('branch_settings').select('*'),
+      supabase.from('branches').select('id,organization_id'),
+      supabase.from('organization_settings').select('organization_id,phone,address,logo_url,currency'),
+      supabase.from('organizations').select('id,name'),
     ]);
     const data = sRes.data as Settings | null;
     if (data) {
@@ -75,6 +98,26 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const bMap: Record<string, BranchSettings> = {};
     for (const row of (bRes.data as BranchSettings[]) || []) bMap[row.branch_id] = row;
     setBranchSettingsMap(bMap);
+    // A profile row opts an organization into organization-level defaults.
+    // Branch explicit overrides always win; no profile means no behavioral change.
+    const orgProfiles = new Map<string, OrganizationDefaults>(
+      (orgSettingsRes.error ? [] : (orgSettingsRes.data || [])).map((row) =>
+        [row.organization_id, {
+          phone: row.phone, address: row.address, logo_url: row.logo_url, currency: row.currency,
+        }]
+      ),
+    );
+    const orgNames = new Map<string, string>(
+      (orgRes.error ? [] : (orgRes.data || [])).map((row) => [row.id, row.name]),
+    );
+    const byBranch: Record<string, OrganizationDefaults> = {};
+    if (!branchRes.error) {
+      for (const branch of branchRes.data || []) {
+        const profile = orgProfiles.get(branch.organization_id);
+        if (profile) byBranch[branch.id] = { ...profile, name: orgNames.get(branch.organization_id) };
+      }
+    }
+    setOrganizationDefaultsByBranch(byBranch);
     setLoading(false);
   }, [sessionUserId, applySystemTheme, applySystemLang]);
 
@@ -183,9 +226,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     (branchId?: string | null): Settings | null => {
       if (!settings) return null;
       if (!branchId) return settings;
-      return mergeEffectiveSettings(settings, branchSettingsMap[branchId] || null);
+      return mergeEffectiveSettings(settings, branchSettingsMap[branchId] || null, organizationDefaultsByBranch[branchId] || null);
     },
-    [settings, branchSettingsMap]
+    [settings, branchSettingsMap, organizationDefaultsByBranch]
   );
 
   const save = useCallback(async (patch: Partial<Settings>): Promise<boolean> => {
