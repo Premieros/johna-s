@@ -3,6 +3,16 @@ import { supabase } from '@/api';
 import { Button } from '@/components/Button';
 import { ENFORCED_ORGANIZATION_MODULE_KEYS } from '@/lib/permissionFeatureKey';
 
+const UNSUPPORTED_MODULE_REASONS: Record<string, { ar: string; en: string }> = {
+  ai_assistant: { ar: 'المساعد الذكي لم يكتمل تنفيذه وربطه بالصلاحيات بعد.', en: 'AI assistant is not yet implemented with independent access enforcement.' },
+  api_access: { ar: 'الربط الخارجي يحتاج بوابة API تتحقق من صلاحية المنظمة في كل طلب.', en: 'External APIs need a per-request organization authorization gateway.' },
+  multi_branch: { ar: 'الفروع المتعددة تعتمد على صلاحيات الوصول والعمليات المشتركة، وتحتاج تدقيقًا قبل التعطيل.', en: 'Multi-branch access is shared with existing business workflows and needs a dedicated audit.' },
+  units: { ar: 'وحدات القياس مرتبطة بالمخزون والمشتريات؛ لا توجد صلاحية مستقلة لتعطيلها حاليًا.', en: 'Measurement units are shared by inventory and purchasing without an independent feature gate.' },
+  excel_import: { ar: 'الاستيراد يكتب مباشرة عبر خدمات البيانات؛ يلزم فصل الاستيراد في خدمة محمية.', en: 'Imports write via data services; a protected server-side import boundary is required.' },
+  excel_export: { ar: 'التصدير يتم عبر المتصفح من البيانات المسموح قراءتها، وليس عبر خدمة تصدير محمية.', en: 'Exports run in the browser from readable data; no protected export-service boundary exists.' },
+  customer_display: { ar: 'شاشة العميل ليست مرتبطة حتى الآن بحارس وصول مستقل.', en: 'Customer display does not yet have a separately enforceable access guard.' },
+};
+
 type Feature = { id: string; key: string; name: string; category: string; is_system: boolean };
 type OrgSettings = {
   phone: string | null; address: string | null; logo_url: string | null; currency: string | null;
@@ -148,7 +158,8 @@ export function OrganizationControlsPanel({
                 return (
                   <label key={feature.id} className="flex items-center justify-between gap-3 rounded-xl border border-ui-border p-3 text-sm">
                     <span className="min-w-0"><strong className="block text-ui-text">{feature.name}</strong><span className="text-xs text-ui-subtle">{feature.key}</span>
-                      {!supported && <span className="block text-xs text-ui-warning">{isAr ? 'التحكم غير متاح حتى استكمال ربط الأمان' : 'Control unavailable until enforcement is complete'}</span>}
+                      {!supported && <span className="block text-xs text-ui-warning">{UNSUPPORTED_MODULE_REASONS[feature.key]?.[isAr ? 'ar' : 'en']
+                        ?? (isAr ? 'يتطلب هذا الموديول حارس وصول مستقل قبل إتاحة التحكم.' : 'This module needs an independent access guard before controls are enabled.')}</span>}
                     </span>
                     <select value={selected} disabled={!supported || !!busyFeature || !!error}
                       aria-label={feature.key}
