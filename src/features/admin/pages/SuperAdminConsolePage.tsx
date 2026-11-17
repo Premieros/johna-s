@@ -67,7 +67,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
   const { lang } = useLanguage();
   const { show } = useToast();
   const ar = lang === 'ar';
-  const { branchSettingsMap, saveBranchSettings } = useSettings();
+  const { branchSettingsMap, saveBranchSettings, refresh: refreshSettings } = useSettings();
   const { branches } = useBranches();
 
   const queryTab = searchParams.get('tab') as SuperTab | 'general' | null;
@@ -482,7 +482,7 @@ export function SuperAdminConsolePage({ defaultTab }: SuperAdminConsoleProps = {
               organizationId={selectedOrganizationId}
               organizationName={tenants.find((item) => item.organization_id === selectedOrganizationId)!.organization_name}
               isAr={ar}
-              onSaved={() => { void loadTenants(); }}
+              onSaved={() => { void loadTenants(); void refreshSettings(); }}
             />
           )}
         </div>
