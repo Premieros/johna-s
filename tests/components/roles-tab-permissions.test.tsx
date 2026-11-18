@@ -122,6 +122,8 @@ describe('RolesTab permission controls', () => {
     render(<RolesTab />);
 
     expect(screen.getAllByText('مشرف الصالة').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'عرض الصلاحيات' }));
+    expect(screen.getByRole('dialog', { name: 'إدارة صلاحيات الدور' })).toBeInTheDocument();
     expect(screen.queryByText('تغيير سعر البيع من نقطة البيع')).not.toBeInTheDocument();
     expect(screen.queryByText('تحديث حالة طلبات المطبخ')).not.toBeInTheDocument();
 
@@ -184,6 +186,7 @@ describe('RolesTab permission controls', () => {
       );
     });
 
+    // The create-role flow opens the permissions modal. Select the existing custom role.
     fireEvent.click(screen.getByRole('button', { name: 'حذف' }));
     const confirm = screen.getByRole('dialog', { name: 'حذف الدور' });
     fireEvent.click(within(confirm).getByRole('button', { name: 'حذف' }));
@@ -196,6 +199,7 @@ describe('RolesTab permission controls', () => {
   it('shows technical details only to Super Admin', () => {
     state.userRole = 'super_admin';
     render(<RolesTab />);
+    fireEvent.click(screen.getByRole('button', { name: 'عرض الصلاحيات' }));
 
     expect(screen.queryByRole('button', { name: 'تفاصيل متقدمة' })).toBeInTheDocument();
     expect(screen.queryByText('pos.view')).not.toBeInTheDocument();
