@@ -410,7 +410,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <div className="mb-3 flex items-center justify-between gap-2 px-2" data-testid="navigation-visibility-actions">
             <span className="text-xs font-semibold text-ui-muted">{ar ? 'أقسام النظام' : 'System sections'}</span>
             <button type="button" data-testid="navigation-expand-all"
-              onClick={() => setCollapsed((current) => Object.fromEntries(
+              onClick={() => setCollapsed(Object.fromEntries(
                 (Object.keys(MENU_GROUPS) as MenuGroup[]).map((group) => [group, false])
               ) as Record<MenuGroup, boolean>)}
               className="rounded-lg border border-ui-border bg-ui-surface px-2.5 py-1.5 text-xs font-bold text-ui-primary hover:bg-ui-primary-soft">
