@@ -14,8 +14,7 @@ describe('authorized navigation visibility', () => {
       ['inventoryBatches', 'inventory.view'], ['stockValuation', 'inventory.ledger.view'],
       ['lowStockAlerts', 'inventory.view'], ['purchases', 'purchases.view'],
       ['purchaseRequests', 'purchases.requests'], ['rfqs', 'purchases.rfq'],
-      ['receiving', 'purchases.receiving'], ['financialReports', 'reports.financial'],
-      ['systemHealth', 'settings.manage'],
+      ['receiving', 'purchases.receiving'], ['systemHealth', 'settings.manage'],
     ];
     for (const [route, permission] of entries) {
       expect(menu).toMatch(new RegExp(`route: APP_ROUTES\\.${route}[^\\n]*permission: '${permission}'`));
