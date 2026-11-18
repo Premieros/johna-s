@@ -68,7 +68,6 @@ export const MENU_ITEMS: MenuItemConfig[] = [
   { id: 'sales', route: APP_ROUTES.sales, icon: 'sales', labelKey: 'salesInvoices', permission: 'sales.view', group: 'finance' },
   { id: 'shifts', route: APP_ROUTES.shifts, icon: 'shifts', labelKey: 'shifts', permission: 'shifts.view', group: 'finance' },
   { id: 'reports', route: APP_ROUTES.reports, icon: 'reports', labelKey: 'reports', permissionsAny: ['reports.view', 'reports.financial'], group: 'finance' },
-  { id: 'financial-reports', route: APP_ROUTES.financialReports, icon: 'financialReports', labelKey: 'reports', label: { ar: 'التقارير المالية', en: 'Financial Reports' }, permission: 'reports.financial', group: 'finance' },
   { id: 'super-admin', route: APP_ROUTES.superAdmin, icon: 'superAdmin', labelKey: 'superAdmin', permission: 'settings.manage', group: 'admin', superAdminOnly: true },
   { id: 'users', route: APP_ROUTES.users, icon: 'users', labelKey: 'users', permission: 'users.view', group: 'admin' },
   { id: 'permissions', route: APP_ROUTES.permissions, icon: 'users', labelKey: 'settings', label: { ar: 'الصلاحيات والأدوار', en: 'Roles & Permissions' }, permission: 'roles.permissions.manage', group: 'admin' },
