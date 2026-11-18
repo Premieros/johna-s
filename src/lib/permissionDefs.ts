@@ -40,7 +40,7 @@ export type Permission =
   | 'customers.view' | 'customers.manage'
   | 'suppliers.view' | 'suppliers.manage' | 'suppliers.opening_balance.manage'
   | 'expenses.view' | 'expenses.manage' | 'expenses.edit' | 'expenses.routing.manage'
-  | 'sales.view' | 'sales.refund.create' | 'sales.payment.receive'
+  | 'sales.view' | 'sales.manage' | 'sales.refund.create' | 'sales.payment.receive'
   | 'refunds.approve'
   | 'reports.view' | 'reports.financial' | 'reports.costing'
   | 'accounts.view' | 'accounts.manage'
@@ -81,7 +81,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'customers.view', 'customers.manage', 'customers.print', 'customers.export',
   'suppliers.view', 'suppliers.manage', 'suppliers.opening_balance.manage', 'suppliers.print',
   'expenses.view', 'expenses.manage', 'expenses.edit', 'expenses.routing.manage', 'expenses.print',
-  'sales.view', 'sales.refund.create', 'sales.payment.receive', 'refunds.approve',
+  'sales.view', 'sales.manage', 'sales.refund.create', 'sales.payment.receive', 'refunds.approve',
   'reports.view', 'reports.financial', 'reports.costing', 'reports.print', 'reports.export',
   'accounts.view', 'accounts.manage', 'accounting.journal.post', 'accounting.treasury.transfer', 'accounting.treasury.main_cash.pay', 'accounting.reconciliation.manage',
   'shifts.view', 'shifts.open', 'shifts.close', 'shifts.close_with_open_orders', 'shifts.manage', 'shifts.report.user', 'shifts.report.shift', 'shifts.day_close',
@@ -182,6 +182,7 @@ export const PERMISSION_LABELS: Record<Permission, { ar: string; en: string }> =
   'expenses.edit': { ar: 'تعديل المصروفات المرحلة', en: 'Edit Posted Expenses' },
   'expenses.routing.manage': { ar: 'إدارة توجيهات المصروفات المحاسبية', en: 'Manage Expense Accounting Routing' },
   'sales.view': { ar: 'عرض فواتير المبيعات', en: 'View Sales Invoices' },
+  'sales.manage': { ar: 'تعديل وحذف سجلات المبيعات مباشرة (صلاحية حرجة)', en: 'Directly Update or Delete Sales Records (Critical)' },
   'sales.refund.create': { ar: 'إنشاء مرتجع مبيعات', en: 'Create Sales Refunds' },
   'sales.payment.receive': { ar: 'تحصيل دفعة عميل', en: 'Receive Customer Payments' },
   'refunds.approve': { ar: 'الموافقة على المرتجعات', en: 'Approve Refunds' },
@@ -240,7 +241,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   { key: 'warehouses', ar: 'المخازن', en: 'Warehouses', permissions: ['warehouses.view', 'warehouses.manage'] },
   { key: 'customers', ar: 'العملاء', en: 'Customers', permissions: ['customers.view', 'customers.manage', 'customers.print', 'customers.export'] },
   { key: 'suppliers', ar: 'الموردون', en: 'Suppliers', permissions: ['suppliers.view', 'suppliers.manage', 'suppliers.opening_balance.manage', 'suppliers.print'] },
-  { key: 'sales', ar: 'المبيعات', en: 'Sales', permissions: ['sales.view', 'sales.refund.create', 'sales.payment.receive', 'sales.export', 'refunds.approve', 'sales.print'] },
+  { key: 'sales', ar: 'المبيعات', en: 'Sales', permissions: ['sales.view', 'sales.manage', 'sales.refund.create', 'sales.payment.receive', 'sales.export', 'refunds.approve', 'sales.print'] },
   { key: 'expenses', ar: 'المصروفات', en: 'Expenses', permissions: ['expenses.view', 'expenses.manage', 'expenses.edit', 'expenses.routing.manage', 'expenses.print'] },
   { key: 'accounts', ar: 'المحاسبة', en: 'Accounting', permissions: ['accounts.view', 'accounts.manage', 'accounting.journal.post', 'accounting.treasury.transfer', 'accounting.treasury.main_cash.pay', 'accounting.reconciliation.manage'] },
   { key: 'shifts', ar: 'الشيفتات', en: 'Shifts', permissions: ['shifts.view', 'shifts.open', 'shifts.close', 'shifts.close_with_open_orders', 'shifts.manage', 'shifts.report.user', 'shifts.report.shift', 'shifts.day_close'] },
