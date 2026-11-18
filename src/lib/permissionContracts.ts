@@ -88,6 +88,7 @@ const REQUIREMENTS: Partial<Record<Permission, Permission[]>> = {
   'expenses.routing.manage': ['expenses.view', 'expenses.manage', 'accounts.view'],
   'expenses.print': ['expenses.view'],
 
+  'sales.manage': ['sales.view'],
   'sales.refund.create': ['sales.view'],
   'sales.payment.receive': ['sales.view'],
   'sales.print': ['sales.view'],
@@ -157,6 +158,7 @@ const CRITICAL = new Set<Permission>([
   'pos.cancel_order',
   'purchases.delete',
   'products.delete',
+  'sales.manage',
   'inventory.adjust',
   'inventory.count.approve',
   'inventory.count.reject',
@@ -196,6 +198,12 @@ const SENSITIVE = new Set<Permission>([
 ]);
 
 const EFFECTS: Partial<Record<Permission, { ar: string; en: string; notesAr?: string; notesEn?: string }>> = {
+  'sales.manage': {
+    ar: 'تسمح سياسات قاعدة البيانات القديمة بتحديث وحذف صفوف المبيعات مباشرة ضمن الفروع المصرح بها. ليست بديلًا عن مسار المرتجعات المعتمد.',
+    en: 'Existing database policies allow direct sales-row updates and deletes within authorized branches. This is not the approved refund workflow.',
+    notesAr: 'صلاحية حرجة للغاية: لا تمنح تلقائيًا لأي دور، بما في ذلك المالك. عمليات المرتجعات المعتمدة تستخدم sales.refund.create وrefunds.approve.',
+    notesEn: 'Extremely sensitive: never automatically assign to any role, including owner. Approved refund flows use sales.refund.create and refunds.approve.',
+  },
   'purchases.receiving': { ar: 'عرض شاشة استلام المشتريات وسجل الاستلام؛ التنفيذ له صلاحية مستقلة.', en: 'View purchase receiving and receipt history; execution requires a separate capability.' },
   'procurement.receive': { ar: 'تنفيذ استلام المشتريات داخل الفروع المسموح بها دون منح إدارة المشتريات.', en: 'Receive purchases inside accessible branches without granting purchase management.', notesAr: 'صلاحية إدارة المشتريات الحالية تستمر في شمول الاستلام للتوافق مع المسارات القائمة.', notesEn: 'Existing purchase-management capability continues to include receiving for established callers.' },
   'pos.view': {
