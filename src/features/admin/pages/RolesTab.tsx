@@ -4,6 +4,7 @@ import {
   CheckCheck,
   Lock,
   Plus,
+  Pencil,
   RotateCcw,
   Save,
   Search,
@@ -115,6 +116,7 @@ export function RolesTab() {
   });
   const [deleting, setDeleting] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState('');
+  const [roleEditorOpen, setRoleEditorOpen] = useState(false);
   const [permissionSearch, setPermissionSearch] = useState('');
   const [showAdvancedDetails, setShowAdvancedDetails] = useState(false);
 
@@ -406,6 +408,7 @@ export function RolesTab() {
     show(t('saveSuccess'), 'success');
     setCreating(false);
     setSelectedRole(res.role || createForm.role);
+    setRoleEditorOpen(true);
   };
 
   const confirmDelete = async () => {
@@ -442,6 +445,19 @@ export function RolesTab() {
     show(t('deleteSuccess'), 'success');
     setDeleting(null);
     setSelectedRole('');
+    setRoleEditorOpen(false);
+  };
+
+  const closeRoleEditor = () => {
+    if (savingRole) return;
+    if (hasUnsavedChanges) {
+      if (!window.confirm(isAr
+        ? 'هناك تغييرات غير محفوظة. هل تريد إغلاق النافذة والتراجع عنها؟'
+        : 'You have unsaved changes. Discard them and close?')) return;
+      resetDraft();
+    }
+    setRoleEditorOpen(false);
+    setPermissionSearch('');
   };
 
   const permissionQuery = permissionSearch.trim().toLowerCase();
@@ -499,54 +515,69 @@ export function RolesTab() {
         </div>
       </Card>
 
-      <Card className="p-3 sm:p-4">
-        <div
-          className="flex gap-2 overflow-x-auto pb-1"
-          role="tablist"
-          aria-label={isAr ? 'الأدوار' : 'Roles'}
-        >
-          {roles.map((role) => {
-            const def = rolesList.find((candidate) => candidate.role === role);
-            const rolePermissions = drafts[role] ?? rolePermissionsMap[role] ?? [];
-            const visibleCount = isPlatformAdmin
-              ? rolePermissions.length
-              : rolePermissions.filter((permission) => canGrantPermission(permission)).length;
-            const visibleCatalogCount = isPlatformAdmin
-              ? ALL_PERMISSIONS.length
-              : ALL_PERMISSIONS.filter((permission) => canOfferPermission(permission)).length;
-            const active = role === currentRole;
-            const platformAdmin = role === 'super_admin';
-            return (
-              <button
-                key={role}
-                type="button"
-                onClick={() => {
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid="roles-grid">
+        {roles.map((role) => {
+          const def = rolesList.find((candidate) => candidate.role === role);
+          const permissions = drafts[role] ?? rolePermissionsMap[role] ?? [];
+          const visibleCount = isPlatformAdmin
+            ? permissions.length
+            : permissions.filter((permission) => canGrantPermission(permission)).length;
+          const availableCount = isPlatformAdmin
+            ? ALL_PERMISSIONS.length
+            : ALL_PERMISSIONS.filter((permission) => canOfferPermission(permission)).length;
+          const platformAdmin = role === 'super_admin';
+          const isSystem = !!ROLE_META[role as Role];
+          const isBranch = def?.scope === 'branch';
+          return (
+            <Card key={role} className="flex flex-col justify-between gap-4 p-4 sm:p-5" >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="rounded-xl bg-ui-primary-soft p-2.5 text-ui-primary shrink-0">
+                    {platformAdmin ? <ShieldCheck className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="truncate font-bold text-ui-text" title={roleMeta[role]?.[lang] || role}>
+                      {roleMeta[role]?.[lang] || role}
+                    </h2>
+                    <p className="mt-1 truncate text-xs text-ui-subtle" title={role}>{role}</p>
+                  </div>
+                </div>
+                <span className="shrink-0 rounded-full bg-ui-page-alt px-2 py-1 text-[11px] text-ui-muted">
+                  {isSystem ? (isAr ? 'نظامي' : 'System') : (isAr ? 'مخصص' : 'Custom')}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-ui-border pt-3">
+                <div className="text-xs text-ui-muted">
+                  <span className="font-bold text-ui-text">
+                    {platformAdmin ? (isAr ? 'وصول شامل' : 'Full access') : `${visibleCount}/${availableCount}`}
+                  </span>
+                  <span className="ms-1">{platformAdmin ? '' : (isAr ? 'صلاحية' : 'permissions')}</span>
+                  {isBranch && <span className="ms-2 rounded-md bg-ui-info-soft px-1.5 py-0.5 text-ui-info">
+                    {isAr ? 'فرع محدد' : 'Branch'}
+                  </span>}
+                </div>
+                <Button size="sm" variant="outline" onClick={() => {
                   setSelectedRole(role);
                   setPermissionSearch('');
-                }}
-                className={`shrink-0 rounded-xl border px-3 py-2 text-start transition ${
-                  active
-                    ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300'
-                    : 'border-ui-border bg-ui-surface text-ui-text hover:bg-ui-page-alt'
-                }`}
-              >
-                <span className="block text-sm font-semibold">
-                  {roleMeta[role]?.[lang] || role}
-                </span>
-                <span className="block text-[11px] text-ui-subtle mt-0.5">
-                  {platformAdmin
-                    ? (isAr ? 'تجاوز منصة كامل' : 'Full platform bypass')
-                    : `${visibleCount}/${visibleCatalogCount}`}
-                  {def?.scope === 'branch' ? ` · ${isAr ? 'فرع' : 'Branch'}` : ''}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </Card>
+                  setRoleEditorOpen(true);
+                }}>
+                  <Pencil className="h-4 w-4" />
+                  {isAr ? 'عرض الصلاحيات' : 'View permissions'}
+                </Button>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
 
       {currentRole && (
-        <Card className="p-4 sm:p-5">
+        <Modal
+          open={roleEditorOpen}
+          onClose={closeRoleEditor}
+          title={isAr ? 'إدارة صلاحيات الدور' : 'Role permissions'}
+          size="2xl"
+        >
+        <div className="space-y-4" data-testid="role-permissions-editor">
           <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4 mb-4">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -887,7 +918,8 @@ export function RolesTab() {
               )}
             </>
           )}
-        </Card>
+        </div>
+        </Modal>
       )}
 
       <p className="px-1 text-xs text-ui-subtle">
