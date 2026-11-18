@@ -273,9 +273,11 @@ export function PricingPage() {
 
   const rowsForTab = tab === 'raw' ? rawRows : tab === 'manufactured' ? manufacturedRows : productRows;
   const allowedToEdit = tab === 'products' ? canProductsEdit : canRawEdit;
+  const allowedToImport = allowedToEdit && (tab !== 'products' || can('products.import'));
+  const allowedToExport = tab !== 'products' || can('products.export');
 
   async function exportPrices() {
-    if (!branchId || loading) return;
+    if (!branchId || busy || !allowedToExport) return;
     try {
       const XLSX = await import('xlsx');
       const sheetRows = rowsForTab.map((row) => {
@@ -299,7 +301,7 @@ export function PricingPage() {
   }
 
   async function selectImport(file: File | undefined) {
-    if (!file || !branchId || !allowedToEdit) return;
+    if (!file || !branchId || !allowedToImport) return;
     setPreview(null);
     try {
       const XLSX = await import('xlsx');
@@ -348,7 +350,7 @@ export function PricingPage() {
 
   async function applyImport() {
     if (!preview || preview.errors.length || !preview.entries.length || !branchId ||
-        preview.branchId !== branchId || preview.tab !== tab || !allowedToEdit || busy) return;
+        preview.branchId !== branchId || preview.tab !== tab || !allowedToImport || busy) return;
     setImporting(true);
     let completed = 0;
     try {
@@ -434,12 +436,12 @@ export function PricingPage() {
                 void selectImport(event.target.files?.[0]);
                 event.target.value = '';
               }} />
-            {allowedToEdit && <Button size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()} disabled={!branchId || busy}>
+            {allowedToImport && <Button size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()} disabled={!branchId || busy}>
               <Upload className="h-4 w-4 shrink-0" />{ar ? 'استيراد الأسعار' : 'Import prices'}
             </Button>}
-            <Button size="sm" variant="secondary" onClick={() => void exportPrices()} disabled={!branchId || busy}>
+            {allowedToExport && <Button size="sm" variant="secondary" onClick={() => void exportPrices()} disabled={!branchId || busy}>
               <Download className="h-4 w-4 shrink-0" />{ar ? 'تصدير Excel' : 'Export Excel'}
-            </Button>
+            </Button>}
             <Button size="sm" variant="secondary" onClick={() => void load()} disabled={busy}>
               <RefreshCw className={`h-4 w-4 shrink-0 ${loading ? 'animate-spin' : ''}`} />
               {ar ? 'تحديث' : 'Refresh'}
