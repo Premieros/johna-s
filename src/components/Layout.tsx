@@ -150,9 +150,9 @@ export function Layout({ children }: { children: ReactNode }) {
   }, {} as Record<MenuGroup, typeof visibleItems>), [visibleItems]);
 
   const activeMenuGroup = useMemo<MenuGroup | null>(() => {
-    const activeItem = visibleItems.find((item) =>
-      location.pathname === item.route || location.pathname.startsWith(`${item.route}/`),
-    );
+    const activeItem = [...visibleItems]
+      .filter((item) => location.pathname === item.route || location.pathname.startsWith(`${item.route}/`))
+      .sort((a, b) => b.route.length - a.route.length)[0];
     return activeItem?.group ?? null;
   }, [location.pathname, visibleItems]);
 
@@ -407,6 +407,16 @@ export function Layout({ children }: { children: ReactNode }) {
             )}
           </section>
 
+          <div className="mb-3 flex items-center justify-between gap-2 px-2" data-testid="navigation-visibility-actions">
+            <span className="text-xs font-semibold text-ui-muted">{ar ? 'أقسام النظام' : 'System sections'}</span>
+            <button type="button" data-testid="navigation-expand-all"
+              onClick={() => setCollapsed((current) => Object.fromEntries(
+                (Object.keys(MENU_GROUPS) as MenuGroup[]).map((group) => [group, false])
+              ) as Record<MenuGroup, boolean>)}
+              className="rounded-lg border border-ui-border bg-ui-surface px-2.5 py-1.5 text-xs font-bold text-ui-primary hover:bg-ui-primary-soft">
+              {ar ? 'إظهار جميع الأقسام' : 'Expand all sections'}
+            </button>
+          </div>
           {(Object.keys(MENU_GROUPS) as MenuGroup[]).map((group) => {
             const items = grouped[group] ?? [];
             if (!items.length) return null;
