@@ -139,9 +139,9 @@ BEGIN
     RAISE EXCEPTION 'LEDGER_SEARCH_VISIBILITY_DRIFT';
   END IF;
   v_def:=replace(v_def,
-    ') vis' || E'\\n\\n  WHERE',
-    ') vis' || E'\\n  LEFT JOIN private.branch_financial_visibility_settings vis_policy' ||
-    E'\\n    ON vis_policy.branch_id = vis.vis_branch_id' || E'\\n\\n  WHERE');
+    ') vis' || chr(10) || chr(10) || '  WHERE',
+    ') vis' || chr(10) || '  LEFT JOIN private.branch_financial_visibility_settings vis_policy' ||
+    chr(10) || '    ON vis_policy.branch_id = vis.vis_branch_id' || chr(10) || chr(10) || '  WHERE');
   IF position('LEFT JOIN private.branch_financial_visibility_settings vis_policy' IN v_def)=0 THEN
     RAISE EXCEPTION 'LEDGER_SEARCH_JOIN_DRIFT';
   END IF;
