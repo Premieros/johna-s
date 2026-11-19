@@ -86,6 +86,31 @@ const ops = (total: number) => ({ orders: [{ total, order_items: [{ quantity: 1 
 const snapshot = (sales: number) => ({ current: { ...totals, sales, payments: sales }, previous: totals, currentSeries: [], previousSeries: [], orderTypes: [], branches: [], recentSales: [], topProducts: [], paymentMethods: [], previousPaymentMethods: [] });
 const enableAll = () => { mocks.permissions = ['sales.view', 'reports.view', 'reports.financial', 'pos.view', 'purchases.view', 'expenses.view', 'inventory.view']; };
 const waitReady = () => waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled());
+describe('dashboard reporting concurrency guard', () => {
+  it('does not run costly income statements until the sales snapshot settles', async () => {
+    const pending = deferred<ReturnType<typeof snapshot>>();
+    mocks.snapshot.mockReturnValueOnce(pending.promise);
+    render(<MemoryRouter><DashboardDataPage /></MemoryRouter>);
+    await waitFor(() => expect(mocks.snapshot).toHaveBeenCalledOnce());
+    expect(mocks.income).not.toHaveBeenCalled();
+    await act(async () => { pending.resolve(snapshot(120)); });
+    await waitFor(() => expect(mocks.income).toHaveBeenCalledOnce());
+    expect(screen.getByTestId('analysis-net-sales')).toHaveTextContent('120.00');
+  });
+
+  it('limits multi-branch income-statement queries to one at a time', async () => {
+    mocks.branch = '';
+    const first = deferred<{ data: { expenses: number; net_income: number } }>();
+    mocks.income.mockReturnValueOnce(first.promise);
+    render(<MemoryRouter><DashboardDataPage /></MemoryRouter>);
+    await waitFor(() => expect(mocks.income).toHaveBeenCalledTimes(1));
+    expect(mocks.income.mock.calls[0][0].p_branch_id).toBe('a');
+    await act(async () => { first.resolve({ data: { expenses: 10, net_income: 20 } }); });
+    await waitFor(() => expect(mocks.income).toHaveBeenCalledTimes(2));
+    expect(mocks.income.mock.calls[1][0].p_branch_id).toBe('b');
+  });
+});
+
 describe('complete dashboard refresh and failure isolation', () => {
   it('refreshes sales, open orders, accounting and stock once per click', async () => {
     enableAll(); mocks.ops.mockResolvedValue(ops(1794));
