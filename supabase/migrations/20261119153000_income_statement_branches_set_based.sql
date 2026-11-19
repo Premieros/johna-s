@@ -68,7 +68,7 @@ GRANT EXECUTE ON FUNCTION public.get_income_statement_branches(uuid[],date,date)
 -- Open amounts follow get_ar_aging/get_ap_aging (including employee receivables
 -- and supplier opening balances) without 1 RPC per branch.
 CREATE OR REPLACE FUNCTION public.get_party_open_balances_branches(
-  p_branch_ids uuid[], p_as_of date, p_party text
+  p_branch_ids uuid[], p_party_ids uuid[], p_as_of date, p_party text
 ) RETURNS TABLE(party_id uuid, open_amount numeric)
 LANGUAGE plpgsql STABLE SECURITY INVOKER
 SET search_path TO public, pg_temp
@@ -79,7 +79,8 @@ BEGIN
     (p_party = 'supplier' AND NOT public.can_permission('suppliers.view')) THEN
     RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501';
   END IF;
-  IF p_branch_ids IS NULL OR cardinality(p_branch_ids) > 500 THEN
+  IF p_branch_ids IS NULL OR cardinality(p_branch_ids) > 500 OR
+     p_party_ids IS NULL OR cardinality(p_party_ids) > 500 THEN
     RAISE EXCEPTION 'INVALID_BRANCH_SCOPE' USING ERRCODE='22023';
   END IF;
   IF EXISTS (
@@ -99,7 +100,8 @@ BEGIN
       FROM public.sales s
       JOIN scope b ON b.id = s.branch_id
       CROSS JOIN date_bounds d
-      WHERE s.status <> 'returned'
+      WHERE s.customer_id = ANY(p_party_ids)
+      AND s.status <> 'returned'
         AND s.created_at::date <= d.until_date
         AND (s.total - coalesce(s.paid_amount,0) - coalesce(s.refunded_amount,0)) > 0
 
@@ -111,7 +113,8 @@ BEGIN
       JOIN scope b ON b.id = e.branch_id
       JOIN public.customers c ON c.id = e.customer_id AND c.branch_id = e.branch_id
       CROSS JOIN date_bounds d
-      WHERE c.customer_type = 'employee'
+      WHERE e.customer_id = ANY(p_party_ids)
+        AND c.customer_type = 'employee'
         AND e.occurred_at::date <= d.until_date
         AND (e.amount - e.settled_amount) > 0
     )
@@ -129,7 +132,8 @@ BEGIN
       FROM public.purchases p
       JOIN scope b ON b.id = p.branch_id
       CROSS JOIN date_bounds d
-      WHERE p.status = 'completed'
+      WHERE p.supplier_id = ANY(p_party_ids)
+        AND p.status = 'completed'
         AND (p.created_at AT TIME ZONE 'Africa/Cairo')::date <= d.until_date
         AND (p.total - coalesce(p.paid_amount,0) - coalesce(p.returned_amount,0)) > 0
 
@@ -140,7 +144,8 @@ BEGIN
       FROM public.supplier_opening_balances ob
       JOIN scope b ON b.id = ob.branch_id
       CROSS JOIN date_bounds d
-      WHERE ob.opening_date <= d.until_date
+      WHERE ob.supplier_id = ANY(p_party_ids)
+        AND ob.opening_date <= d.until_date
         AND (ob.amount - ob.settled_amount) > 0
     )
     SELECT s.id, round(sum(a.balance),2)
@@ -151,5 +156,5 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.get_party_open_balances_branches(uuid[],date,text) FROM PUBLIC,anon;
-GRANT EXECUTE ON FUNCTION public.get_party_open_balances_branches(uuid[],date,text) TO authenticated,service_role;
+REVOKE ALL ON FUNCTION public.get_party_open_balances_branches(uuid[],uuid[],date,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.get_party_open_balances_branches(uuid[],uuid[],date,text) TO authenticated,service_role;
