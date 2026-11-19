@@ -5,6 +5,7 @@ const read = (path: string) => readFileSync(path, 'utf8');
 const dashboard = read('src/features/dashboard/pages/DashboardDataPage.tsx');
 const customers = read('src/features/parties/pages/CustomersPage.tsx');
 const suppliers = read('src/features/parties/pages/SuppliersPage.tsx');
+const reports = read('src/features/reporting/pages/ReportsPage.tsx');
 const sql = read('supabase/migrations/20261119153000_income_statement_branches_set_based.sql');
 
 describe('100-branch read scalability safeguards', () => {
@@ -13,6 +14,7 @@ describe('100-branch read scalability safeguards', () => {
     expect(dashboard).toContain('p_branch_ids: targetBranches.map((branch) => branch.id)');
     expect(dashboard).toContain('INCOMPLETE_BRANCH_FINANCIAL_SUMMARY');
     expect(dashboard).not.toContain('Promise.all(targetBranches.map((branch) => reporting.getIncomeStatement');
+    expect(reports).toContain('getIncomeStatementBranches({');
   });
 
   it('does not fire one AR/AP aging RPC for each branch in customer and supplier lists', () => {
