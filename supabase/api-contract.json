@@ -474,6 +474,12 @@
       ]
     },
     {
+      "name": "get_branch_financial_visibility_settings",
+      "params": [
+        "branch_id"
+      ]
+    },
+    {
       "name": "get_branch_treasury_day_close_reconciliation",
       "params": [
         "branch_id",
@@ -1516,6 +1522,14 @@
         "name",
         "name_en",
         "phone"
+      ]
+    },
+    {
+      "name": "update_branch_financial_visibility_settings",
+      "params": [
+        "branch_id",
+        "historical_percent",
+        "recent_days"
       ]
     },
     {

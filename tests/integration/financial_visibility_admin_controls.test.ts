@@ -124,6 +124,51 @@ describe.skipIf(skip)('financial visibility admin controls', () => {
     expect(otherBranch.rows[0].allowed).toBe(false);
   });
 
+  guarded('each branch has independent history settings and one history.unlimited bypass', async () => {
+    await client.query(
+      'INSERT INTO public.user_branch_access(user_id,branch_id) VALUES($1,$2),($3,$2) ON CONFLICT(user_id,branch_id) DO NOTHING',
+      [ids.users.branch_manager, ids.branchB, ids.users.cashier],
+    );
+    const first = await runAsPersist(client, ids.users.branch_manager,
+      'SELECT public.update_branch_financial_visibility_settings($1::uuid, 7, 0) AS result',
+      [ids.branchA]);
+    const second = await runAsPersist(client, ids.users.branch_manager,
+      'SELECT public.update_branch_financial_visibility_settings($1::uuid, 7, 100) AS result',
+      [ids.branchB]);
+    expect(first.rows[0].result).toMatchObject({ success: true });
+    expect(second.rows[0].result).toMatchObject({ success: true });
+
+    const readA = await runAs(client, ids.users.branch_manager,
+      'SELECT public.get_branch_financial_visibility_settings($1::uuid) AS result',
+      [ids.branchA]);
+    const readB = await runAs(client, ids.users.branch_manager,
+      'SELECT public.get_branch_financial_visibility_settings($1::uuid) AS result',
+      [ids.branchB]);
+    expect(readA.rows[0].result).toMatchObject({ success: true, recent_days: 7, historical_percent: 0 });
+    expect(readB.rows[0].result).toMatchObject({ success: true, recent_days: 7, historical_percent: 100 });
+
+    const old = randomUUID();
+    const cashA = await runAs(client, ids.users.cashier,
+      "SELECT private.financial_row_visible($1::uuid,$2::uuid,now()-interval '30 days') AS allowed",
+      [old, ids.branchA]);
+    const cashB = await runAs(client, ids.users.cashier,
+      "SELECT private.financial_row_visible($1::uuid,$2::uuid,now()-interval '30 days') AS allowed",
+      [old, ids.branchB]);
+    expect(cashA.rows[0].allowed).toBe(false);
+    expect(cashB.rows[0].allowed).toBe(true);
+
+    const managerA = await runAs(client, ids.users.branch_manager,
+      "SELECT private.financial_row_visible($1::uuid,$2::uuid,now()-interval '30 days') AS allowed",
+      [old, ids.branchA]);
+    expect(managerA.rows[0].allowed).toBe(true);
+    await client.query('DELETE FROM public.user_branch_access WHERE user_id=$1 AND branch_id=$2',
+      [ids.users.cashier,ids.branchB]);
+    const deniedB = await runAs(client, ids.users.cashier,
+      "SELECT private.financial_row_visible($1::uuid,$2::uuid,now()-interval '30 days') AS allowed",
+      [old, ids.branchB]);
+    expect(deniedB.rows[0].allowed).toBe(false);
+  });
+
   guarded('active orders remain visible inside the branch even when historical percentage is zero', async () => {
     const setAllHidden = await runAsPersist(
       client,
