@@ -3,7 +3,7 @@
 -- but scans journal entries once for all requested branches.
 CREATE OR REPLACE FUNCTION public.get_income_statement_branches(
   p_branch_ids uuid[], p_from_date date, p_to_date date
-) RETURNS TABLE(branch_id uuid, revenue numeric, discount numeric, net_revenue numeric, cogs numeric, gross_profit numeric, expenses numeric, net_income numeric)
+) RETURNS TABLE(branch_id uuid, revenue numeric, discount numeric, net_revenue numeric, cogs numeric, gross_profit numeric, other_income numeric, expenses numeric, net_income numeric)
 LANGUAGE plpgsql STABLE SECURITY INVOKER
 SET search_path TO public, pg_temp
 AS $function$
@@ -39,12 +39,19 @@ BEGIN
     GROUP BY m.branch_id
   ), amounts AS (
     SELECT j.branch_id,
-      sum(CASE WHEN l.account_id IN (m.revenue_id,m.other_income_id) THEN l.credit - l.debit ELSE 0 END) AS revenue,
+      sum(CASE WHEN l.account_id = m.revenue_id THEN l.credit - l.debit ELSE 0 END) AS revenue,
       sum(CASE WHEN l.account_id = m.discount_id THEN l.debit - l.credit ELSE 0 END) AS discount,
       sum(CASE WHEN l.account_id = m.cogs_id THEN l.debit - l.credit ELSE 0 END) AS cogs,
+      sum(CASE WHEN a.account_type = 'income'
+          AND l.account_id IS DISTINCT FROM m.revenue_id
+          AND l.account_id IS DISTINCT FROM m.discount_id
+          THEN l.credit - l.debit ELSE 0 END) AS other_income,
       sum(CASE WHEN a.account_type = 'expense'
-          AND l.account_id <> coalesce(m.cogs_id,'00000000-0000-0000-0000-000000000000'::uuid)
-          THEN l.debit - l.credit ELSE 0 END) AS expenses
+          AND l.account_id IS DISTINCT FROM m.cogs_id
+          AND l.account_id IS DISTINCT FROM m.discount_id
+          THEN l.debit - l.credit ELSE 0 END) AS expenses,
+      sum(CASE WHEN a.account_type IN ('income','expense')
+          THEN l.credit - l.debit ELSE 0 END) AS net_income
     FROM public.journal_entries j
     JOIN requested r ON r.id = j.branch_id
     CROSS JOIN bounds hb
@@ -60,8 +67,9 @@ BEGIN
     round(coalesce(x.revenue,0) - coalesce(x.discount,0),2),
     round(coalesce(x.cogs,0),2),
     round(coalesce(x.revenue,0) - coalesce(x.discount,0) - coalesce(x.cogs,0),2),
+    round(coalesce(x.other_income,0),2),
     round(coalesce(x.expenses,0),2),
-    round(coalesce(x.revenue,0) - coalesce(x.discount,0) - coalesce(x.cogs,0) - coalesce(x.expenses,0),2)
+    round(coalesce(x.net_income,0),2)
   FROM requested r LEFT JOIN amounts x ON x.branch_id = r.id;
 END;
 $function$;
