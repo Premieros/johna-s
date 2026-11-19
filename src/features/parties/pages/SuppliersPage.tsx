@@ -23,7 +23,7 @@ import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
 import { useGuidedWorkflow } from '@/core/guard';
 import { SupplierStatementModal } from '../components/SupplierStatementModal';
-import type { ApAgingRow, Supplier, SupplierEvaluationRow } from '@/lib/types';
+import type { Supplier, SupplierEvaluationRow } from '@/lib/types';
 import { deleteSupplier, saveSupplier } from '../services/supplierCrud';
 
 export function SuppliersPage() {
