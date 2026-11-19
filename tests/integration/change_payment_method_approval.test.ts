@@ -47,6 +47,8 @@ describe('change sale payment method approval flow', () => {
     const def = String(r.rows[0].def || '');
     expect(def).toContain('public.user_may_access_branch(v_sale.branch_id)');
     expect(def).not.toContain('v_user_branch <> v_sale.branch_id');
+    expect(def).toContain('SPLIT_PAYMENT_REQUIRES_ITEM_LEVEL_CORRECTION');
+    expect(def).toContain('FROM public.sale_payments');
     expect(def).toContain('APPROVAL_REQUIRED');
     expect(def).toContain('CHANGE_PAYMENT_APPROVAL_CONSUME_FAILED');
     expect(def).toContain('UPDATE public.shift_operations');
