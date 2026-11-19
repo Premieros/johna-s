@@ -54,13 +54,18 @@ export function CustomersPage() {
         if (!cancelled) setOpenBalances({});
         return;
       }
-      const results = await Promise.all(
-        branchIds.map((branchId) => api.accounting.getArAging({ p_branch_id: branchId, p_as_of: new Date().toISOString().slice(0, 10) })),
-      );
-      const next: Record<string, number> = {};
-      results.forEach(({ data }) => {
-        ((data as ArAgingRow[]) || []).forEach((row) => { next[row.customer_id] = Number(row.open_amount || 0); });
+      const { data, error } = await api.accounting.getPartyOpenBalancesBranches({
+        p_branch_ids: branchIds,
+        p_as_of: businessDateISO(),
+        p_party: 'customer',
       });
+      if (cancelled) return;
+      if (error || !Array.isArray(data)) {
+        // A failed aggregate must not replace existing balances with misleading zeroes.
+        return;
+      }
+      const next: Record<string, number> = {};
+      data.forEach((row) => { next[row.party_id] = Number(row.open_amount || 0); });
       if (!cancelled) setOpenBalances(next);
     };
     void loadOpenBalances();
