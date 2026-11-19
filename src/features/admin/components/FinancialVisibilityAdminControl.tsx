@@ -124,7 +124,7 @@ export function FinancialVisibilityAdminControl() {
             label={ar ? 'الفرع المطلوب تعديل سياسته' : 'Branch visibility policy'}
             value={selectedBranchId}
             onChange={(event) => setSelectedBranchId(event.target.value)}
-            disabled={loading || saving || !selectedBranchId}
+            disabled={saving}
             data-testid="financial-visibility-branch"
           >
             <option value="">{ar ? 'اختر الفرع' : 'Select branch'}</option>
@@ -164,7 +164,7 @@ export function FinancialVisibilityAdminControl() {
 
           <div className="flex justify-end gap-2 border-t border-ui-border pt-4">
             <Button variant="outline" onClick={() => setOpen(false)}>{ar ? 'إلغاء' : 'Cancel'}</Button>
-            <Button onClick={() => void save()} disabled={loading || saving}>
+            <Button onClick={() => void save()} disabled={loading || saving || !selectedBranchId}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               {ar ? 'حفظ سياسة هذا الفرع' : 'Save Branch Policy'}
             </Button>
