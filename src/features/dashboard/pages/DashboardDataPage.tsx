@@ -374,19 +374,38 @@ export function DashboardDataPage() {
     if (salesSettledKey !== salesRequestKey) return () => { cancelled = true; };
     void (async () => {
       const targetBranches = branchFilter ? branches.filter((branch) => branch.id === branchFilter) : branches;
-      const statements: Awaited<ReturnType<typeof reporting.getIncomeStatement>>[] = [];
-      if (canViewFinancial) {
-        for (const branch of targetBranches) {
-          if (cancelled) return;
-          statements.push(await reporting.getIncomeStatement({ p_branch_id: branch.id, p_from_date: window.from, p_to_date: window.to }));
+      let financialRows: Array<{ expenses: number; net_income: number }> = [];
+      if (canViewFinancial && targetBranches.length > 1) {
+        // One set-based database aggregation, not one RPC per branch.
+        const { data, error } = await reporting.getIncomeStatementBranches({
+          p_branch_ids: targetBranches.map((branch) => branch.id),
+          p_from_date: window.from,
+          p_to_date: window.to,
+        });
+        if (error) throw error;
+        const expected = new Set(targetBranches.map((branch) => branch.id));
+        const received = new Set((data || []).map((row) => row.branch_id));
+        if (!Array.isArray(data) || received.size !== expected.size ||
+            data.length !== expected.size || [...received].some((id) => !expected.has(id)) ||
+            data.some((row) => !Number.isFinite(Number(row.expenses)) || !Number.isFinite(Number(row.net_income)))) {
+          throw new Error('INCOMPLETE_BRANCH_FINANCIAL_SUMMARY');
         }
+        financialRows = data;
+      } else if (canViewFinancial && targetBranches.length === 1) {
+        const { data, error } = await reporting.getIncomeStatement({
+          p_branch_id: targetBranches[0].id,
+          p_from_date: window.from,
+          p_to_date: window.to,
+        });
+        if (error) throw error;
+        if (data) financialRows = [data];
       }
       if (cancelled) return;
-      const validStatements = statements.filter((result) => !result.error && result.data);
-      const expenses = canViewFinancial && targetBranches.length && validStatements.length === targetBranches.length ? validStatements.reduce((sum, result) => sum + Number(result.data?.expenses || 0), 0) : null;
-      const profit = canViewFinancial && targetBranches.length && validStatements.length === targetBranches.length ? validStatements.reduce((sum, result) => sum + Number(result.data?.net_income || 0), 0) : null;
+      const financeComplete = canViewFinancial && targetBranches.length > 0 && financialRows.length === targetBranches.length;
+      const expenses = financeComplete ? financialRows.reduce((sum, row) => sum + Number(row.expenses || 0), 0) : null;
+      const profit = financeComplete ? financialRows.reduce((sum, row) => sum + Number(row.net_income || 0), 0) : null;
       setQuickStats((current) => ({ ...current, expenses, profit }));
-      setSectionErrors((current) => ({ ...current, finance: canViewFinancial && Boolean(targetBranches.length) && validStatements.length !== targetBranches.length }));
+      setSectionErrors((current) => ({ ...current, finance: canViewFinancial && Boolean(targetBranches.length) && !financeComplete }));
     })().catch(() => {
       if (!cancelled) setSectionErrors((current) => ({ ...current, finance: canViewFinancial }));
     }).finally(() => {
