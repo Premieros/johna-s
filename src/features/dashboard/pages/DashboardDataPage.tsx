@@ -194,6 +194,8 @@ export function DashboardDataPage() {
   const [sectionErrors, setSectionErrors] = useState({ stock: false, finance: false, ops: false });
   const [salesUnavailable, setSalesUnavailable] = useState(false);
   const [salesTimedOut, setSalesTimedOut] = useState(false);
+  // Defer expensive accounting statements until the sales snapshot request settles.
+  const [salesSettledKey, setSalesSettledKey] = useState<string | null>(null);
   const [comparisonUnavailable, setComparisonUnavailable] = useState(false);
   const [paymentsUnavailable, setPaymentsUnavailable] = useState(false);
   const [itemsUnavailable, setItemsUnavailable] = useState(false);
@@ -209,6 +211,7 @@ export function DashboardDataPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const salesRequestKey = `${branchFilter || '*'}:${range}:${window.from}:${window.to}:${refreshVersion}`;
   const [snapshot, setSnapshot] = useState<DashboardSalesSnapshot | null>(null);
   const [sales, setSales] = useState<Sale[]>([]);
   const [previousSales, setPreviousSales] = useState<Sale[]>([]);
@@ -229,6 +232,7 @@ export function DashboardDataPage() {
     const requestId = ++loadId.current;
     setRefreshing(true);
     setLoading(true);
+    setSalesSettledKey(null);
     setError(null);
     setSalesUnavailable(false);
     setSalesTimedOut(false);
@@ -330,9 +334,9 @@ export function DashboardDataPage() {
         ? (ar ? 'استغرق تحميل تحليل المبيعات وقتًا أطول من مهلة قاعدة البيانات. اختر فترة أقصر أو أعد المحاولة.' : 'Sales analysis exceeded the database time limit. Choose a shorter period or retry.')
         : (ar ? 'تعذر تحميل بيانات المبيعات. أعد المحاولة.' : 'Sales data could not be loaded. Please retry.'));
     } finally {
-      if (requestId === loadId.current) { setLoading(false); setRefreshing(false); }
+      if (requestId === loadId.current) { setLoading(false); setRefreshing(false); setSalesSettledKey(salesRequestKey); }
     }
-  }, [ar, branchFilter, range, window, canViewSales]);
+  }, [ar, branchFilter, range, window, canViewSales, salesRequestKey]);
 
   useEffect(() => { void load(); return () => { loadId.current += 1; }; }, [load]);
 
@@ -366,11 +370,17 @@ export function DashboardDataPage() {
     setQuickStats((current) => ({ ...current, expenses: null, profit: null }));
     setSectionBusy((current) => ({ ...current, finance: true }));
     setSectionErrors((current) => ({ ...current, finance: false }));
+    // Avoid issuing two expensive reporting RPCs in parallel on dashboard mount.
+    if (salesSettledKey !== salesRequestKey) return () => { cancelled = true; };
     void (async () => {
       const targetBranches = branchFilter ? branches.filter((branch) => branch.id === branchFilter) : branches;
-      const statements = canViewFinancial
-        ? await Promise.all(targetBranches.map((branch) => reporting.getIncomeStatement({ p_branch_id: branch.id, p_from_date: window.from, p_to_date: window.to })))
-        : [];
+      const statements: Awaited<ReturnType<typeof reporting.getIncomeStatement>>[] = [];
+      if (canViewFinancial) {
+        for (const branch of targetBranches) {
+          if (cancelled) return;
+          statements.push(await reporting.getIncomeStatement({ p_branch_id: branch.id, p_from_date: window.from, p_to_date: window.to }));
+        }
+      }
       if (cancelled) return;
       const validStatements = statements.filter((result) => !result.error && result.data);
       const expenses = canViewFinancial && targetBranches.length && validStatements.length === targetBranches.length ? validStatements.reduce((sum, result) => sum + Number(result.data?.expenses || 0), 0) : null;
@@ -383,7 +393,7 @@ export function DashboardDataPage() {
       if (!cancelled) setSectionBusy((current) => ({ ...current, finance: false }));
     });
     return () => { cancelled = true; };
-  }, [branchFilter, branches, window, canViewFinancial]);
+  }, [branchFilter, branches, window, canViewFinancial, salesSettledKey, salesRequestKey]);
 
   useEffect(() => {
     let cancelled = false;
