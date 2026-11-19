@@ -21,7 +21,8 @@ import { useCan } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
-import type { ArAgingRow, Customer } from '@/lib/types';
+import type { Customer } from '@/lib/types';
+import { businessDateISO } from '@/lib/businessTime';
 import { deleteCustomer, saveCustomer } from '../services/customerCrud';
 
 export function CustomersPage() {
