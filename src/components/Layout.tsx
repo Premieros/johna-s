@@ -422,7 +422,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   <h1 className="text-lg font-black text-ui-text">{MENU_GROUPS[activeMenuGroup][ar ? 'ar' : 'en']}</h1>
                   <span className="text-xs font-medium text-ui-subtle">{ar ? 'اختر الشاشة' : 'Choose a screen'}</span>
                 </div>
-                <nav data-testid="section-tabs-list" aria-label={ar ? 'شاشات القسم' : 'Section pages'} className="flex flex-wrap gap-1.5 border-b border-ui-border pb-2">
+                <nav data-testid="section-tabs-list" aria-label={ar ? 'شاشات القسم' : 'Section pages'} className="flex min-w-0 gap-1.5 overflow-x-auto overscroll-x-contain whitespace-nowrap border-b border-ui-border pb-2">
                   {grouped[activeMenuGroup].map((item) => {
                     const selected = location.pathname === item.route || location.pathname.startsWith(`${item.route}/`);
                     return (
@@ -433,7 +433,7 @@ export function Layout({ children }: { children: ReactNode }) {
                         onPointerEnter={() => prefetchAppRoute(item.route)}
                         onFocus={() => prefetchAppRoute(item.route)}
                         aria-current={selected ? 'page' : undefined}
-                        className={`inline-flex min-h-10 items-center gap-2 rounded-lg border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${selected ? 'border-ui-primary bg-ui-primary-soft text-ui-primary' : 'border-transparent text-ui-muted hover:bg-ui-page-alt hover:text-ui-text'}`}
+                        className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${selected ? 'border-ui-primary bg-ui-primary-soft text-ui-primary' : 'border-transparent text-ui-muted hover:bg-ui-page-alt hover:text-ui-text'}`}
                       >
                         {ICONS[item.icon]}
                         <span>{item.label ? item.label[ar ? 'ar' : 'en'] : item.labelKey ? t(item.labelKey) : item.id}</span>
