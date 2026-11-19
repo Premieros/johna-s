@@ -98,6 +98,61 @@ ALTER POLICY financial_visibility_daily_closes ON public.daily_closes USING (
   )
 );
 
+-- Rebind historical shift/day close reports to their record's branch.
+-- Unlike ordinary records, these report snapshots deliberately use the strict
+-- recent-days window and do not sample old financial totals.
+DO $rebind_reports$
+DECLARE v_def text;
+BEGIN
+  SELECT pg_get_functiondef('public.get_shift_closing_report(uuid)'::regprocedure) INTO v_def;
+  IF position('FROM private.get_financial_visibility_limits() l' IN v_def)=0
+     OR position('v_shift.branch_id' IN v_def)=0 THEN
+    RAISE EXCEPTION 'SHIFT_CLOSING_VISIBILITY_DRIFT';
+  END IF;
+  EXECUTE replace(v_def,
+    'FROM private.get_financial_visibility_limits() l',
+    'FROM private.get_financial_visibility_limits(v_shift.branch_id) l');
+
+  SELECT pg_get_functiondef('public.get_day_closing_report(uuid,date)'::regprocedure) INTO v_def;
+  IF position('FROM private.get_financial_visibility_limits() l' IN v_def)=0
+     OR position('p_branch_id' IN v_def)=0 THEN
+    RAISE EXCEPTION 'DAY_CLOSING_VISIBILITY_DRIFT';
+  END IF;
+  EXECUTE replace(v_def,
+    'FROM private.get_financial_visibility_limits() l',
+    'FROM private.get_financial_visibility_limits(p_branch_id) l');
+END;
+$rebind_reports$;
+
+-- High-volume ledger search caches the caller's roles and global fallback.
+-- Join the branch overrides by the source record branch instead of evaluating
+-- one common cutoff for all branches, retaining its optimized SQL plan.
+DO $rebind_ledger$
+DECLARE v_def text;
+BEGIN
+  SELECT pg_get_functiondef(
+    'public.search_inventory_ledger(uuid,text,text,timestamptz,timestamptz,bigint,integer)'::regprocedure
+  ) INTO v_def;
+  IF position('vis.vis_created_at >= v_cutoff' IN v_def)=0
+    OR position(') vis' IN v_def)=0
+    OR position(') < v_historical_percent' IN v_def)=0 THEN
+    RAISE EXCEPTION 'LEDGER_SEARCH_VISIBILITY_DRIFT';
+  END IF;
+  v_def:=replace(v_def,
+    ') vis' || E'\\n\\n  WHERE',
+    ') vis' || E'\\n  LEFT JOIN private.branch_financial_visibility_settings vis_policy' ||
+    E'\\n    ON vis_policy.branch_id = vis.vis_branch_id' || E'\\n\\n  WHERE');
+  IF position('LEFT JOIN private.branch_financial_visibility_settings vis_policy' IN v_def)=0 THEN
+    RAISE EXCEPTION 'LEDGER_SEARCH_JOIN_DRIFT';
+  END IF;
+  v_def:=replace(v_def, 'vis.vis_created_at >= v_cutoff',
+    'vis.vis_created_at >= public.history_date_start(public.history_business_date() - (GREATEST(COALESCE(vis_policy.recent_days,v_recent_days),1)-1))');
+  v_def:=replace(v_def, ') < v_historical_percent',
+    ') < COALESCE(vis_policy.historical_percent,v_historical_percent)');
+  EXECUTE v_def;
+END;
+$rebind_ledger$;
+
 -- Settings are administered only by settings.manage and only for permitted branches.
 -- The single existing history.unlimited permission is unchanged.
 CREATE FUNCTION public.get_branch_financial_visibility_settings(p_branch_id uuid)
