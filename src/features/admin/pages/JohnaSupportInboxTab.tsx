@@ -3,7 +3,7 @@ import { Headphones, MessageCircle, RefreshCw, Send, UserRound, Bot } from 'luci
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 
-const API = 'https://premieros-agent-support-public.vercel.app/api/support/johna-inbox';
+const API = 'https://premieros-ai-sales-agent.vercel.app/api/support/johna-inbox';
 type Conversation = {
  id: string; mode: 'ai' | 'human'; createdAt: string; updatedAt: string;
 };
