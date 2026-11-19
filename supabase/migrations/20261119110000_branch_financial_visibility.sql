@@ -65,36 +65,70 @@ BEGIN
 END;
 $guard$;
 
--- The existing functions for purchases, expenses, journal entries and other
--- rows call private.financial_row_visible and inherit the branch-local policy.
-ALTER POLICY financial_visibility_sales ON public.sales USING (
-  id IS NOT NULL AND branch_id IS NOT NULL AND created_at IS NOT NULL
-  AND (public.is_pos_admin() OR public.user_may_access_branch(branch_id))
-  AND private.financial_row_visible(id,branch_id,created_at)
+-- Preserve all canonical pre-existing policy definitions and their strict
+-- rollback/drift hashes. They form a superset, while branch-specific restrictive
+-- policies below enforce the effective selected branch limits.
+--
+-- The pre-existing inline policies call the zero-argument getter. Those base
+-- policies must no longer reject rows which the selected branch policy allows;
+-- they retain all original permission and branch checks.
+CREATE OR REPLACE FUNCTION private.get_financial_visibility_limits()
+RETURNS TABLE(recent_days integer,historical_percent integer)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $legacy$
+  SELECT 365::integer,100::integer;
+$legacy$;
+
+-- The authoritative reader for ordinary financial rows uses the branch-aware
+-- predicate directly; only this one historical capability bypasses sampling.
+-- For hot sales and ledger RLS, avoid redundant per-row definer calls by keeping
+-- the original optimized policies plus a narrow restrictive branch condition.
+CREATE POLICY branch_financial_visibility_sales
+ON public.sales AS RESTRICTIVE FOR SELECT TO authenticated USING (
+  (SELECT public.can_permission('history.unlimited'))
+  OR created_at >= public.history_date_start(
+    public.history_business_date() -
+    (GREATEST(COALESCE(
+      (SELECT l.recent_days FROM private.get_financial_visibility_limits(branch_id) l LIMIT 1),7
+    ),1)-1)
+  )
+  OR (('x' || substr(md5(branch_id::text || ':' || id::text),1,8))::bit(32)::bigint % 100)
+    < (SELECT LEAST(GREATEST(COALESCE(l.historical_percent,30),0),100)
+       FROM private.get_financial_visibility_limits(branch_id) l LIMIT 1)
 );
 
--- Keep the reference-linked branch of the inventory visibility policy intact.
-ALTER POLICY financial_visibility_inventory_ledger ON public.inventory_ledger USING (
+-- Existing ledger references already apply financial_reference_visible, which
+-- in turn uses the record's branch. Only unmatched non-reference rows need the
+-- additional branch-local sample check.
+CREATE POLICY branch_financial_visibility_inventory_ledger
+ON public.inventory_ledger AS RESTRICTIVE FOR SELECT TO authenticated USING (
   CASE
-    WHEN lower(COALESCE(reference_type,'')) = ANY (
+    WHEN lower(COALESCE(reference_type,''))=ANY(
       ARRAY['sale','refund','sale_refund','purchase','purchase_return','expense','customer_payment','supplier_payment']
-    ) AND reference_id IS NOT NULL
-      THEN private.financial_reference_visible(reference_type,reference_id,(md5(id::text))::uuid,branch_id,created_at)
-    ELSE private.financial_row_visible((md5(id::text))::uuid,branch_id,created_at)
+    ) AND reference_id IS NOT NULL THEN true
+    ELSE
+      (SELECT public.can_permission('history.unlimited'))
+      OR created_at >= public.history_date_start(
+        public.history_business_date() -
+        (GREATEST(COALESCE(
+          (SELECT l.recent_days FROM private.get_financial_visibility_limits(branch_id) l LIMIT 1),7
+        ),1)-1)
+      )
+      OR (('x' || substr(md5(branch_id::text || ':' || (md5(id::text))::uuid::text),1,8))::bit(32)::bigint % 100)
+        < (SELECT LEAST(GREATEST(COALESCE(l.historical_percent,30),0),100)
+           FROM private.get_financial_visibility_limits(branch_id) l LIMIT 1)
   END
 );
 
--- Day close has a strict recent-window rule, not old-record sampling.
-ALTER POLICY financial_visibility_daily_closes ON public.daily_closes USING (
-  public.user_may_access_branch(branch_id)
-  AND (
-    public.can_permission('history.unlimited')
-    OR business_date >= (
-      public.history_business_date() -
-      (GREATEST(COALESCE(
-        (SELECT l.recent_days FROM private.get_financial_visibility_limits(branch_id) l LIMIT 1),7
-      ),1)-1)
-    )
+-- Day-close snapshots remain full or hidden (no sampling). The canonical
+-- day-close policy is preserved byte-for-byte for rollback compatibility.
+CREATE POLICY branch_financial_visibility_daily_closes
+ON public.daily_closes AS RESTRICTIVE FOR SELECT TO authenticated USING (
+  (SELECT public.can_permission('history.unlimited'))
+  OR business_date >= (
+    public.history_business_date() -
+    (GREATEST(COALESCE(
+      (SELECT l.recent_days FROM private.get_financial_visibility_limits(branch_id) l LIMIT 1),7
+    ),1)-1)
   )
 );
 
@@ -146,9 +180,9 @@ BEGIN
     RAISE EXCEPTION 'LEDGER_SEARCH_JOIN_DRIFT';
   END IF;
   v_def:=replace(v_def, 'vis.vis_created_at >= v_cutoff',
-    'vis.vis_created_at >= public.history_date_start(public.history_business_date() - (GREATEST(COALESCE(vis_policy.recent_days,v_recent_days),1)-1))');
+    'vis.vis_created_at >= public.history_date_start(public.history_business_date() - (GREATEST(COALESCE(vis_policy.recent_days,(SELECT recent_days FROM private.financial_visibility_settings WHERE singleton=true),7),1)-1))');
   v_def:=replace(v_def, ') < v_historical_percent',
-    ') < COALESCE(vis_policy.historical_percent,v_historical_percent)');
+    ') < COALESCE(vis_policy.historical_percent,(SELECT historical_percent FROM private.financial_visibility_settings WHERE singleton=true),30)');
   EXECUTE v_def;
 END;
 $rebind_ledger$;
