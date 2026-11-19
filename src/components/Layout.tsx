@@ -399,8 +399,29 @@ export function Layout({ children }: { children: ReactNode }) {
                 >
                   {ICONS[landing.icon]}
                   <span className="flex-1 truncate">{MENU_GROUPS[group][ar ? 'ar' : 'en']}</span>
-                  <span className={`rounded-md px-1.5 py-0.5 text-[10px] ${active ? 'bg-white/20' : 'bg-ui-page-alt'}`}>{items.length}</span>
+
                 </NavLink>
+                {active && items.length > 1 && (
+                  <div data-testid={`nav-group-pages-${group}`} className="mt-1 space-y-0.5 ps-3">
+                    {items.map((item) => {
+                      const selected = location.pathname === item.route || location.pathname.startsWith(`${item.route}/`);
+                      return (
+                        <NavLink
+                          key={item.id}
+                          data-testid={`sidebar-nav-item-${item.id}`}
+                          to={item.route}
+                          onPointerEnter={() => prefetchAppRoute(item.route)}
+                          onFocus={() => prefetchAppRoute(item.route)}
+                          onClick={() => setMobileOpen(false)}
+                          aria-current={selected ? 'page' : undefined}
+                          className={`flex min-h-9 items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${selected ? 'bg-ui-primary-soft text-ui-primary' : 'text-ui-muted hover:bg-ui-page-alt hover:text-ui-text'}`}
+                        >
+                          <span className="min-w-0 flex-1 truncate">{item.label ? item.label[ar ? 'ar' : 'en'] : item.labelKey ? t(item.labelKey) : item.id}</span>
+                        </NavLink>
+                      );
+                    })}
+                  </div>
+                )}
               </section>
             );
           })}
@@ -411,15 +432,15 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <div data-testid="app-content-shell" className={`min-h-screen pt-[64px] transition-all duration-200 ${desktopSidebarHidden ? 'lg:ms-0' : 'lg:ms-[260px]'}`}>
         <ReturnContextBanner />
-        <main data-testid="app-main" className="min-h-[calc(100vh-64px)] bg-ui-page p-4 sm:p-6 lg:p-7">
+        <main data-testid="app-main" className="min-h-[calc(100vh-64px)] bg-ui-page p-3 sm:p-4 lg:p-5">
           <div
             data-testid="design-content-surface"
-            className={`min-h-[calc(100vh-64px)] w-full min-w-0 space-y-5 ${fullWidthContent ? 'max-w-none' : 'mx-auto max-w-[1600px]'}`}
+            className={`min-h-[calc(100vh-64px)] w-full min-w-0 space-y-3 ${fullWidthContent ? 'max-w-none' : 'mx-auto max-w-[1600px]'}`}
           >
             {activeMenuGroup && (grouped[activeMenuGroup]?.length ?? 0) > 1 && (
-              <section data-testid="section-workspace-tabs" aria-label={MENU_GROUPS[activeMenuGroup][ar ? 'ar' : 'en']} className="rounded-2xl border border-ui-border bg-ui-surface p-3 shadow-ui-sm">
-                <div className="mb-3 flex items-center justify-between gap-2 px-2">
-                  <h1 className="text-lg font-black text-ui-text">{MENU_GROUPS[activeMenuGroup][ar ? 'ar' : 'en']}</h1>
+              <section data-testid="section-workspace-tabs" aria-label={MENU_GROUPS[activeMenuGroup][ar ? 'ar' : 'en']} className="rounded-2xl border border-ui-border bg-ui-surface p-2 shadow-ui-sm">
+                <div className="mb-1 flex items-center justify-between gap-2 px-2">
+                  <h1 className="text-base font-black text-ui-text">{MENU_GROUPS[activeMenuGroup][ar ? 'ar' : 'en']}</h1>
                   <span className="text-xs font-medium text-ui-subtle">{ar ? 'اختر الشاشة' : 'Choose a screen'}</span>
                 </div>
                 <nav data-testid="section-tabs-list" aria-label={ar ? 'شاشات القسم' : 'Section pages'} className="flex min-w-0 gap-1.5 overflow-x-auto overscroll-x-contain whitespace-nowrap border-b border-ui-border pb-2">
