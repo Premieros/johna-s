@@ -135,8 +135,8 @@ describe.skipIf(skip)('financial visibility admin controls', () => {
     const second = await runAsPersist(client, ids.users.branch_manager,
       'SELECT public.update_branch_financial_visibility_settings($1::uuid, 7, 100) AS result',
       [ids.branchB]);
-    expect(first.rows[0].result.success).toBe(true);
-    expect(second.rows[0].result.success).toBe(true);
+    expect(first.rows[0].result).toMatchObject({ success: true });
+    expect(second.rows[0].result).toMatchObject({ success: true });
 
     const readA = await runAs(client, ids.users.branch_manager,
       'SELECT public.get_branch_financial_visibility_settings($1::uuid) AS result',
