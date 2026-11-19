@@ -17,7 +17,9 @@ describe('100-branch read scalability safeguards', () => {
 
   it('does not fire one AR/AP aging RPC for each branch in customer and supplier lists', () => {
     expect(customers).toContain('getPartyOpenBalancesBranches({');
+    expect(customers).toContain('p_party_ids: items.map((item) => item.id)');
     expect(suppliers).toContain('getPartyOpenBalancesBranches({');
+    expect(suppliers).toContain('p_party_ids: items.map((item) => item.id)');
     expect(customers).not.toContain('branchIds.map((branchId) => api.accounting.getArAging');
     expect(suppliers).not.toContain('branchIds.map((branchId) => api.accounting.getApAging');
     expect(sql).toContain('JOIN scope b ON b.id');
