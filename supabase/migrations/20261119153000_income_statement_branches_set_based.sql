@@ -29,10 +29,10 @@ BEGIN
            public.history_clamp_to(p_to_date) AS date_to
   ), mappings AS MATERIALIZED (
     SELECT m.branch_id,
-      max(m.account_id) FILTER (WHERE m.semantic_key = 'revenue') AS revenue_id,
-      max(m.account_id) FILTER (WHERE m.semantic_key = 'other_income') AS other_income_id,
-      max(m.account_id) FILTER (WHERE m.semantic_key = 'discount_given') AS discount_id,
-      max(m.account_id) FILTER (WHERE m.semantic_key = 'cogs') AS cogs_id
+      (array_agg(m.account_id) FILTER (WHERE m.semantic_key = 'revenue'))[1] AS revenue_id,
+      (array_agg(m.account_id) FILTER (WHERE m.semantic_key = 'other_income'))[1] AS other_income_id,
+      (array_agg(m.account_id) FILTER (WHERE m.semantic_key = 'discount_given'))[1] AS discount_id,
+      (array_agg(m.account_id) FILTER (WHERE m.semantic_key = 'cogs'))[1] AS cogs_id
     FROM public.account_mappings m
     JOIN requested r ON r.id = m.branch_id
     WHERE m.semantic_key IN ('revenue','other_income','discount_given','cogs')
