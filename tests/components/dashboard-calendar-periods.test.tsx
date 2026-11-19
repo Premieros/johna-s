@@ -160,7 +160,7 @@ it('does not fan out into raw sales reads after a timeout and permits an explici
   await waitReady();
   expect(mocks.fallback).not.toHaveBeenCalled();
   expect(mocks.snapshot).toHaveBeenCalledTimes(1);
-  expect(screen.getByText('Sales data could not be loaded. Please retry.')).toBeInTheDocument();
+  expect(screen.getByText('Sales analysis exceeded the database time limit. Choose a shorter period or retry.')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
   await waitReady();
   expect(mocks.snapshot).toHaveBeenCalledTimes(2);

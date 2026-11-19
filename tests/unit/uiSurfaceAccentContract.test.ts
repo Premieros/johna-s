@@ -99,7 +99,7 @@ describe('UI surface accent and typography contract', () => {
     const layout = read('src/components/Layout.tsx');
 
     expect(dashboard).toContain('w-full min-w-0 bg-ui-page');
-    expect(dashboard).toContain('className="w-full min-w-0 space-y-5"');
+    expect(dashboard).toContain('className="w-full min-w-0 space-y-3"');
     expect(dashboard).not.toContain('mx-auto max-w-[1560px]');
     expect(dashboard).not.toContain('bg-ui-page px-4 py-5 sm:px-7 sm:py-7');
     expect(layout).toContain("const fullWidthContent = location.pathname === APP_ROUTES.dashboard");

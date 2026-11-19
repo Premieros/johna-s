@@ -440,7 +440,7 @@ export function Layout({ children }: { children: ReactNode }) {
             className={`min-h-[calc(100vh-64px)] w-full min-w-0 space-y-3 ${fullWidthContent ? 'max-w-none' : 'mx-auto max-w-[1600px]'}`}
           >
             {activeMenuGroup && (grouped[activeMenuGroup]?.length ?? 0) > 1 && (
-              <section data-testid="section-workspace-tabs" aria-label={MENU_GROUPS[activeMenuGroup][ar ? 'ar' : 'en']} className="rounded-2xl border border-ui-border bg-ui-surface p-2 shadow-ui-sm">
+              <section data-testid="section-workspace-tabs" aria-label={MENU_GROUPS[activeMenuGroup][ar ? 'ar' : 'en']} className={`rounded-2xl border border-ui-border bg-ui-surface p-2 shadow-ui-sm ${desktopSidebarHidden ? '' : 'lg:hidden'}`}>
                 <div className="mb-1 flex items-center justify-between gap-2 px-2">
                   <h1 className="text-base font-black text-ui-text">{MENU_GROUPS[activeMenuGroup][ar ? 'ar' : 'en']}</h1>
                   <span className="text-xs font-medium text-ui-subtle">{ar ? 'اختر الشاشة' : 'Choose a screen'}</span>
