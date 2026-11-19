@@ -3,6 +3,7 @@ import '../reportGrid.css';
 import { MonthCloseReview } from '../MonthCloseReview';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ReportsPage } from './ReportsPage';
 import { FinancialReportsPage } from '@/features/accounting/pages/FinancialReportsPage';
@@ -98,5 +99,7 @@ export function ReportsCenterPage() {
       </main>
     </div>
   </div>;
-  return content;
+  // Render the full-screen workspace outside the shell's section-tab spacing
+  // so the overlay is positioned against the viewport even on narrow phones.
+  return expanded ? createPortal(content, document.body) : content;
 }
