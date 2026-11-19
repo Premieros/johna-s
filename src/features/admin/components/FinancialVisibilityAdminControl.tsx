@@ -50,7 +50,7 @@ export function FinancialVisibilityAdminControl() {
 
   useEffect(() => {
     if (open && visible && selectedBranchId) void load();
-  }, [open, visible, load]);
+  }, [open, visible, load, selectedBranchId]);
 
   if (!visible) return null;
 
