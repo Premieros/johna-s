@@ -2,8 +2,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DashboardDataPage } from '@/features/dashboard/pages/DashboardDataPage';
-const mocks = vi.hoisted(() => ({ snapshot: vi.fn(), income: vi.fn(), ops: vi.fn(), stock: vi.fn(), fallback: vi.fn(), permissions: ['sales.view','reports.financial','purchases.view','expenses.view'], branch: 'a', unlimited: false, branches: [{ id: 'a', name: 'A' }] }));
-vi.mock('@/api', () => ({ reporting: { getIncomeStatement: mocks.income } }));
+const mocks = vi.hoisted(() => ({ snapshot: vi.fn(), income: vi.fn(), incomeBranches: vi.fn(), ops: vi.fn(), stock: vi.fn(), fallback: vi.fn(), permissions: ['sales.view','reports.financial','purchases.view','expenses.view'], branch: 'a', unlimited: false, branches: [{ id: 'a', name: 'A' }] }));
+vi.mock('@/api', () => ({ reporting: { getIncomeStatement: mocks.income, getIncomeStatementBranches: mocks.incomeBranches } }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en' }) }));
 vi.mock('@/lib/useBranchFilter', () => ({ useBranchFilter: () => mocks.branch }));
 vi.mock('@/lib/useHistoryAccess', () => ({ useHistoryAccess: () => ({ unlimited: mocks.unlimited }) }));
@@ -22,6 +22,7 @@ beforeEach(() => {
   mocks.fallback.mockReset().mockResolvedValue({ currentRows: [], previousRows: [], itemRows: [], currentErrorMessage: null, previousErrorMessage: null, itemErrorMessage: null });
   mocks.snapshot.mockReset().mockResolvedValue({ current: totals, previous: totals, currentSeries: [], previousSeries: [], orderTypes: [], branches: [], recentSales: [], topProducts: [], paymentMethods: [], previousPaymentMethods: [] });
   mocks.income.mockReset().mockResolvedValue({ data: { expenses: 10, net_income: 90 } });
+  mocks.incomeBranches.mockReset().mockResolvedValue({ data: [{ branch_id: 'a', expenses: 10, net_income: 90 }, { branch_id: 'b', expenses: 20, net_income: 80 }], error: null });
   mocks.ops.mockReset().mockResolvedValue({ orders: [], purchases: [], expenses: [] });
 });
 describe('live dashboard period selection', () => {
@@ -98,16 +99,13 @@ describe('dashboard reporting concurrency guard', () => {
     expect(screen.getByTestId('analysis-net-sales')).toHaveTextContent('120.00');
   });
 
-  it('limits multi-branch income-statement queries to one at a time', async () => {
+  it('uses a single set-based RPC for all accessible branches without fanout', async () => {
     mocks.branch = '';
-    const first = deferred<{ data: { expenses: number; net_income: number } }>();
-    mocks.income.mockReturnValueOnce(first.promise);
     render(<MemoryRouter><DashboardDataPage /></MemoryRouter>);
-    await waitFor(() => expect(mocks.income).toHaveBeenCalledTimes(1));
-    expect(mocks.income.mock.calls[0][0].p_branch_id).toBe('a');
-    await act(async () => { first.resolve({ data: { expenses: 10, net_income: 20 } }); });
-    await waitFor(() => expect(mocks.income).toHaveBeenCalledTimes(2));
-    expect(mocks.income.mock.calls[1][0].p_branch_id).toBe('b');
+    await waitFor(() => expect(mocks.incomeBranches).toHaveBeenCalledTimes(1));
+    expect(mocks.income).not.toHaveBeenCalled();
+    expect(mocks.incomeBranches.mock.calls[0][0].p_branch_ids).toEqual(['a', 'b']);
+    await waitFor(() => expect(screen.getByText('Accounting net profit').parentElement).toHaveTextContent('170.00'));
   });
 });
 
