@@ -39,6 +39,20 @@ describe('change sale payment method approval flow', () => {
     expect(def).toContain('CHANGE_PAYMENT_APPROVAL_CONSUME_FAILED');
   });
 
+  it('honors explicit secondary-branch grants without weakening approval and journal checks', async () => {
+    if (!canRun) return;
+    const r = await client.query(`
+      SELECT pg_get_functiondef('public.change_sale_payment_method(uuid,text,text)'::regprocedure) AS def
+    `);
+    const def = String(r.rows[0].def || '');
+    expect(def).toContain('public.user_may_access_branch(v_sale.branch_id)');
+    expect(def).not.toContain('v_user_branch <> v_sale.branch_id');
+    expect(def).toContain('APPROVAL_REQUIRED');
+    expect(def).toContain('CHANGE_PAYMENT_APPROVAL_CONSUME_FAILED');
+    expect(def).toContain('UPDATE public.shift_operations');
+    expect(def).toContain('UPDATE public.journal_entry_lines');
+  });
+
   it('allows only post-sale methods that map safely to cash/bank accounts', async () => {
     if (!canRun) return;
     const r = await client.query(`
