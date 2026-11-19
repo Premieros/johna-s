@@ -133,7 +133,7 @@ describe.skipIf(!dbUrl)('historical zero consumption priced independently of sto
     } finally { await db.query('ROLLBACK TO SAVEPOINT scoped_lookup_parity'); }
   });
 
-  it('matches the original ledger visibility predicate for restricted and unrestricted readers', async () => {
+  it('matches combined canonical and branch-restrictive ledger visibility predicates for all readers', async () => {
     const viewer = randomUUID(), foreignBranch = randomUUID();
     await db.query('SAVEPOINT ledger_visibility_parity');
     try {
@@ -141,6 +141,7 @@ describe.skipIf(!dbUrl)('historical zero consumption priced independently of sto
       await db.query(`INSERT INTO public.roles(role,name_ar,name_en,permissions,is_active) VALUES('cost_predicate_viewer','اختبار','Predicate','["reports.costing","sales.view","raw_materials.view"]',true)`);
       await db.query(`INSERT INTO public.users(id,email,full_name,role,branch_id,is_active) VALUES($1,$2,'Predicate Viewer','cost_predicate_viewer',$3,true)`, [viewer,`${viewer}@test.local`,branch]);
       const policy = (await db.query(`SELECT pg_get_expr(polqual,polrelid) expression FROM pg_policy WHERE polrelid='public.inventory_ledger'::regclass AND polname='financial_visibility_inventory_ledger'`)).rows[0].expression;
+      const branchPolicy = (await db.query(`SELECT pg_get_expr(polqual,polrelid) expression FROM pg_policy WHERE polrelid='public.inventory_ledger'::regclass AND polname='branch_financial_visibility_inventory_ledger'`)).rows[0].expression;
       const sql = `WITH candidates AS (
         SELECT i::bigint id,b.branch_id,t.reference_type,r.reference_id,d.created_at
         FROM generate_series(1,12) i
@@ -149,7 +150,7 @@ describe.skipIf(!dbUrl)('historical zero consumption priced independently of sto
         CROSS JOIN (VALUES ($3::uuid),($4::uuid),(NULL::uuid)) r(reference_id)
         CROSS JOIN (VALUES (now()),(now()-interval '40 days'),(NULL::timestamptz)) d(created_at)
       ) SELECT count(*) FILTER(WHERE (private.financial_reference_visible(reference_type,reference_id,(md5(id::text))::uuid,branch_id,created_at))
-        IS DISTINCT FROM (${policy}))::int mismatches FROM candidates`;
+        IS DISTINCT FROM ((${policy}) AND (${branchPolicy})))::int mismatches FROM candidates`;
       for (const actor of [admin,viewer]) {
         await db.query(`SELECT set_config('app.user_id',$1,true)`, [actor]);
         await db.query('SET LOCAL ROLE authenticated');
