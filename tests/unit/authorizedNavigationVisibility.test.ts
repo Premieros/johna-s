@@ -29,10 +29,10 @@ describe('authorized navigation visibility', () => {
     expect(menu).toContain('superAdminOnly: true');
   });
 
-  it('lets users reveal permitted sections without overwriting saved preferences on initial load', () => {
-    expect(layout).toContain('data-testid="navigation-expand-all"');
-    expect(layout).toContain("premier:nav-collapsed-groups");
-    expect(layout).toContain('[group, false]');
+  it('always exposes authorized section entries and retains the deepest active route', () => {
+    expect(layout).toContain('data-testid={`nav-group-entry-${group}`}');
+    expect(layout).toContain('data-testid="section-workspace-tabs"');
+    expect(layout).toContain('const items = grouped[group] ?? []');
     expect(layout).toContain('b.route.length - a.route.length');
   });
 });
