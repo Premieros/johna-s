@@ -193,6 +193,7 @@ export function DashboardDataPage() {
   const [sectionBusy, setSectionBusy] = useState({ stock: true, finance: true, ops: true });
   const [sectionErrors, setSectionErrors] = useState({ stock: false, finance: false, ops: false });
   const [salesUnavailable, setSalesUnavailable] = useState(false);
+  const [salesTimedOut, setSalesTimedOut] = useState(false);
   const [comparisonUnavailable, setComparisonUnavailable] = useState(false);
   const [paymentsUnavailable, setPaymentsUnavailable] = useState(false);
   const [itemsUnavailable, setItemsUnavailable] = useState(false);
@@ -230,6 +231,7 @@ export function DashboardDataPage() {
     setLoading(true);
     setError(null);
     setSalesUnavailable(false);
+    setSalesTimedOut(false);
     setComparisonUnavailable(false);
     setPaymentsUnavailable(false);
     setItemsUnavailable(false);
@@ -319,10 +321,14 @@ export function DashboardDataPage() {
 
       setLoading(false);
       setRefreshing(false);
-    } catch {
+    } catch (failure) {
       if (requestId !== loadId.current) return;
+      const timedOut = typeof failure === 'object' && failure !== null && 'code' in failure && failure.code === '57014';
+      setSalesTimedOut(timedOut);
       setSalesUnavailable(true);
-      setError(ar ? 'تعذر تحميل بيانات المبيعات. أعد المحاولة.' : 'Sales data could not be loaded. Please retry.');
+      setError(timedOut
+        ? (ar ? 'استغرق تحميل تحليل المبيعات وقتًا أطول من مهلة قاعدة البيانات. اختر فترة أقصر أو أعد المحاولة.' : 'Sales analysis exceeded the database time limit. Choose a shorter period or retry.')
+        : (ar ? 'تعذر تحميل بيانات المبيعات. أعد المحاولة.' : 'Sales data could not be loaded. Please retry.'));
     } finally {
       if (requestId === loadId.current) { setLoading(false); setRefreshing(false); }
     }
@@ -511,7 +517,7 @@ export function DashboardDataPage() {
   const quick = (value: number | null, formatter: (value: number) => string) => value === null ? '—' : formatter(value);
   const recent = snapshot ? snapshot.recentSales : sales.slice(0, 5);
 
-  return <div dir={ar ? 'rtl' : 'ltr'} className="min-h-[calc(100vh-64px)] w-full min-w-0 bg-ui-page py-3 sm:py-4" data-testid="dashboard-surface"><div className="w-full min-w-0 space-y-5">
+  return <div dir={ar ? 'rtl' : 'ltr'} className="w-full min-w-0 bg-ui-page py-1 sm:py-2" data-testid="dashboard-surface"><div className="w-full min-w-0 space-y-3">
     {canViewSales && <section data-testid="dashboard-sales-analysis" aria-busy={loading} className="ui-accent-card ui-accent-primary rounded-3xl border border-ui-border bg-ui-surface p-4 shadow-ui sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h1 className="flex items-center gap-2 text-lg font-black text-ui-text"><BarChart3 className="h-5 w-5 text-ui-primary" />{ar ? 'تحليل المبيعات' : 'Sales analysis'}</h1><p className="mt-1 text-xs text-ui-muted">{rangeLabels[range][ar ? 0 : 1]} · {window.from} — {window.to}</p></div>
@@ -522,7 +528,7 @@ export function DashboardDataPage() {
         <div><p className="text-xs text-ui-muted">{ar ? 'عدد الفواتير' : 'Invoices'}</p><p className="mt-1 text-base font-extrabold text-ui-text tabular-nums sm:text-xl">{quick(loading || salesUnavailable ? null : current.orders, value => formatNumber(value, 0))}</p></div>
         <div><p className="text-xs text-ui-muted">{ar ? 'متوسط الفاتورة' : 'Average invoice'}</p><p className="mt-1 break-words text-base font-extrabold text-ui-text tabular-nums sm:text-xl">{quick(loading || salesUnavailable ? null : current.orders ? current.sales / current.orders : 0, money)}</p></div>
       </div>
-      <div className="mt-3 h-44 min-w-0 text-ui-primary sm:h-52">
+      <div className={`mt-2 min-w-0 text-ui-primary ${loading || (!salesUnavailable && current.orders > 0) ? 'h-44 sm:h-52' : 'min-h-16'}`}>
         {loading ? <div role="status" className="flex h-full items-center justify-center"><RefreshCw className="h-5 w-5 animate-spin" /><span className="sr-only">{ar ? 'جارٍ تحميل تحليل المبيعات' : 'Loading sales analysis'}</span></div> : salesUnavailable ? <Unavailable ar={ar} /> : current.orders > 0 ? <Suspense fallback={<div className="flex h-full items-center justify-center"><RefreshCw className="h-5 w-5 animate-spin" /></div>}><DashboardSalesChart data={chart} formatValue={money} /></Suspense> : <Empty ar={ar} />}
       </div>
     </section>}
@@ -546,7 +552,7 @@ export function DashboardDataPage() {
     <p data-testid="dashboard-selected-dates" className="text-sm font-bold text-ui-muted">{window.from} — {window.to}</p>
 
     {Object.values(sectionErrors).some(Boolean) && <div role="status" className="rounded-2xl border border-ui-warning/30 bg-ui-warning-soft p-4 text-sm font-bold text-ui-warning">{ar ? 'تعذر تحديث بعض البطاقات. القيمة غير المتاحة تظهر بعلامة —. اضغط تحديث للمحاولة مجددًا.' : 'Some cards could not be refreshed. Unavailable values show —. Refresh to retry.'}</div>}
-    {error && <div className="rounded-2xl border border-ui-danger/30 bg-ui-danger-soft p-4 text-sm font-bold text-ui-danger">{error}</div>}
+    {error && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-ui-danger/30 bg-ui-danger-soft p-3 text-sm font-bold text-ui-danger"><span>{error}</span>{salesTimedOut && range !== 'month' && <button type="button" onClick={() => setRange('month')} className="rounded-lg border border-ui-danger/30 px-3 py-1.5 hover:bg-ui-surface">{ar ? 'عرض هذا الشهر' : 'View this month'}</button>}</div>}
 
     {(canViewSales || canViewFinancial || canViewInventory) && <Card><div className="mb-4"><h2 className="text-lg font-black text-ui-text">{ar ? `ملخص ${rangeLabels[range][0]}` : `${rangeLabels[range][1]} summary`}</h2><p className="text-xs text-ui-subtle">{ar ? 'المبيعات صافية بعد المرتجعات، والربح من قائمة الدخل المحاسبية' : 'Sales are net of refunds; profit comes from the accounting income statement'}</p></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {canViewFinancial && <div className="ui-accent-top ui-accent-finance rounded-2xl border border-ui-border bg-ui-surface p-4"><p className="text-xs text-ui-subtle">{ar ? 'المصروفات المحاسبية' : 'Accounting expenses'}</p><p className="mt-2 text-xl font-black text-ui-text">{quick(quickStats.expenses, money)}</p></div>}
