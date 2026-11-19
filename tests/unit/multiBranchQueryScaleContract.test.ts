@@ -33,6 +33,12 @@ describe('100-branch read scalability safeguards', () => {
     expect(sql).toContain('public.history_clamp_from(p_from_date)');
     expect(sql).toContain('public.history_clamp_to(p_to_date)');
     expect(sql).toContain('public.history_clamp_as_of(p_as_of)');
+    expect(sql).toContain("a.account_type = 'income'");
+    expect(sql).toContain('AS other_income');
+    expect(sql).toContain('AS net_income');
+    expect(sql).toContain("l.account_id IS DISTINCT FROM m.discount_id");
+    expect(sql).toContain("p_party IS NULL");
+    expect(sql).toContain("p_party_ids IS NULL");
     expect(sql).toContain('GRANT EXECUTE ON FUNCTION public.get_income_statement_branches');
   });
 });
