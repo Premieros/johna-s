@@ -115,7 +115,7 @@ BEGIN
       CROSS JOIN date_bounds d
       WHERE s.customer_id = ANY(p_party_ids)
       AND s.status <> 'returned'
-        AND s.created_at::date <= d.until_date
+        AND (s.created_at AT TIME ZONE 'Africa/Cairo')::date <= d.until_date
         AND (s.total - coalesce(s.paid_amount,0) - coalesce(s.refunded_amount,0)) > 0
 
       UNION ALL
@@ -128,7 +128,7 @@ BEGIN
       CROSS JOIN date_bounds d
       WHERE e.customer_id = ANY(p_party_ids)
         AND c.customer_type = 'employee'
-        AND e.occurred_at::date <= d.until_date
+        AND (e.occurred_at AT TIME ZONE 'Africa/Cairo')::date <= d.until_date
         AND (e.amount - e.settled_amount) > 0
     )
     SELECT c.id, round(sum(a.balance),2)
