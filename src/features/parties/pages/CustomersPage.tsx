@@ -51,12 +51,13 @@ export function CustomersPage() {
     let cancelled = false;
     const loadOpenBalances = async () => {
       const branchIds = branchFilter ? [branchFilter] : branches.map((branch) => branch.id);
-      if (!branchIds.length) {
+      if (!branchIds.length || !items.length) {
         if (!cancelled) setOpenBalances({});
         return;
       }
       const { data, error } = await api.accounting.getPartyOpenBalancesBranches({
         p_branch_ids: branchIds,
+        p_party_ids: items.map((item) => item.id),
         p_as_of: businessDateISO(),
         p_party: 'customer',
       });
@@ -71,7 +72,7 @@ export function CustomersPage() {
     };
     void loadOpenBalances();
     return () => { cancelled = true; };
-  }, [branchFilter, branches]);
+  }, [branchFilter, branches, items]);
 
   const balanceFor = (customer: Customer) => Number(openBalances[customer.id] || 0);
   const filtered = items.filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone?.includes(search));
