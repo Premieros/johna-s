@@ -62,6 +62,7 @@ export const reporting = {
   getTrialBalanceSummary(p: { p_branch_id: string | null; p_to_date: string }): ApiResult<TrialBalanceSummary> { return rpc('get_trial_balance_summary', p); },
   getGeneralLedger(p: { p_branch_id: string | null; p_account_id: string | null; p_from_date: string | null; p_to_date: string | null }, signal?: AbortSignal): ApiResult<GeneralLedgerRow[]> { return rpc('get_general_ledger', p, signal); },
   getIncomeStatement(p: { p_branch_id: string | null; p_from_date: string; p_to_date: string }, signal?: AbortSignal): ApiResult<IncomeStatementResult> { return rpc('get_income_statement', p, signal); },
+  getIncomeStatementBranches(p: { p_branch_ids: string[]; p_from_date: string; p_to_date: string }, signal?: AbortSignal): ApiResult<Array<{ branch_id: string; expenses: number; net_income: number }>> { return rpc('get_income_statement_branches', p, signal); },
   getBalanceSheet(p: { p_branch_id: string | null; p_as_of: string }, signal?: AbortSignal): ApiResult<BalanceSheetResult> { return rpc('get_balance_sheet', p, signal); },
   getArAging(p: { p_branch_id: string | null; p_as_of: string }, signal?: AbortSignal): ApiResult<ArAgingRow[]> { return rpc('get_ar_aging', p, signal); },
   getApAging(p: { p_branch_id: string | null; p_as_of: string }, signal?: AbortSignal): ApiResult<ApAgingRow[]> { return rpc('get_ap_aging', p, signal); },
