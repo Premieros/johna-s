@@ -1,7 +1,7 @@
 import { PeriodCloseReport } from '../PeriodCloseReport';
 import '../reportGrid.css';
 import { MonthCloseReview } from '../MonthCloseReview';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -23,6 +23,18 @@ export function ReportsCenterPage() {
   const [search, setSearch] = useState('');
   const ar = lang === 'ar';
   const [expanded,setExpanded] = useState(false);
+  const workspaceSlot = useRef<HTMLDivElement>(null);
+  const [workspaceHost] = useState(() => document.createElement('div'));
+  // Move the same portal host between the normal layout and the document body.
+  // The report DOM remains mounted across fullscreen transitions.
+  useLayoutEffect(() => {
+    const slot = workspaceSlot.current;
+    if (!slot) return;
+    (expanded ? document.body : slot).appendChild(workspaceHost);
+    return () => {
+      if (workspaceHost.parentNode) workspaceHost.parentNode.removeChild(workspaceHost);
+    };
+  }, [expanded, workspaceHost]);
   useEffect(() => {
     if (!expanded) return;
     const previous = document.body.style.overflow;
@@ -99,7 +111,6 @@ export function ReportsCenterPage() {
       </main>
     </div>
   </div>;
-  // Render the full-screen workspace outside the shell's section-tab spacing
-  // so the overlay is positioned against the viewport even on narrow phones.
-  return expanded ? createPortal(content, document.body) : content;
+  // Keep a stable portal root so fullscreen does not remount active report state.
+  return <><div ref={workspaceSlot} />{createPortal(content, workspaceHost)}</>;
 }
