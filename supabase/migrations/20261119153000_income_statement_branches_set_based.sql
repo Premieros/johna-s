@@ -3,7 +3,7 @@
 -- but scans journal entries once for all requested branches.
 CREATE OR REPLACE FUNCTION public.get_income_statement_branches(
   p_branch_ids uuid[], p_from_date date, p_to_date date
-) RETURNS TABLE(branch_id uuid, expenses numeric, net_income numeric)
+) RETURNS TABLE(branch_id uuid, revenue numeric, discount numeric, net_revenue numeric, cogs numeric, gross_profit numeric, expenses numeric, net_income numeric)
 LANGUAGE plpgsql STABLE SECURITY INVOKER
 SET search_path TO public, pg_temp
 AS $function$
@@ -55,6 +55,11 @@ BEGIN
     GROUP BY j.branch_id
   )
   SELECT r.id,
+    round(coalesce(x.revenue,0),2),
+    round(coalesce(x.discount,0),2),
+    round(coalesce(x.revenue,0) - coalesce(x.discount,0),2),
+    round(coalesce(x.cogs,0),2),
+    round(coalesce(x.revenue,0) - coalesce(x.discount,0) - coalesce(x.cogs,0),2),
     round(coalesce(x.expenses,0),2),
     round(coalesce(x.revenue,0) - coalesce(x.discount,0) - coalesce(x.cogs,0) - coalesce(x.expenses,0),2)
   FROM requested r LEFT JOIN amounts x ON x.branch_id = r.id;
