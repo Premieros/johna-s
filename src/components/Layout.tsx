@@ -118,6 +118,8 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const visibleItems = useMemo(
     () => MENU_ITEMS.filter((item) =>
+      // Approval Center now lives in the header bell, not the sidebar/tabs.
+      item.id !== 'approvals' &&
       (!item.permission || can(item.permission)) &&
       (!item.permissionsAny || item.permissionsAny.some((permission) => can(permission))) &&
       (!item.superAdminOnly || user?.role === 'super_admin') &&

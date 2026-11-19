@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useCan } from '@/lib/permissions';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { createReadRefreshQueue } from '@/lib/readRefreshQueue';
+import { APP_ROUTES } from '@/core/navigation/routes';
 
 type ApprovalRequest = {
   id: string;
@@ -205,6 +206,15 @@ export function ApprovalInbox({ ar }: { ar: boolean }) {
               <p className="font-semibold text-ui-text">{ar ? 'طلبات الموافقة' : 'Approval requests'}</p>
               <p className="text-xs text-ui-muted">{ar ? 'الطلبات المعلقة التي تحتاج قرارًا' : 'Pending requests that need a decision'}</p>
             </div>
+            <a
+              data-testid="approval-center-header-link"
+              href={`#${APP_ROUTES.approvals}`}
+              onClick={() => setApprovalOpen(false)}
+              className="mx-2 mt-2 flex items-center justify-between rounded-lg border border-ui-border bg-ui-primary-soft px-3 py-2 text-sm font-semibold text-ui-primary hover:bg-ui-page-alt"
+            >
+              <span>{ar ? 'سجل الموافقات واعتماد التصاريح' : 'Approvals & authorizations center'}</span>
+              <span aria-hidden="true">›</span>
+            </a>
             {decisionError && <p role="alert" className="px-4 py-2 text-sm text-ui-danger">{decisionError}</p>}
             <div className="max-h-96 overflow-y-auto p-2">
               {items.length === 0 ? (
