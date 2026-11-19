@@ -97,19 +97,17 @@ const NAV_GROUP_BY_ROUTE: Record<string, string> = {
 };
 
 async function clickRouteLink(page: Page, route: string) {
-  const target = page.locator(`a[href="#${route}"]`).first();
+  const group = NAV_GROUP_BY_ROUTE[route];
+  if (!group) throw new Error(`No section mapped for ${route}`);
+  const section = page.getByTestId(`nav-group-entry-${group}`);
+  await expect(section).toBeVisible();
+  await section.click();
 
-  if (!(await target.isVisible().catch(() => false))) {
-    const group = NAV_GROUP_BY_ROUTE[route];
-    if (group) {
-      const toggle = page.getByTestId(`nav-group-toggle-${group}`);
-      await expect(toggle).toBeVisible();
-      await toggle.click();
-    }
+  if (!(await page.evaluate((target) => window.location.hash === `#${target}`, route))) {
+    const tab = page.getByTestId('section-tabs-list').locator(`a[href="#${route}"]`);
+    await expect(tab).toBeVisible();
+    await tab.click();
   }
-
-  await expect(target).toBeVisible();
-  await target.click();
 }
 
 test.describe('dashboard and navigation actions', () => {
@@ -124,9 +122,10 @@ test.describe('dashboard and navigation actions', () => {
 
     await expect(page.locator('header').first()).toBeVisible();
     await expect(page.locator('main').first()).toBeVisible();
-    await expect(page.locator(`a[href="#/dashboard"]`).first()).toBeVisible();
-    await expect(page.locator(`a[href="#/pos"]`).first()).toBeVisible();
-    await expect(page.locator(`a[href="#/inventory-center"]`).first()).toBeVisible();
+    await expect(page.getByTestId('nav-group-entry-main')).toBeVisible();
+    await expect(page.getByTestId('nav-group-entry-centers')).toBeVisible();
+    await expect(page.getByTestId('section-tabs-list').locator('a[href="#/dashboard"]')).toBeVisible();
+    await expect(page.getByTestId('section-tabs-list').locator('a[href="#/pos"]')).toBeVisible();
     expect(consoleErrors).toEqual([]);
   });
 
