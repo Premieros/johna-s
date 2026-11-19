@@ -8,9 +8,9 @@ import { PaymentsPage } from '@/features/accounting/pages/PaymentsPage';
 
 const mocks = vi.hoisted(() => ({
   t: (key: string) => key, branch: 'smouha', show: vi.fn(), pages: vi.fn(), alerts: vi.fn(), summary: vi.fn(),
-  ap: vi.fn(), ar: vi.fn(), meta: vi.fn(),
+  ap: vi.fn(), ar: vi.fn(), partyBalances: vi.fn(), meta: vi.fn(),
 }));
-vi.mock('@/api', () => ({ inventory: { getLowStockAlerts: mocks.alerts, getLowStockSummary: mocks.summary }, accounting: { getApAging: mocks.ap, getArAging: mocks.ar, getAccessibleTreasuryAccounts: async () => ({ data: [], error: null }) } }));
+vi.mock('@/api', () => ({ inventory: { getLowStockAlerts: mocks.alerts, getLowStockSummary: mocks.summary }, accounting: { getApAging: mocks.ap, getArAging: mocks.ar, getPartyOpenBalancesBranches: mocks.partyBalances, getAccessibleTreasuryAccounts: async () => ({ data: [], error: null }) } }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en', t: mocks.t }) }));
 vi.mock('@/components/Toast', () => ({ useToast: () => ({ show: mocks.show }) }));
 vi.mock('@/lib/useBranchFilter', () => ({ useBranchFilter: () => mocks.branch }));
@@ -39,6 +39,7 @@ beforeEach(() => {
   ], error: null });
   mocks.ap.mockResolvedValue({ data: [{ supplier_id: 's', supplier_name: 'Supplier', open_amount: 12, bucket_0_30: 0, bucket_31_60: 12, bucket_61_90: 0, bucket_90_plus: 0 }], error: null });
   mocks.ar.mockResolvedValue({ data: [], error: null });
+  mocks.partyBalances.mockResolvedValue({ data: [{ party_id: 's', open_amount: 12 }], error: null });
 });
 describe('audited screen regressions', () => {
   it.each(['smouha', 'cleopatra'])('sends name/code/category search to bounded server paging in %s', async branch => {
