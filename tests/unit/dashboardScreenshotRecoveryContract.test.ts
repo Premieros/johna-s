@@ -9,8 +9,8 @@ describe('dashboard recovery and navigation density', () => {
     expect(dashboard).toContain("failure.code === '57014'");
     expect(dashboard).toContain("setSalesUnavailable(true)");
     expect(dashboard).toContain("setSalesTimedOut(timedOut)");
-    expect(dashboard).toContain("onClick={() => setRange('month')}");
-    expect(dashboard).toContain("salesTimedOut && range !== 'month'");
+    expect(dashboard).toContain("onClick={() => setRange('today')}");
+    expect(dashboard).toContain("salesTimedOut && range !== 'today'");
     expect(dashboard).toContain("role=\"alert\"");
   });
 
