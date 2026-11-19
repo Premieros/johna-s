@@ -104,9 +104,9 @@ async function clickRouteLink(page: Page, route: string) {
   await section.click();
 
   if (!(await page.evaluate((target) => window.location.hash === `#${target}`, route))) {
-    const tab = page.getByTestId('section-tabs-list').locator(`a[href="#${route}"]`);
-    await expect(tab).toBeVisible();
-    await tab.click();
+    const directLink = page.locator(`[data-testid^="sidebar-nav-item-"][href="#${route}"]`);
+    await expect(directLink).toBeVisible();
+    await directLink.click();
   }
 }
 
@@ -124,8 +124,9 @@ test.describe('dashboard and navigation actions', () => {
     await expect(page.locator('main').first()).toBeVisible();
     await expect(page.getByTestId('nav-group-entry-main')).toBeVisible();
     await expect(page.getByTestId('nav-group-entry-centers')).toBeVisible();
-    await expect(page.getByTestId('section-tabs-list').locator('a[href="#/dashboard"]')).toBeVisible();
-    await expect(page.getByTestId('section-tabs-list').locator('a[href="#/pos"]')).toBeVisible();
+    await expect(page.getByTestId('sidebar-nav-item-dashboard')).toBeVisible();
+    await expect(page.getByTestId('sidebar-nav-item-pos')).toBeVisible();
+    await expect(page.getByTestId('section-workspace-tabs')).toBeHidden();
     expect(consoleErrors).toEqual([]);
   });
 
