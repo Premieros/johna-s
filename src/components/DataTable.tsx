@@ -489,7 +489,7 @@ export function DataTable<T extends { id?: string }>({
   return (
     <div data-testid="data-table" className="min-w-0 max-w-full">
       {(hasDataTools || enableColumnVisibility || hasActiveFilters) && (
-        <div data-testid="data-table-toolbar" className="mb-3 flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
+        <div data-testid="data-table-toolbar" className="mb-1 flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
           {onImportFile && (
             <>
               <input ref={importRef} type="file" accept={importAccept} className="hidden" onChange={handleImport} />
