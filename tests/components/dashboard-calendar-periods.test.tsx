@@ -99,6 +99,23 @@ describe('dashboard reporting concurrency guard', () => {
     expect(screen.getByTestId('analysis-net-sales')).toHaveTextContent('120.00');
   });
 
+  it('keeps one accounting request when the organization grows to 100 branches', async () => {
+    mocks.branch = '';
+    mocks.branches = Array.from({ length: 100 }, (_, index) => ({ id: `branch-${index}`, name: `Branch ${index}` }));
+    mocks.incomeBranches.mockResolvedValue({
+      data: mocks.branches.map((branch) => ({
+        branch_id: branch.id, revenue: 50, discount: 0, net_revenue: 50,
+        cogs: 0, gross_profit: 50, other_income: 0, expenses: 5, net_income: 45,
+      })),
+      error: null,
+    });
+    render(<MemoryRouter><DashboardDataPage /></MemoryRouter>);
+    await waitFor(() => expect(mocks.incomeBranches).toHaveBeenCalledTimes(1));
+    expect(mocks.incomeBranches.mock.calls[0][0].p_branch_ids).toHaveLength(100);
+    expect(mocks.income).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByText('Accounting net profit').parentElement).toHaveTextContent('4,500.00'));
+  });
+
   it('uses a single set-based RPC for all accessible branches without fanout', async () => {
     mocks.branch = '';
     render(<MemoryRouter><DashboardDataPage /></MemoryRouter>);
