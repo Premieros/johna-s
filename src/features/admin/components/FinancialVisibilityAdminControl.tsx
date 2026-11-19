@@ -3,7 +3,8 @@ import { EyeOff, Loader2, SlidersHorizontal } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { admin } from '@/api';
 import { Button } from '@/components/Button';
-import { Input } from '@/components/Input';
+import { Input, Select } from '@/components/Input';
+import { useBranches } from '@/hooks/useBranches';
 import { Modal } from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import { useCan } from '@/lib/permissions';
@@ -14,6 +15,8 @@ export function FinancialVisibilityAdminControl() {
   const can = useCan();
   const { lang } = useLanguage();
   const { show } = useToast();
+  const { branches } = useBranches();
+  const [selectedBranchId, setSelectedBranchId] = useState('');
   const location = useLocation();
   const ar = lang === 'ar';
   const [open, setOpen] = useState(false);
@@ -25,9 +28,10 @@ export function FinancialVisibilityAdminControl() {
   const visible = can('settings.manage') && location.pathname === APP_ROUTES.superAdmin;
 
   const load = useCallback(async () => {
+    if (!selectedBranchId) return;
     setLoading(true);
     try {
-      const { data, error } = await admin.getFinancialVisibilitySettings();
+      const { data, error } = await admin.getBranchFinancialVisibilitySettings({ p_branch_id: selectedBranchId });
       if (error || !data?.success) throw new Error(data?.error || error?.message || 'LOAD_FAILED');
       setRecentDays(Number(data.recent_days ?? 7));
       setHistoricalPercent(Number(data.historical_percent ?? 30));
@@ -36,15 +40,25 @@ export function FinancialVisibilityAdminControl() {
     } finally {
       setLoading(false);
     }
-  }, [ar, show]);
+  }, [ar, show, selectedBranchId]);
 
   useEffect(() => {
-    if (open && visible) void load();
+    if (!selectedBranchId || !branches.some((branch) => branch.id === selectedBranchId)) {
+      setSelectedBranchId(branches[0]?.id || '');
+    }
+  }, [branches, selectedBranchId]);
+
+  useEffect(() => {
+    if (open && visible && selectedBranchId) void load();
   }, [open, visible, load]);
 
   if (!visible) return null;
 
   const save = async () => {
+    if (!selectedBranchId || !branches.some((branch) => branch.id === selectedBranchId)) {
+      show(ar ? 'اختر فرعًا مصرحًا به' : 'Select an authorized branch', 'error');
+      return;
+    }
     if (!Number.isInteger(recentDays) || recentDays < 1 || recentDays > 365) {
       show(ar ? 'عدد الأيام يجب أن يكون من 1 إلى 365' : 'Recent days must be between 1 and 365', 'error');
       return;
@@ -56,12 +70,13 @@ export function FinancialVisibilityAdminControl() {
 
     setSaving(true);
     try {
-      const { data, error } = await admin.updateFinancialVisibilitySettings({
+      const { data, error } = await admin.updateBranchFinancialVisibilitySettings({
+        p_branch_id: selectedBranchId,
         p_recent_days: recentDays,
         p_historical_percent: historicalPercent,
       });
       if (error || !data?.success) throw new Error(data?.error || error?.message || 'SAVE_FAILED');
-      show(ar ? 'تم حفظ سياسة عرض البيانات' : 'Financial visibility policy saved', 'success');
+      show(ar ? 'تم حفظ سياسة عرض البيانات للفرع المحدد فقط' : 'Visibility policy saved for the selected branch only', 'success');
       setOpen(false);
     } catch (err) {
       show(ar ? `فشل حفظ السياسة: ${String((err as Error).message || err)}` : `Failed to save policy: ${String((err as Error).message || err)}`, 'error');
@@ -98,12 +113,23 @@ export function FinancialVisibilityAdminControl() {
                 </p>
                 <p>
                   {ar
-                    ? 'من يملك صلاحية عرض السجل التاريخي الكامل يرى كامل التاريخ. غير المخولين يرون الفترة الحديثة كاملة، وما قبلها بالنسبة الثابتة المحددة هنا. لا يعتمد هذا القرار على اسم الدور.'
-                    : 'Users with the unlimited historical-data permission see full history. Other users see the recent window in full and the configured stable percentage of older history. This never depends on a role name.'}
+                    ? 'تُطبّق الإعدادات على الفرع المختار فقط. من يملك صلاحية عرض السجل التاريخي الكامل يرى كل تاريخ الفروع المصرح له بها؛ أما بقية المستخدمين فيخضعون لسياسة كل فرع.'
+                    : 'Settings apply only to the selected branch. The single unlimited-history permission bypasses history sampling only for branches the user can access.'}
                 </p>
               </div>
             </div>
           </div>
+
+          <Select
+            label={ar ? 'الفرع المطلوب تعديل سياسته' : 'Branch visibility policy'}
+            value={selectedBranchId}
+            onChange={(event) => setSelectedBranchId(event.target.value)}
+            disabled={loading || saving || !selectedBranchId}
+            data-testid="financial-visibility-branch"
+          >
+            <option value="">{ar ? 'اختر الفرع' : 'Select branch'}</option>
+            {branches.map((branch) => <option key={branch.id} value={branch.id}>{ar ? branch.name : branch.name_en || branch.name}</option>)}
+          </Select>
 
           {loading ? (
             <div className="flex min-h-28 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-brand-500" /></div>
@@ -140,7 +166,7 @@ export function FinancialVisibilityAdminControl() {
             <Button variant="outline" onClick={() => setOpen(false)}>{ar ? 'إلغاء' : 'Cancel'}</Button>
             <Button onClick={() => void save()} disabled={loading || saving}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              {ar ? 'حفظ السياسة' : 'Save Policy'}
+              {ar ? 'حفظ سياسة هذا الفرع' : 'Save Branch Policy'}
             </Button>
           </div>
         </div>
