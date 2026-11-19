@@ -8,7 +8,7 @@ LANGUAGE plpgsql STABLE SECURITY INVOKER
 SET search_path TO public, pg_temp
 AS $function$
 BEGIN
-  IF auth.uid() IS NULL OR NOT public.can_permission('reports.financial') THEN
+  IF auth.uid() IS NULL OR NOT (public.can_permission('reports.financial') OR public.can_permission('reports.costing')) THEN
     RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE = '42501';
   END IF;
   IF p_branch_ids IS NULL OR cardinality(p_branch_ids) > 500 THEN
