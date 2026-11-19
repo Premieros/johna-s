@@ -27,14 +27,16 @@ export function ReportsCenterPage() {
   const [workspaceHost] = useState(() => document.createElement('div'));
   // Move the same portal host between the normal layout and the document body.
   // The report DOM remains mounted across fullscreen transitions.
+  // A permission fallback can render <Navigate> before the workspace slot exists.
+  // Reconcile the host on every committed render so the next route render
+  // attaches the portal without remounting its report contents.
   useLayoutEffect(() => {
-    const slot = workspaceSlot.current;
-    if (!slot) return;
-    (expanded ? document.body : slot).appendChild(workspaceHost);
-    return () => {
-      if (workspaceHost.parentNode) workspaceHost.parentNode.removeChild(workspaceHost);
-    };
-  }, [expanded, workspaceHost]);
+    const target = expanded ? document.body : workspaceSlot.current;
+    if (target && workspaceHost.parentNode !== target) target.appendChild(workspaceHost);
+  });
+  useEffect(() => () => {
+    workspaceHost.remove();
+  }, [workspaceHost]);
   useEffect(() => {
     if (!expanded) return;
     const previous = document.body.style.overflow;
