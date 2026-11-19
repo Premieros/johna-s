@@ -62,12 +62,13 @@ export function SuppliersPage() {
     let cancelled = false;
     const loadOpenBalances = async () => {
       const branchIds = branchFilter ? [branchFilter] : branches.map((branch) => branch.id);
-      if (!branchIds.length) {
+      if (!branchIds.length || !items.length) {
         if (!cancelled) setOpenBalances({});
         return;
       }
       const { data, error } = await api.accounting.getPartyOpenBalancesBranches({
         p_branch_ids: branchIds,
+        p_party_ids: items.map((item) => item.id),
         p_as_of: businessDateISO(),
         p_party: 'supplier',
       });
@@ -82,7 +83,7 @@ export function SuppliersPage() {
     };
     void loadOpenBalances();
     return () => { cancelled = true; };
-  }, [branchFilter, branches]);
+  }, [branchFilter, branches, items]);
 
   const balanceFor = (supplier: Supplier) => Number(openBalances[supplier.id] || 0);
   const filtered = items.filter((s) => !search || s.name.toLowerCase().includes(search.toLowerCase()) || s.phone?.includes(search));
