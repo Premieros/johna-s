@@ -79,6 +79,30 @@ describe.skipIf(!dbUrl)('owner secondary-branch posted expenses remain RLS prote
     expect(await expenseAmount(ids.users.owner,ids.branchB)).toBe(0);
   });
 
+  it('shows recent secondary-branch expenses without unlimited history but still requires grant', async () => {
+    await client.query(`UPDATE public.roles
+      SET permissions = permissions - 'history.unlimited'
+      WHERE role = 'owner'`);
+    await client.query(
+      `INSERT INTO public.user_branch_access(user_id,branch_id)
+       VALUES($1,$2) ON CONFLICT(user_id,branch_id) DO NOTHING`,
+      [ids.users.owner, ids.branchB],
+    );
+    const permissions = await runAs(client, ids.users.owner,
+      `SELECT public.can_permission('expenses.view') AS can_view,
+              public.can_permission('history.unlimited') AS full_history,
+              public.user_may_access_branch($1) AS allowed`,
+      [ids.branchB]);
+    expect(permissions.rows[0]).toEqual({can_view:true,full_history:false,allowed:true});
+    expect(await expenseAmount(ids.users.owner,ids.branchB)).toBe(79);
+    expect(await expenseAmount(ids.users.owner,ids.branchA)).toBe(21);
+    expect(await expenseAmount(ids.users.cashier,ids.branchB)).toBe(0);
+
+    await client.query('DELETE FROM public.user_branch_access WHERE user_id=$1 AND branch_id=$2',
+      [ids.users.owner,ids.branchB]);
+    expect(await expenseAmount(ids.users.owner,ids.branchB)).toBe(0);
+  });
+
   it('keeps the historical financial-visibility policy restrictive', async () => {
     const result = await client.query(
       `SELECT policyname,permissive FROM pg_policies
