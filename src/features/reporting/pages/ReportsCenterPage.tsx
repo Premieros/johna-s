@@ -1,8 +1,9 @@
 import { PeriodCloseReport } from '../PeriodCloseReport';
 import '../reportGrid.css';
 import { MonthCloseReview } from '../MonthCloseReview';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ReportsPage } from './ReportsPage';
 import { FinancialReportsPage } from '@/features/accounting/pages/FinancialReportsPage';
@@ -22,6 +23,20 @@ export function ReportsCenterPage() {
   const [search, setSearch] = useState('');
   const ar = lang === 'ar';
   const [expanded,setExpanded] = useState(false);
+  const workspaceSlot = useRef<HTMLDivElement>(null);
+  const [workspaceHost] = useState(() => document.createElement('div'));
+  // Move the same portal host between the normal layout and the document body.
+  // The report DOM remains mounted across fullscreen transitions.
+  // A permission fallback can render <Navigate> before the workspace slot exists.
+  // Reconcile the host on every committed render so the next route render
+  // attaches the portal without remounting its report contents.
+  useLayoutEffect(() => {
+    const target = expanded ? document.body : workspaceSlot.current;
+    if (target && workspaceHost.parentNode !== target) target.appendChild(workspaceHost);
+  });
+  useEffect(() => () => {
+    workspaceHost.remove();
+  }, [workspaceHost]);
   useEffect(() => {
     if (!expanded) return;
     const previous = document.body.style.overflow;
@@ -67,7 +82,7 @@ export function ReportsCenterPage() {
     else if (view.type) fallback.set('type', view.consumptionGroup ? view.key : view.type);
     return <Navigate to={`/reports?${fallback}`} replace />;
   }
-  const content = <div data-testid="unified-reports-center" data-expanded={expanded} className={`report-workspace space-y-2 bg-ui-page ${expanded ? 'fixed inset-0 z-[60] overflow-auto overscroll-contain p-3 text-ui-text sm:p-4' : ''}`}>
+  const content = <div data-testid="unified-reports-center" data-expanded={expanded} className={`report-workspace space-y-2 bg-ui-page ${expanded ? 'fixed inset-0 !m-0 z-[60] overflow-auto overscroll-contain p-3 text-ui-text sm:p-4' : ''}`}>
     <div className="grid min-w-0 gap-4 grid-cols-1">
       <details className="rounded-lg border border-ui-border bg-ui-surface px-3 py-2"><summary className="cursor-pointer text-sm font-semibold">{ar ? 'اختيار التقرير' : 'Choose report'} · {ar ? report.ar : report.en}</summary><aside className="mt-2 space-y-2" aria-label={ar ? 'التقارير الأساسية' : 'Basic reports'}>
         <div className="relative max-w-sm">
@@ -98,5 +113,6 @@ export function ReportsCenterPage() {
       </main>
     </div>
   </div>;
-  return content;
+  // Keep a stable portal root so fullscreen does not remount active report state.
+  return <><div ref={workspaceSlot} />{createPortal(content, workspaceHost)}</>;
 }

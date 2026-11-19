@@ -6,15 +6,13 @@ const root = resolve(process.cwd());
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 
 describe('UI consolidation contracts', () => {
-  it('keeps navigation compact, persistent, and opens the active group automatically', () => {
+  it('keeps section-level navigation compact with all authorized screens available as tabs', () => {
     const layout = read('src/components/Layout.tsx');
 
-    expect(layout).toContain("premier:nav-collapsed-groups");
-    expect(layout).toContain('catalog: true');
-    expect(layout).toContain('finance: true');
-    expect(layout).toContain('admin: true');
+    expect(layout).toContain('data-testid={`nav-group-entry-${group}`}');
+    expect(layout).toContain('data-testid="section-workspace-tabs"');
     expect(layout).toContain('activeMenuGroup');
-    expect(layout).toContain('[activeMenuGroup]: false');
+    expect(layout).toContain('grouped[activeMenuGroup].map((item)');
   });
 
   it('keeps phone data cards concise with expandable secondary fields', () => {

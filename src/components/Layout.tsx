@@ -80,25 +80,6 @@ export function Layout({ children }: { children: ReactNode }) {
   const [desktopSidebarHidden, setDesktopSidebarHidden] = useState(() =>
     typeof window !== 'undefined' && window.localStorage.getItem('premier:desktop-sidebar-hidden') === '1',
   );
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = JSON.parse(window.localStorage.getItem('premier:nav-collapsed-groups') || '{}') as Record<string, boolean>;
-        if (Object.keys(saved).length > 0) return saved;
-      } catch {
-        // Fall back to the compact default below.
-      }
-    }
-    return {
-      main: false,
-      centers: false,
-      catalog: true,
-      operations: true,
-      people: true,
-      finance: true,
-      admin: true,
-    };
-  });
   const ar = lang === 'ar';
   const branchFilter = useBranchFilter();
   const isPosRoute = location.pathname === APP_ROUTES.pos || location.pathname.startsWith(`${APP_ROUTES.pos}/`);
@@ -155,18 +136,6 @@ export function Layout({ children }: { children: ReactNode }) {
       .sort((a, b) => b.route.length - a.route.length)[0];
     return activeItem?.group ?? null;
   }, [location.pathname, visibleItems]);
-
-  useEffect(() => {
-    if (!activeMenuGroup) return;
-    setCollapsed((current) => current[activeMenuGroup]
-      ? { ...current, [activeMenuGroup]: false }
-      : current);
-  }, [activeMenuGroup]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem('premier:nav-collapsed-groups', JSON.stringify(collapsed));
-  }, [collapsed]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -407,44 +376,31 @@ export function Layout({ children }: { children: ReactNode }) {
             )}
           </section>
 
-          <div className="mb-3 flex items-center justify-between gap-2 px-2" data-testid="navigation-visibility-actions">
-            <span className="text-xs font-semibold text-ui-muted">{ar ? 'أقسام النظام' : 'System sections'}</span>
-            <button type="button" data-testid="navigation-expand-all"
-              onClick={() => setCollapsed(Object.fromEntries(
-                (Object.keys(MENU_GROUPS) as MenuGroup[]).map((group) => [group, false])
-              ) as Record<MenuGroup, boolean>)}
-              className="rounded-lg border border-ui-border bg-ui-surface px-2.5 py-1.5 text-xs font-bold text-ui-primary hover:bg-ui-primary-soft">
-              {ar ? 'إظهار جميع الأقسام' : 'Expand all sections'}
-            </button>
+          <div className="mb-3 px-3 text-xs font-semibold text-ui-muted">
+            {ar ? 'أقسام النظام' : 'System sections'}
           </div>
+          {/* One sidebar destination per section. The full permission-filtered
+              list stays available as tabs inside its shared workspace. */}
           {(Object.keys(MENU_GROUPS) as MenuGroup[]).map((group) => {
             const items = grouped[group] ?? [];
             if (!items.length) return null;
+            const landing = items[0];
+            const active = activeMenuGroup === group;
             return (
-              <section key={group} data-testid={`nav-group-${group}`} className="mb-3">
-                <button data-testid={`nav-group-toggle-${group}`} type="button" onClick={() => setCollapsed((v) => ({ ...v, [group]: !v[group] }))} className="flex min-h-9 w-full items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-ui-subtle transition hover:bg-ui-page-alt hover:text-ui-text">
-                  <span>{MENU_GROUPS[group][ar ? 'ar' : 'en']}</span>
-                  <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-150 ${collapsed[group] ? 'rotate-90' : ''}`} />
-                </button>
-                {!collapsed[group] && (
-                  <div className="mt-1 space-y-0.5">
-                    {items.map((item) => (
-                      <NavLink
-                        data-testid={`nav-item-${item.id}`}
-                        key={item.id}
-                        to={item.route}
-                        onPointerEnter={() => prefetchAppRoute(item.route)}
-                        onFocus={() => prefetchAppRoute(item.route)}
-                        onTouchStart={() => prefetchAppRoute(item.route)}
-                        onClick={() => setMobileOpen(false)}
-                        className={({ isActive }) => `group flex min-h-[40px] items-center gap-3 rounded-xl px-3 text-sm font-medium transition-all duration-150 ${isActive ? 'bg-ui-primary text-ui-primary-fg shadow-[0_4px_12px_rgba(91,43,216,0.18)]' : 'text-ui-muted hover:bg-ui-primary-soft hover:text-ui-primary'}`}
-                      >
-                        {ICONS[item.icon]}
-                        <span className="flex-1 truncate">{item.label ? item.label[ar ? 'ar' : 'en'] : item.labelKey ? t(item.labelKey) : item.id}</span>
-                      </NavLink>
-                    ))}
-                  </div>
-                )}
+              <section key={group} data-testid={`nav-group-${group}`} className="mb-1">
+                <NavLink
+                  data-testid={`nav-group-entry-${group}`}
+                  to={landing.route}
+                  onPointerEnter={() => prefetchAppRoute(landing.route)}
+                  onFocus={() => prefetchAppRoute(landing.route)}
+                  onClick={() => setMobileOpen(false)}
+                  aria-current={active ? 'page' : undefined}
+                  className={`flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-bold transition-colors ${active ? 'bg-ui-primary text-ui-primary-fg shadow-ui-sm' : 'text-ui-muted hover:bg-ui-primary-soft hover:text-ui-primary'}`}
+                >
+                  {ICONS[landing.icon]}
+                  <span className="flex-1 truncate">{MENU_GROUPS[group][ar ? 'ar' : 'en']}</span>
+                  <span className={`rounded-md px-1.5 py-0.5 text-[10px] ${active ? 'bg-white/20' : 'bg-ui-page-alt'}`}>{items.length}</span>
+                </NavLink>
               </section>
             );
           })}
@@ -460,6 +416,33 @@ export function Layout({ children }: { children: ReactNode }) {
             data-testid="design-content-surface"
             className={`min-h-[calc(100vh-64px)] w-full min-w-0 space-y-5 ${fullWidthContent ? 'max-w-none' : 'mx-auto max-w-[1600px]'}`}
           >
+            {activeMenuGroup && (grouped[activeMenuGroup]?.length ?? 0) > 1 && (
+              <section data-testid="section-workspace-tabs" aria-label={MENU_GROUPS[activeMenuGroup][ar ? 'ar' : 'en']} className="rounded-2xl border border-ui-border bg-ui-surface p-3 shadow-ui-sm">
+                <div className="mb-3 flex items-center justify-between gap-2 px-2">
+                  <h1 className="text-lg font-black text-ui-text">{MENU_GROUPS[activeMenuGroup][ar ? 'ar' : 'en']}</h1>
+                  <span className="text-xs font-medium text-ui-subtle">{ar ? 'اختر الشاشة' : 'Choose a screen'}</span>
+                </div>
+                <nav data-testid="section-tabs-list" aria-label={ar ? 'شاشات القسم' : 'Section pages'} className="flex min-w-0 gap-1.5 overflow-x-auto overscroll-x-contain whitespace-nowrap border-b border-ui-border pb-2">
+                  {grouped[activeMenuGroup].map((item) => {
+                    const selected = location.pathname === item.route || location.pathname.startsWith(`${item.route}/`);
+                    return (
+                      <NavLink
+                        key={item.id}
+                        data-testid={`nav-item-${item.id}`}
+                        to={item.route}
+                        onPointerEnter={() => prefetchAppRoute(item.route)}
+                        onFocus={() => prefetchAppRoute(item.route)}
+                        aria-current={selected ? 'page' : undefined}
+                        className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${selected ? 'border-ui-primary bg-ui-primary-soft text-ui-primary' : 'border-transparent text-ui-muted hover:bg-ui-page-alt hover:text-ui-text'}`}
+                      >
+                        {ICONS[item.icon]}
+                        <span>{item.label ? item.label[ar ? 'ar' : 'en'] : item.labelKey ? t(item.labelKey) : item.id}</span>
+                      </NavLink>
+                    );
+                  })}
+                </nav>
+              </section>
+            )}
             {children}
           </div>
         </main>

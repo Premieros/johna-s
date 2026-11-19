@@ -249,6 +249,28 @@ describe('Phase 4 — no duplicate destinations', () => {
   });
 });
 
+describe('section workspace navigation', () => {
+  it('shows one sidebar destination per section with each authorized screen in a workspace tab', () => {
+    const layout = read('src/components/Layout.tsx');
+    expect(layout).toContain('data-testid={`nav-group-entry-${group}`}');
+    expect(layout).toContain('data-testid="section-workspace-tabs"');
+    expect(layout).toContain('data-testid="section-tabs-list"');
+    expect(layout).toContain('data-testid={`nav-item-${item.id}`}');
+    expect(layout).toContain('const items = grouped[group] ?? []');
+    expect(layout).toContain('grouped[activeMenuGroup].map((item)');
+  });
+
+  it('preserves each original route and its existing permission-gated menu registry', () => {
+    const layout = read('src/components/Layout.tsx');
+    expect(layout).toContain('(!item.permission || can(item.permission))');
+    expect(layout).toContain('item.permissionsAny.some((permission) => can(permission))');
+    expect(layout).toContain("(!item.superAdminOnly || user?.role === 'super_admin')");
+    expect(layout).toContain('to={item.route}');
+    expect(layout).toContain('to={landing.route}');
+    expect(MENU_ITEMS.filter(item => item.group === 'main').some(item => item.id === 'pos')).toBe(true);
+  });
+});
+
 describe('Phase 4 — sidebar structure', () => {
   it('sidebar uses all defined menu groups', () => {
     const groupKeys = Object.keys(MENU_GROUPS);
