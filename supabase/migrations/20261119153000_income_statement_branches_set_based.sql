@@ -63,3 +63,93 @@ $function$;
 
 REVOKE ALL ON FUNCTION public.get_income_statement_branches(uuid[],date,date) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.get_income_statement_branches(uuid[],date,date) TO authenticated,service_role;
+
+-- Bulk list-screen balances: one RLS-respecting scan across authorized branches.
+-- Open amounts follow get_ar_aging/get_ap_aging (including employee receivables
+-- and supplier opening balances) without 1 RPC per branch.
+CREATE OR REPLACE FUNCTION public.get_party_open_balances_branches(
+  p_branch_ids uuid[], p_as_of date, p_party text
+) RETURNS TABLE(party_id uuid, open_amount numeric)
+LANGUAGE plpgsql STABLE SECURITY INVOKER
+SET search_path TO public, pg_temp
+AS $function$
+BEGIN
+  IF auth.uid() IS NULL OR p_party NOT IN ('customer','supplier') OR
+    (p_party = 'customer' AND NOT public.can_permission('customers.view')) OR
+    (p_party = 'supplier' AND NOT public.can_permission('suppliers.view')) THEN
+    RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501';
+  END IF;
+  IF p_branch_ids IS NULL OR cardinality(p_branch_ids) > 500 THEN
+    RAISE EXCEPTION 'INVALID_BRANCH_SCOPE' USING ERRCODE='22023';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM unnest(p_branch_ids) AS b(id)
+    WHERE b.id IS NULL OR NOT public.user_may_access_branch(b.id)
+  ) THEN
+    RAISE EXCEPTION 'BRANCH_MISMATCH' USING ERRCODE='42501';
+  END IF;
+
+  IF p_party = 'customer' THEN
+    RETURN QUERY
+    WITH scope AS MATERIALIZED (SELECT DISTINCT id FROM unnest(p_branch_ids) AS s(id)),
+    date_bounds AS MATERIALIZED (SELECT public.history_clamp_as_of(p_as_of) AS until_date),
+    amounts AS (
+      SELECT s.customer_id AS id, s.branch_id,
+        (s.total - coalesce(s.paid_amount,0) - coalesce(s.refunded_amount,0))::numeric AS balance
+      FROM public.sales s
+      JOIN scope b ON b.id = s.branch_id
+      CROSS JOIN date_bounds d
+      WHERE s.status <> 'returned'
+        AND s.created_at::date <= d.until_date
+        AND (s.total - coalesce(s.paid_amount,0) - coalesce(s.refunded_amount,0)) > 0
+
+      UNION ALL
+
+      SELECT e.customer_id, e.branch_id,
+        (e.amount - e.settled_amount)::numeric
+      FROM public.employee_receivable_entries e
+      JOIN scope b ON b.id = e.branch_id
+      JOIN public.customers c ON c.id = e.customer_id AND c.branch_id = e.branch_id
+      CROSS JOIN date_bounds d
+      WHERE c.customer_type = 'employee'
+        AND e.occurred_at::date <= d.until_date
+        AND (e.amount - e.settled_amount) > 0
+    )
+    SELECT c.id, round(sum(a.balance),2)
+    FROM amounts a
+    JOIN public.customers c ON c.id = a.id AND c.branch_id = a.branch_id
+    GROUP BY c.id;
+  ELSE
+    RETURN QUERY
+    WITH scope AS MATERIALIZED (SELECT DISTINCT id FROM unnest(p_branch_ids) AS s(id)),
+    date_bounds AS MATERIALIZED (SELECT public.history_clamp_as_of(p_as_of) AS until_date),
+    amounts AS (
+      SELECT p.supplier_id AS id, p.branch_id,
+        (p.total - coalesce(p.paid_amount,0) - coalesce(p.returned_amount,0))::numeric AS balance
+      FROM public.purchases p
+      JOIN scope b ON b.id = p.branch_id
+      CROSS JOIN date_bounds d
+      WHERE p.status = 'completed'
+        AND (p.created_at AT TIME ZONE 'Africa/Cairo')::date <= d.until_date
+        AND (p.total - coalesce(p.paid_amount,0) - coalesce(p.returned_amount,0)) > 0
+
+      UNION ALL
+
+      SELECT ob.supplier_id, ob.branch_id,
+        (ob.amount - ob.settled_amount)::numeric
+      FROM public.supplier_opening_balances ob
+      JOIN scope b ON b.id = ob.branch_id
+      CROSS JOIN date_bounds d
+      WHERE ob.opening_date <= d.until_date
+        AND (ob.amount - ob.settled_amount) > 0
+    )
+    SELECT s.id, round(sum(a.balance),2)
+    FROM amounts a
+    JOIN public.suppliers s ON s.id = a.id AND s.branch_id = a.branch_id
+    GROUP BY s.id;
+  END IF;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.get_party_open_balances_branches(uuid[],date,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.get_party_open_balances_branches(uuid[],date,text) TO authenticated,service_role;
