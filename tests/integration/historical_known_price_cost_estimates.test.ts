@@ -150,7 +150,7 @@ describe.skipIf(!dbUrl)('historical zero consumption priced independently of sto
         CROSS JOIN (VALUES ($3::uuid),($4::uuid),(NULL::uuid)) r(reference_id)
         CROSS JOIN (VALUES (now()),(now()-interval '40 days'),(NULL::timestamptz)) d(created_at)
       ) SELECT count(*) FILTER(WHERE (private.financial_reference_visible(reference_type,reference_id,(md5(id::text))::uuid,branch_id,created_at))
-        IS DISTINCT FROM ((${policy}) AND (${branchPolicy})))::int mismatches FROM candidates`;
+        IS DISTINCT FROM ((${policy}) AND (${branchPolicy})))::int mismatches FROM candidates AS inventory_ledger`;
       for (const actor of [admin,viewer]) {
         await db.query(`SELECT set_config('app.user_id',$1,true)`, [actor]);
         await db.query('SET LOCAL ROLE authenticated');
