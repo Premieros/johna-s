@@ -87,7 +87,7 @@ LANGUAGE plpgsql STABLE SECURITY INVOKER
 SET search_path TO public, pg_temp
 AS $function$
 BEGIN
-  IF auth.uid() IS NULL OR p_party NOT IN ('customer','supplier') OR
+  IF auth.uid() IS NULL OR p_party IS NULL OR p_party NOT IN ('customer','supplier') OR
     (p_party = 'customer' AND NOT public.can_permission('customers.view')) OR
     (p_party = 'supplier' AND NOT public.can_permission('suppliers.view')) THEN
     RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501';
