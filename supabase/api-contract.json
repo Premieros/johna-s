@@ -635,6 +635,14 @@
       ]
     },
     {
+      "name": "get_income_statement_branches",
+      "params": [
+        "branch_ids",
+        "from_date",
+        "to_date"
+      ]
+    },
+    {
       "name": "get_inventory_item_statement",
       "params": [
         "branch_id",
@@ -764,6 +772,15 @@
         "branch_id",
         "from",
         "to"
+      ]
+    },
+    {
+      "name": "get_party_open_balances_branches",
+      "params": [
+        "as_of",
+        "branch_ids",
+        "party",
+        "party_ids"
       ]
     },
     {

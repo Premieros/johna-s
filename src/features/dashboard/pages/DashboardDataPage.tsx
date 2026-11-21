@@ -194,6 +194,8 @@ export function DashboardDataPage() {
   const [sectionErrors, setSectionErrors] = useState({ stock: false, finance: false, ops: false });
   const [salesUnavailable, setSalesUnavailable] = useState(false);
   const [salesTimedOut, setSalesTimedOut] = useState(false);
+  // Defer expensive accounting statements until the sales snapshot request settles.
+  const [salesSettledKey, setSalesSettledKey] = useState<string | null>(null);
   const [comparisonUnavailable, setComparisonUnavailable] = useState(false);
   const [paymentsUnavailable, setPaymentsUnavailable] = useState(false);
   const [itemsUnavailable, setItemsUnavailable] = useState(false);
@@ -209,6 +211,7 @@ export function DashboardDataPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const salesRequestKey = `${branchFilter || '*'}:${range}:${window.from}:${window.to}:${refreshVersion}`;
   const [snapshot, setSnapshot] = useState<DashboardSalesSnapshot | null>(null);
   const [sales, setSales] = useState<Sale[]>([]);
   const [previousSales, setPreviousSales] = useState<Sale[]>([]);
@@ -229,6 +232,7 @@ export function DashboardDataPage() {
     const requestId = ++loadId.current;
     setRefreshing(true);
     setLoading(true);
+    setSalesSettledKey(null);
     setError(null);
     setSalesUnavailable(false);
     setSalesTimedOut(false);
@@ -330,9 +334,9 @@ export function DashboardDataPage() {
         ? (ar ? 'استغرق تحميل تحليل المبيعات وقتًا أطول من مهلة قاعدة البيانات. اختر فترة أقصر أو أعد المحاولة.' : 'Sales analysis exceeded the database time limit. Choose a shorter period or retry.')
         : (ar ? 'تعذر تحميل بيانات المبيعات. أعد المحاولة.' : 'Sales data could not be loaded. Please retry.'));
     } finally {
-      if (requestId === loadId.current) { setLoading(false); setRefreshing(false); }
+      if (requestId === loadId.current) { setLoading(false); setRefreshing(false); setSalesSettledKey(salesRequestKey); }
     }
-  }, [ar, branchFilter, range, window, canViewSales]);
+  }, [ar, branchFilter, range, window, canViewSales, salesRequestKey]);
 
   useEffect(() => { void load(); return () => { loadId.current += 1; }; }, [load]);
 
@@ -366,24 +370,49 @@ export function DashboardDataPage() {
     setQuickStats((current) => ({ ...current, expenses: null, profit: null }));
     setSectionBusy((current) => ({ ...current, finance: true }));
     setSectionErrors((current) => ({ ...current, finance: false }));
+    // Avoid issuing two expensive reporting RPCs in parallel on dashboard mount.
+    if (salesSettledKey !== salesRequestKey) return () => { cancelled = true; };
     void (async () => {
       const targetBranches = branchFilter ? branches.filter((branch) => branch.id === branchFilter) : branches;
-      const statements = canViewFinancial
-        ? await Promise.all(targetBranches.map((branch) => reporting.getIncomeStatement({ p_branch_id: branch.id, p_from_date: window.from, p_to_date: window.to })))
-        : [];
+      let financialRows: Array<{ expenses: number; net_income: number }> = [];
+      if (canViewFinancial && targetBranches.length > 1) {
+        // One set-based database aggregation, not one RPC per branch.
+        const { data, error } = await reporting.getIncomeStatementBranches({
+          p_branch_ids: targetBranches.map((branch) => branch.id),
+          p_from_date: window.from,
+          p_to_date: window.to,
+        });
+        if (error) throw error;
+        const expected = new Set(targetBranches.map((branch) => branch.id));
+        const received = new Set((data || []).map((row) => row.branch_id));
+        if (!Array.isArray(data) || received.size !== expected.size ||
+            data.length !== expected.size || [...received].some((id) => !expected.has(id)) ||
+            data.some((row) => !Number.isFinite(Number(row.expenses)) || !Number.isFinite(Number(row.net_income)))) {
+          throw new Error('INCOMPLETE_BRANCH_FINANCIAL_SUMMARY');
+        }
+        financialRows = data;
+      } else if (canViewFinancial && targetBranches.length === 1) {
+        const { data, error } = await reporting.getIncomeStatement({
+          p_branch_id: targetBranches[0].id,
+          p_from_date: window.from,
+          p_to_date: window.to,
+        });
+        if (error) throw error;
+        if (data) financialRows = [data];
+      }
       if (cancelled) return;
-      const validStatements = statements.filter((result) => !result.error && result.data);
-      const expenses = canViewFinancial && targetBranches.length && validStatements.length === targetBranches.length ? validStatements.reduce((sum, result) => sum + Number(result.data?.expenses || 0), 0) : null;
-      const profit = canViewFinancial && targetBranches.length && validStatements.length === targetBranches.length ? validStatements.reduce((sum, result) => sum + Number(result.data?.net_income || 0), 0) : null;
+      const financeComplete = canViewFinancial && targetBranches.length > 0 && financialRows.length === targetBranches.length;
+      const expenses = financeComplete ? financialRows.reduce((sum, row) => sum + Number(row.expenses || 0), 0) : null;
+      const profit = financeComplete ? financialRows.reduce((sum, row) => sum + Number(row.net_income || 0), 0) : null;
       setQuickStats((current) => ({ ...current, expenses, profit }));
-      setSectionErrors((current) => ({ ...current, finance: canViewFinancial && Boolean(targetBranches.length) && validStatements.length !== targetBranches.length }));
+      setSectionErrors((current) => ({ ...current, finance: canViewFinancial && Boolean(targetBranches.length) && !financeComplete }));
     })().catch(() => {
       if (!cancelled) setSectionErrors((current) => ({ ...current, finance: canViewFinancial }));
     }).finally(() => {
       if (!cancelled) setSectionBusy((current) => ({ ...current, finance: false }));
     });
     return () => { cancelled = true; };
-  }, [branchFilter, branches, window, canViewFinancial]);
+  }, [branchFilter, branches, window, canViewFinancial, salesSettledKey, salesRequestKey]);
 
   useEffect(() => {
     let cancelled = false;

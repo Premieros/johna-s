@@ -431,11 +431,27 @@ export function ReportsPage({ controlledReportType, onReportTypeChange, workspac
       const targetBranches = effectiveBranchFilter
         ? branches.filter((branch) => branch.id === effectiveBranchFilter)
         : branches;
-      const results = await readReportBranches(targetBranches, async (branch) => {
-        const { data: statement, error } = await reporting.getIncomeStatement({ p_branch_id: branch.id, p_from_date: allowed.from, p_to_date: allowed.to });
-        if (error) throw error;
-        return { branch, statement };
-      }, signal);
+      const results = targetBranches.length > 1
+        ? await (async () => {
+          const { data, error } = await reporting.getIncomeStatementBranches({
+            p_branch_ids: targetBranches.map((branch) => branch.id),
+            p_from_date: allowed.from,
+            p_to_date: allowed.to,
+          }, signal);
+          if (error) throw error;
+          const byBranch = new Map((data || []).map((statement) => [statement.branch_id, statement]));
+          if (!data || byBranch.size !== targetBranches.length || data.length !== targetBranches.length ||
+              targetBranches.some((branch) => !byBranch.has(branch.id)) ||
+              data.some((row) => !Number.isFinite(Number(row.net_income)))) {
+            throw new Error('INCOMPLETE_BRANCH_FINANCIAL_SUMMARY');
+          }
+          return targetBranches.map((branch) => ({ branch, statement: byBranch.get(branch.id)! }));
+        })()
+        : await readReportBranches(targetBranches, async (branch) => {
+          const { data: statement, error } = await reporting.getIncomeStatement({ p_branch_id: branch.id, p_from_date: allowed.from, p_to_date: allowed.to }, signal);
+          if (error) throw error;
+          return { branch, statement };
+        }, signal);
       const rows = results.map(({ branch, statement }) => withBranch(branch.id, {
         [lang === 'ar' ? 'الفترة' : 'Period']: `${allowed.from} - ${allowed.to}`,
         [lang === 'ar' ? 'صافي الإيراد' : 'Net Revenue']: Number(statement?.net_revenue || 0),

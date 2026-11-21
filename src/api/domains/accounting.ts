@@ -66,6 +66,7 @@ export const accounting = {
   getJournalsPage(p: { p_branch_id: string | null; p_from_date: string | null; p_to_date: string | null; p_reference_type: string | null; p_search: string | null; p_page_size: number; p_after_entry_date: string | null; p_after_entry_number: string | null; p_after_id: string | null }): ApiResult<JournalPageDto> { return rpc('get_journals_page', p); },
   postManualJournal(p: { p_branch_id: string | null; p_description: string; p_lines: JournalLineInput[] }): ApiResult<RpcResult> { return rpc('post_manual_journal', p); },
   getArAging(p: { p_branch_id: string | null; p_as_of: string }): ApiResult<ArAgingRow[]> { return rpc('get_ar_aging', p); },
+  getPartyOpenBalancesBranches(p: { p_branch_ids: string[]; p_party_ids: string[]; p_as_of: string; p_party: 'customer' | 'supplier' }): ApiResult<Array<{ party_id: string; open_amount: number }>> { return rpc('get_party_open_balances_branches', p); },
   getApAging(p: { p_branch_id: string | null; p_as_of: string }): ApiResult<ApAgingRow[]> { return rpc('get_ap_aging', p); },
   getSupplierStatement(p: { p_supplier_id: string; p_branch_id: string }): ApiResult<unknown> { return rpc('get_supplier_statement', p); },
   getSupplierOpeningBalance(p: { p_supplier_id: string; p_branch_id: string }): ApiResult<{

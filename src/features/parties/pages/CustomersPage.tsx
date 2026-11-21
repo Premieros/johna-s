@@ -21,7 +21,8 @@ import { useCan } from '@/lib/permissions';
 import { useSettings } from '@/context/SettingsContext';
 import { useBranches } from '@/hooks/useBranches';
 import { usePaginatedRows } from '@/hooks/usePaginatedRows';
-import type { ArAgingRow, Customer } from '@/lib/types';
+import type { Customer } from '@/lib/types';
+import { businessDateISO } from '@/lib/businessTime';
 import { deleteCustomer, saveCustomer } from '../services/customerCrud';
 
 export function CustomersPage() {
@@ -50,22 +51,28 @@ export function CustomersPage() {
     let cancelled = false;
     const loadOpenBalances = async () => {
       const branchIds = branchFilter ? [branchFilter] : branches.map((branch) => branch.id);
-      if (!branchIds.length) {
+      if (!branchIds.length || !items.length) {
         if (!cancelled) setOpenBalances({});
         return;
       }
-      const results = await Promise.all(
-        branchIds.map((branchId) => api.accounting.getArAging({ p_branch_id: branchId, p_as_of: new Date().toISOString().slice(0, 10) })),
-      );
-      const next: Record<string, number> = {};
-      results.forEach(({ data }) => {
-        ((data as ArAgingRow[]) || []).forEach((row) => { next[row.customer_id] = Number(row.open_amount || 0); });
+      const { data, error } = await api.accounting.getPartyOpenBalancesBranches({
+        p_branch_ids: branchIds,
+        p_party_ids: items.map((item) => item.id),
+        p_as_of: businessDateISO(),
+        p_party: 'customer',
       });
+      if (cancelled) return;
+      if (error || !Array.isArray(data)) {
+        // A failed aggregate must not replace existing balances with misleading zeroes.
+        return;
+      }
+      const next: Record<string, number> = {};
+      data.forEach((row) => { next[row.party_id] = Number(row.open_amount || 0); });
       if (!cancelled) setOpenBalances(next);
     };
     void loadOpenBalances();
     return () => { cancelled = true; };
-  }, [branchFilter, branches]);
+  }, [branchFilter, branches, items]);
 
   const balanceFor = (customer: Customer) => Number(openBalances[customer.id] || 0);
   const filtered = items.filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone?.includes(search));
