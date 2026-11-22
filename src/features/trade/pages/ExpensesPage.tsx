@@ -153,7 +153,47 @@ export function ExpensesPage() {
     setModalOpen(true);
   };
 
-  const openEdit = (expense: Expense) => {
+  const readActiveShift = async (branchId: string): Promise<string | null> => {
+    const { data, error: shiftError } = await api.pos.getActiveShift({ p_branch_id: branchId });
+    if (shiftError) throw new Error(shiftError.message || 'SHIFT_READ_FAILED');
+    const state = data as { open?: boolean; shift?: { id?: string } | null } | null;
+    return state?.open ? state.shift?.id || null : null;
+  };
+
+  // Opening or closing a shift does not necessarily change the selected branch.
+  // Recheck after returning to the tab, as well as before an edit or a posting.
+  useEffect(() => {
+    if (!effectiveBranchId) return;
+    let cancelled = false;
+    const refreshShift = () => {
+      if (document.visibilityState === 'hidden') return;
+      void readActiveShift(effectiveBranchId)
+        .then((id) => { if (!cancelled) setActiveShiftId(id); })
+        .catch(() => { if (!cancelled) setActiveShiftId(null); });
+    };
+    window.addEventListener('focus', refreshShift);
+    document.addEventListener('visibilitychange', refreshShift);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', refreshShift);
+      document.removeEventListener('visibilitychange', refreshShift);
+    };
+  }, [effectiveBranchId]);
+
+  const openEdit = async (expense: Expense) => {
+    if (!can('expenses.edit') || expense.status === 'voided' || expense.branch_id !== effectiveBranchId) return;
+    try {
+      const freshShiftId = await readActiveShift(effectiveBranchId);
+      setActiveShiftId(freshShiftId);
+      if (!freshShiftId || expense.shift_id !== freshShiftId) {
+        show(isAr ? 'لا يمكن تعديل مصروف من وردية غير مفتوحة' : 'This expense does not belong to the open shift', 'error');
+        return;
+      }
+    } catch (readError) {
+      setActiveShiftId(null);
+      show(readError instanceof Error ? readError.message : t('error'), 'error');
+      return;
+    }
     setEditingExpense(expense);
     setEditReason('');
     setForm({
@@ -172,7 +212,21 @@ export function ExpensesPage() {
 
   const save = async () => {
     if (!form.amount || form.amount <= 0) { show(t('required') + ': ' + t('amount'), 'error'); return; }
-    if (!effectiveBranchId || !activeShiftId) { show(isAr ? 'لا توجد وردية مفتوحة' : 'No open shift is available', 'error'); return; }
+    if (!effectiveBranchId) { show(isAr ? 'اختر الفرع' : 'Select branch', 'error'); return; }
+    let currentShiftId: string | null;
+    try {
+      currentShiftId = await readActiveShift(effectiveBranchId);
+      setActiveShiftId(currentShiftId);
+    } catch (readError) {
+      setActiveShiftId(null);
+      show(readError instanceof Error ? readError.message : t('error'), 'error');
+      return;
+    }
+    if (!currentShiftId) { show(isAr ? 'لا توجد وردية مفتوحة' : 'No open shift is available', 'error'); return; }
+    if (editingExpense && (editingExpense.branch_id !== effectiveBranchId || editingExpense.shift_id !== currentShiftId)) {
+      show(isAr ? 'لا يمكن تعديل مصروف من فرع أو وردية أخرى' : 'Cannot edit an expense from another branch or shift', 'error');
+      return;
+    }
     if (!form.category) { show(isAr ? 'اختر نوع المصروف' : 'Select an expense category', 'error'); return; }
     if (!form.expense_account_id || !form.treasury_account_id) {
       show(isAr ? 'المصروف غير مربوط بتوجيه محاسبي كامل' : 'Expense accounting routing is incomplete', 'error');
@@ -209,7 +263,7 @@ export function ExpensesPage() {
       const { data, error: saveError } = await api.accounting.postShiftExpense({
         p_idempotency_key: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
         p_branch_id: effectiveBranchId,
-        p_shift_id: activeShiftId,
+        p_shift_id: currentShiftId,
         p_category: form.category,
         p_description: form.description || null,
         p_amount: form.amount,
@@ -338,8 +392,8 @@ export function ExpensesPage() {
     { key: 'void_reason', header: isAr ? 'سبب العكس/الإلغاء' : 'Void/reversal reason', render: (e) => e.void_reason || '-' },
     { key: 'actions', header: t('actions'), render: (e) => (
       <div className="flex gap-1">
-        {can('expenses.edit') && e.status !== 'voided' && e.shift_id === activeShiftId && (
-          <button onClick={() => openEdit(e)} className="p-1.5 rounded-md hover:bg-ui-page-alt text-ui-primary" title={isAr ? 'تعديل المصروف' : 'Edit expense'}><Pencil className="w-4 h-4" /></button>
+        {can('expenses.edit') && e.status !== 'voided' && e.branch_id === effectiveBranchId && e.shift_id === activeShiftId && (
+          <button onClick={() => { void openEdit(e); }} className="p-1.5 rounded-md hover:bg-ui-page-alt text-ui-primary" title={isAr ? 'تعديل المصروف' : 'Edit expense'}><Pencil className="w-4 h-4" /></button>
         )}
         {can('expenses.manage') && e.status !== 'voided' && (
           <button onClick={() => setReverseId(e.id)} className="p-1.5 rounded-md hover:bg-ui-danger-soft text-ui-danger" title={isAr ? 'عكس المصروف' : 'Reverse expense'}><RotateCcw className="w-4 h-4" /></button>
