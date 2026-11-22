@@ -1,6 +1,8 @@
 -- Avoid per-row reevaluation of auth.uid() in row security policies.
 -- Keep every original branch, role and permission predicate exactly as-is.
--- Policies are sourced from the production policy definitions on 2026-11-22.
+-- Policies are sourced from production definitions on 2026-11-22.
+-- Do NOT rewrite organization_members policies: their self-reference can trigger
+-- recursive RLS evaluation after wrapping auth.uid(), as caught by CI.
 -- Intentionally do not change app.register_branch or financial restrictive policies.
 
 ALTER POLICY "branch_overrides_select" ON public."branch_feature_overrides" USING (is_super_admin() OR (EXISTS ( SELECT 1
@@ -19,13 +21,8 @@ ALTER POLICY "auth_update_order_items" ON public."order_items" USING (EXISTS ( S
    FROM orders o
   WHERE ((o.id = order_items.order_id) AND user_may_access_branch(o.branch_id) AND ((o.cashier_id = (select auth.uid())) OR can_manage_other_pos_orders()))));
 
-ALTER POLICY "organization_members_insert" ON public."organization_members" WITH CHECK (is_pos_admin() OR (can_permission('users.branches.manage'::text) AND (EXISTS ( SELECT 1
-   FROM organization_members m
-  WHERE ((m.organization_id = organization_members.organization_id) AND (m.user_id = (select auth.uid())) AND (m.is_active = true))))));
 
-ALTER POLICY "organization_members_select" ON public."organization_members" USING ((user_id = (select auth.uid())) OR is_pos_admin());
 
-ALTER POLICY "organization_members_update" ON public."organization_members" USING ((user_id = (select auth.uid())) OR is_pos_admin()) WITH CHECK ((user_id = (select auth.uid())) OR is_pos_admin());
 
 ALTER POLICY "organizations_select" ON public."organizations" USING (is_pos_admin() OR (EXISTS ( SELECT 1
    FROM organization_members om
