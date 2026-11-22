@@ -185,7 +185,11 @@ export function PrinterSettingsPanel({ branchId, branchName }: PrinterSettingsPa
     queueReadRef.current = queue;
     if (!canManagePrinters || !selectedBranchId) return () => { queue.cancel(); };
     void loadPrintQueue();
-    const timer = window.setInterval(() => void loadPrintQueue(), 5000);
+    // This is an operator-facing queue summary, not the print transport.
+    // Reduce read-only polling and avoid even scheduling reads in background tabs.
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void loadPrintQueue();
+    }, 15_000);
     const onVisible = () => { if (!document.hidden) void loadPrintQueue(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
