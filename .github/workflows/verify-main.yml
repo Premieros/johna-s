@@ -38,6 +38,13 @@ jobs:
           fetch-depth: 0
       - name: Verify mandatory active work log
         run: node scripts/ci/verify-worklog.mjs
+      - name: Validate Premier safety declarations (fast, PR only)
+        if: github.event_name == 'pull_request'
+        env:
+          CI_SCOPE_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          node --test scripts/ci/premier-safety-gate.test.mjs
+          node scripts/ci/premier-safety-gate.mjs
       - name: Classify verified source scope
         id: plan
         env:
