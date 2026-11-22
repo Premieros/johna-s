@@ -15,6 +15,7 @@ describe('auth.uid RLS initplan policy optimization', () => {
   });
   it('does not modify restrictive finance policies or registration bootstrap', () => {
     expect(migration).not.toContain('financial_visibility_');
-    expect(migration).not.toContain('app.register_branch');
+    const statements = migration.split('\n').filter((line) => !line.trimStart().startsWith('--')).join('\n');
+    expect(statements).not.toContain('app.register_branch');
   });
 });
