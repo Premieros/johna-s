@@ -43,6 +43,20 @@ describe.skipIf(!local)('verified public organization onboarding — owned local
   expect((await runAs(db,owner,"UPDATE public.organization_members SET membership_role='admin' WHERE user_id=$1",[owner])).error).toBe('MEMBERSHIP_BINDING_IMMUTABLE');
   expect((await runAs(db,owner,"INSERT INTO public.organization_members(organization_id,user_id,membership_role) VALUES($1,$2,'member')",[organization,ids.users.cashier])).error).toBe('MEMBERSHIP_BRANCH_MISMATCH');
  });
+ it('prevents self reactivation, deactivation and rewriting membership audit identity',async()=>{
+  expect((await runAs(db,owner,'UPDATE public.organization_members SET is_active=false WHERE user_id=$1',[owner])).error).toBe('MEMBERSHIP_BINDING_IMMUTABLE');
+  expect((await runAs(db,owner,"UPDATE public.organization_members SET created_at=now()-interval '1 day' WHERE user_id=$1",[owner])).error).toBe('MEMBERSHIP_BINDING_IMMUTABLE');
+  expect((await runAs(db,owner,'UPDATE public.organization_members SET id=$1 WHERE user_id=$2',[randomUUID(),owner])).error).toBe('MEMBERSHIP_BINDING_IMMUTABLE');
+  await db.query('SAVEPOINT test_membership_reactivation');
+  try{
+   await db.query('UPDATE public.organization_members SET is_active=false WHERE user_id=$1',[owner]);
+   const denied=await runAs(db,owner,'UPDATE public.organization_members SET is_active=true WHERE user_id=$1',[owner]);
+   expect(denied.error).toBe('MEMBERSHIP_BINDING_IMMUTABLE');
+   const admin=await runAs(db,ids.users.super_admin,'UPDATE public.organization_members SET is_active=true WHERE user_id=$1 RETURNING is_active',[owner]);
+   expect(admin.error).toBeUndefined();
+   expect(admin.rows[0]).toEqual({is_active:true});
+  }finally{await db.query('ROLLBACK TO SAVEPOINT test_membership_reactivation');}
+ });
  it('rejects unconfirmed and anonymous identities, preserving privileged legacy RPC closure',async()=>{
   const unconfirmed=await identity(false);const before=await counts();expect((await signup(unconfirmed)).error).toBe('EMAIL_CONFIRMATION_REQUIRED');expect(await counts()).toEqual(before);
   expect((await db.query("SELECT has_function_privilege('anon','public.complete_own_organization_signup(text,text,text)','execute') bootstrap,has_function_privilege('anon','public.register_tenant(text,text,text,text,text,text,text,text)','execute') legacy")).rows[0]).toEqual({bootstrap:false,legacy:false});
