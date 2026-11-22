@@ -1,34 +1,13 @@
 -- Make authorized branches equivalent while preserving existing permissions, restrictive financial history policies and document segregation.
 -- Backports the verified production RLS/function corrections.
+-- Do not widen manufactured-recipe/component policies here: their secondary-branch
+-- costing path already requires reports.costing and an explicit branch grant.
+-- This protects cashiers from reading manufacturing recipes just because they can use a branch.
 ALTER POLICY "daily_closes_select" ON public."daily_closes" USING ((is_pos_admin() OR user_may_access_branch(branch_id)));
 
 ALTER POLICY "daily_closes_write" ON public."daily_closes" WITH CHECK ((is_pos_admin() OR (can_permission('shifts.day_close'::text) AND user_may_access_branch(branch_id))));
 
 ALTER POLICY "auth_select_inventory" ON public."inventory" USING ((is_pos_admin() OR user_may_access_branch(branch_id)));
-
-ALTER POLICY "iub_branch_read" ON public."inventory_unit_batches" USING (user_may_access_branch(branch_id));
-
-ALTER POLICY "iue_branch_read" ON public."inventory_unit_entries" USING (user_may_access_branch(branch_id));
-
-ALTER POLICY "iup_branch_read" ON public."inventory_unit_productions" USING (user_may_access_branch(branch_id));
-
-ALTER POLICY "iuru_branch_read" ON public."inventory_unit_recipe_units" USING ((unit_id IN ( SELECT iu.id
-   FROM inventory_units iu
-  WHERE (user_may_access_branch(iu.branch_id) OR (iu.branch_id IS NULL)))));
-
-ALTER POLICY "iur_branch_read" ON public."inventory_unit_recipes" USING ((unit_id IN ( SELECT inventory_units.id
-   FROM inventory_units
-  WHERE (user_may_access_branch(inventory_units.branch_id) OR (inventory_units.branch_id IS NULL)))));
-
-ALTER POLICY "inventory_units_branch_read" ON public."inventory_units" USING (((branch_id IS NULL) OR user_may_access_branch(branch_id)));
-
-ALTER POLICY "inventory_units_registration_insert" ON public."inventory_units" WITH CHECK ((((COALESCE(current_setting('app.register_branch'::text, true), ''::text) = 'on'::text) AND (branch_id IS NOT NULL) AND (EXISTS ( SELECT 1
-   FROM branches b
-  WHERE (b.id = inventory_units.branch_id)))) OR user_may_access_branch(branch_id) OR is_pos_admin()));
-
-ALTER POLICY "pul_branch_read" ON public."product_unit_links" USING ((product_id IN ( SELECT products.id
-   FROM products
-  WHERE (user_may_access_branch(products.branch_id) OR (products.branch_id IS NULL)))));
 
 ALTER POLICY "auth_delete_purchase_items" ON public."purchase_items" USING ((is_pos_admin() OR (EXISTS ( SELECT 1
    FROM purchases p
