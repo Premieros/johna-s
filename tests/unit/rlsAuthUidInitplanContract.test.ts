@@ -9,7 +9,8 @@ describe('auth.uid RLS initplan policy optimization', () => {
     expect(migration).toContain('get_branch_id()');
   });
   it('wraps every auth.uid invocation in a scalar SELECT', () => {
-    expect(migration).not.toMatch(/(?<!select )auth\.uid\(\)/i);
+    const statements = migration.split('\n').filter((line) => !line.trimStart().startsWith('--')).join('\n');
+    expect(statements).not.toMatch(/(?<!select )auth\.uid\(\)/i);
     expect(migration).toContain('(select auth.uid())');
   });
   it('does not modify restrictive finance policies or registration bootstrap', () => {
