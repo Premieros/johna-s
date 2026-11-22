@@ -109,29 +109,39 @@ ALTER POLICY "supplier_quotation_items_write" ON public."supplier_quotation_item
 ALTER POLICY "supplier_quotations_select" ON public."supplier_quotations" USING ((is_pos_admin() OR user_may_access_branch(branch_id)));
 
 ALTER POLICY "supplier_quotations_write" ON public."supplier_quotations" USING ((is_pos_admin() OR (can_permission('purchases.manage'::text) AND user_may_access_branch(branch_id)))) WITH CHECK ((is_pos_admin() OR (can_permission('purchases.manage'::text) AND user_may_access_branch(branch_id))));
--- Reconcile the legacy purchase-return guard with the existing authorized-branch model.
+-- The purchase-return branch check has multiple historical source forms.
+-- Preserve its complete function definition and reject any unexpected variant.
 DO $guard$
-DECLARE old_guard text := $old$
-SELECT branch_id INTO v_user_branch FROM users WHERE id = auth.uid();
-    IF NOT is_pos_admin() AND v_user_branch IS NOT NULL
-       AND v_purchase.branch_id IS NOT NULL AND v_user_branch <> v_purchase.branch_id THEN
-      RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
-    END IF;$old$;
-new_guard text := $new$
-IF v_purchase.branch_id IS NOT NULL
+DECLARE
+  definition text;
+  old_start integer;
+  old_end integer;
+  old_comparison integer;
+  replacement text := $new$
+    IF v_purchase.branch_id IS NOT NULL
        AND NOT public.user_may_access_branch(v_purchase.branch_id) THEN
       RETURN jsonb_build_object('success', false, 'error', 'BRANCH_MISMATCH');
     END IF;$new$;
-definition text;
 BEGIN
- SELECT pg_get_functiondef(p.oid) INTO definition FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
- WHERE n.nspname='public' AND p.proname='process_purchase_return'
- AND pg_get_function_identity_arguments(p.oid)='p_purchase_id uuid, p_items jsonb, p_reason text';
- IF definition IS NULL THEN RAISE EXCEPTION 'process_purchase_return function missing'; END IF;
- IF strpos(definition, old_guard)>0 THEN
-  EXECUTE replace(definition, old_guard, new_guard);
- ELSIF strpos(definition,new_guard)=0 THEN
-  RAISE EXCEPTION 'purchase return guard is unknown';
- END IF;
-END;
+  SELECT pg_get_functiondef(p.oid) INTO STRICT definition
+  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+  WHERE n.nspname='public' AND p.proname='process_purchase_return'
+    AND pg_get_function_identity_arguments(p.oid)='p_purchase_id uuid, p_items jsonb, p_reason text';
+  IF strpos(definition, 'user_may_access_branch(v_purchase.branch_id)')>0 THEN
+    RETURN; -- already multi-branch authorized
+  END IF;
+  old_comparison := strpos(definition, 'v_user_branch <> v_purchase.branch_id');
+  IF old_comparison=0 THEN
+    RAISE EXCEPTION 'purchase return branch guard is unknown; refusing to change permissions';
+  END IF;
+  old_start := strpos(definition, 'SELECT branch_id INTO v_user_branch');
+  IF old_start=0 OR old_start>old_comparison THEN
+    RAISE EXCEPTION 'purchase return branch read guard is unknown';
+  END IF;
+  old_end := strpos(substring(definition FROM old_comparison), 'END IF;')+old_comparison+length('END IF;')-1;
+  IF old_end<=old_comparison THEN
+    RAISE EXCEPTION 'purchase return guard terminator not found';
+  END IF;
+  EXECUTE substring(definition FROM 1 FOR old_start-1) || replacement || substring(definition FROM old_end+1);
+END
 $guard$;
