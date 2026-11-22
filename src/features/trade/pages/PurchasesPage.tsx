@@ -44,6 +44,10 @@ interface PurchaseFormItem {
 
 const EMPTY_LINE: PurchaseFormItem = { line_type: 'product', product_id: '', raw_material_id: '', unit_name: 'piece', quantity: 1, unit_cost: 0 };
 
+// Corrected invoices retain their previous versions for audit; they are not active invoices.
+const isCorrectionRevision = (purchase: Purchase): boolean =>
+  purchase.status === 'returned' && /-REV-[a-f0-9]{8}$/i.test(purchase.invoice_number);
+
 export function PurchasesPage() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
@@ -75,6 +79,7 @@ export function PurchasesPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [rawUnits, setRawUnits] = useState<PurchaseRawUnit[]>([]);
   const [search, setSearch] = useState('');
+  const [showCorrectionRevisions, setShowCorrectionRevisions] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [viewModal, setViewModal] = useState<Purchase | null>(null);
@@ -113,7 +118,10 @@ export function PurchasesPage() {
     }
   }, [location.state]);
 
-  const filtered = items.filter((p) => !search || p.invoice_number.toLowerCase().includes(search.toLowerCase()) || (p as Purchase & { supplier?: Supplier }).supplier?.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = items.filter((p) =>
+    (showCorrectionRevisions || !isCorrectionRevision(p)) &&
+    (!search || p.invoice_number.toLowerCase().includes(search.toLowerCase()) || (p as Purchase & { supplier?: Supplier }).supplier?.name.toLowerCase().includes(search.toLowerCase()))
+  );
   const formWarehouses = useMemo(
     () => warehouses.filter((warehouse) => !form.branch_id || warehouse.branch_id === form.branch_id),
     [warehouses, form.branch_id],
@@ -411,7 +419,7 @@ export function PurchasesPage() {
 
   const handleExport = async () => {
     const all = await fetchAllPurchases();
-    exportToExcel(all.map((p) => ({
+    exportToExcel(all.filter((p) => showCorrectionRevisions || !isCorrectionRevision(p)).map((p) => ({
       Invoice: p.invoice_number,
       Date: formatDate(p.created_at, lang),
       Supplier: (p as Purchase & { supplier?: Supplier }).supplier?.name || '',
@@ -621,6 +629,10 @@ export function PurchasesPage() {
 
       <DesignPanel testId="purchases-search-panel" className="ui-accent-purchase">
         <DesignSearch value={search} onChange={setSearch} label={t('search')} placeholder={t('search')} testId="purchases-search" />
+        <label className="mt-2 flex items-center gap-2 text-sm text-ui-subtle">
+          <input type="checkbox" checked={showCorrectionRevisions} onChange={(event) => setShowCorrectionRevisions(event.target.checked)} />
+          {lang === 'ar' ? 'إظهار نسخ الفواتير القديمة بعد التعديل (REV)' : 'Show previous corrected invoice versions (REV)'}
+        </label>
       </DesignPanel>
       <DesignPanel testId="purchases-table-panel" className="ui-accent-purchase">
         <DataTable columns={columns} data={filtered} loading={loading} error={error} emptyMessage={t('noData')} onRowClick={viewPurchase} />
