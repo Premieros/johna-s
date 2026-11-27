@@ -191,6 +191,7 @@ export function SalesPage() {
     const payments = await loadReceiptPayments(sale);
     return {
       invoice: sale.invoice_number,
+      saleId: sale.id,
       branchName: branchNameForSale(sale),
       items: (sale.sale_items || []).map((item) => ({
         name: item.product?.name || item.unit_name || '-',
@@ -338,6 +339,7 @@ export function SalesPage() {
     const totalRefund = refundTotal();
     const receipt: ReceiptData = {
       invoice: refundSale.invoice_number,
+      saleId: refundSale.id,
       branchName: branchNameForSale(refundSale),
       items: selected.map(({ item, qty }) => ({
         name: item.product?.name || item.unit_name || '-',
