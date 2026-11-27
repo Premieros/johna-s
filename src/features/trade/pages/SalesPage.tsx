@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { APP_ROUTES } from '@/core/navigation/routes';
 import { Trash2, FileText, Edit2, RotateCcw, Eye, Printer } from 'lucide-react';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -58,12 +59,33 @@ export function SalesPage() {
   const { show } = useToast();
   const branchFilter = useBranchFilter();
   const can = useCan();
+  const params = new URLSearchParams(window.location.search);
+  const requestedCustomer = params.get('customer') || '';
+  const scopedCustomer = /^[0-9a-f-]{36}$/i.test(requestedCustomer) ? requestedCustomer : '';
+  const requestedInvoice = params.get('invoice') || '';
+  const scopedDay = params.get('day') || '';
+  const from = params.get('from') || '';
+  const to = params.get('to') || '';
+  const validDay = (day: string) => /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(Date.parse(day)) && new Date(day).toISOString().slice(0, 10) === day;
+  const validPeriod = (!from || validDay(from)) && (!to || validDay(to)) && (!from || !to || from <= to);
+  const dayIsValid = validDay(scopedDay);
+  const nextDay = (day: string) => new Date(Date.parse(day) + 86400000).toISOString().slice(0, 10);
+  const rangeFrom = dayIsValid ? scopedDay : from;
+  const rangeTo = dayIsValid ? scopedDay : to;
+  const rangeFilters = [
+    ...(rangeFrom && validDay(rangeFrom) ? [`created_at.gte.${rangeFrom}T00:00:00Z`] : []),
+    ...(rangeTo && validDay(rangeTo) ? [`created_at.lt.${nextDay(rangeTo)}T00:00:00Z`] : []),
+  ];
+
+
   const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadSales } = usePaginatedRows<SaleRow>({
     table: 'sales',
     select: 'id, invoice_number, source_order_id, table_id, table:dining_tables(id,branch_id,name), subtotal, discount_amount, tax_amount, total, paid_amount, refunded_amount, payment_method, status, notes, created_at, customer_id, branch_id, order_type, guest_count, is_archived, customer:customers(name), source_order:orders!sales_source_order_id_fkey(order_number), sale_items(id, product_id, unit_name, quantity, unit_price, discount_amount, refunded_quantity, refunded_amount, total, product:products(name))',
     order: { column: 'created_at', ascending: false },
     branch_id: branchFilter,
-    filters: [{ column: 'is_archived', value: false }],
+    filters: [{ column: 'is_archived', value: false }, ...(scopedCustomer ? [{ column: 'customer_id', value: scopedCustomer }] : []), ...(scopedCustomer && requestedInvoice ? [{ column: 'invoice_number', value: requestedInvoice }] : [])],
+    or: scopedCustomer && !requestedInvoice && rangeFilters.length ? (rangeFilters.length === 1 ? rangeFilters[0] : `and(${rangeFilters.join(',')})`) : undefined,
+    enabled: !requestedCustomer || (!!scopedCustomer && !!branchFilter && validPeriod && (!scopedDay || dayIsValid)),
     pageSize: 100,
   });
   const [search, setSearch] = useState('');
@@ -176,6 +198,7 @@ export function SalesPage() {
     const payments = await loadReceiptPayments(sale);
     return {
       invoice: sale.invoice_number,
+      saleId: sale.id,
       branchName: branchNameForSale(sale),
       items: (sale.sale_items || []).map((item) => ({
         name: item.product?.name || item.unit_name || '-',
@@ -323,6 +346,7 @@ export function SalesPage() {
     const totalRefund = refundTotal();
     const receipt: ReceiptData = {
       invoice: refundSale.invoice_number,
+      saleId: refundSale.id,
       branchName: branchNameForSale(refundSale),
       items: selected.map(({ item, qty }) => ({
         name: item.product?.name || item.unit_name || '-',
@@ -635,6 +659,11 @@ export function SalesPage() {
         </>
       } />
 
+      {requestedCustomer && <div className="flex flex-wrap items-center gap-2">
+        <span>{isAr ? 'فواتير العميل' : 'Customer invoices'} {scopedDay || [from, to].filter(Boolean).join(' — ')} {requestedInvoice}</span>
+        <a className="underline" href={APP_ROUTES.financialReports + '?' + new URLSearchParams({ view: 'party_statement', customer: scopedCustomer, from: from || '2000-01-01', ...(to ? { to } : {}) }).toString()}>{isAr ? 'العودة لكشف الحساب' : 'Back to statement'}</a>
+        <a className="underline" href={APP_ROUTES.sales}>{isAr ? 'جميع المبيعات' : 'All sales'}</a>
+      </div>}
       <DesignPanel testId="sales-search-panel">
         <DesignSearch value={search} onChange={setSearch} label={t('search')}
           placeholder={isAr ? 'بحث برقم الفاتورة أو رقم الطلب أو اسم العميل...' : 'Search by invoice number, order number or customer...'} testId="sales-search" />

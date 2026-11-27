@@ -5,6 +5,8 @@ import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { useAuth } from '@/context/AuthContext';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { APP_ROUTES } from '@/core/navigation/routes';
+import { useCan } from '@/lib/permissions';
 import { Scale, BookOpen, TrendingUp, PieChart, Clock, Download, BadgeCheck, BadgeAlert, Landmark, ArrowLeftRight, Receipt, WalletCards, PackageSearch } from 'lucide-react';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -41,6 +43,11 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
   const accountingCreditLabel = isAr ? 'دائن' : 'Credit';
   const [searchParams] = useSearchParams();
   const history = useHistoryAccess();
+  const can = useCan();
+  const requestedCustomer = searchParams.get('customer') || '';
+  const [statementMode, setStatementMode] = useState<'movements' | 'daily'>('movements');
+  const statementPrintRef = useRef<HTMLDivElement>(null);
+  const [statementPrintError, setStatementPrintError] = useState('');
 
   const requestedView = searchParams.get('view');
   const validViews: View[] = ['trial_balance', 'ledger', 'treasury_statement', 'inventory_movement', 'income', 'balance_sheet', 'ar_aging', 'ap_aging', 'aging_summary', 'cash_flow', 'party_statement'];
@@ -146,7 +153,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         if (partySide === 'ar') {
           const customers = rows as Customer[];
           setCustomers(customers);
-          setPartyId((prev) => customers.some((x) => x.id === prev) ? prev : '');
+          setPartyId((prev) => customers.some((x) => x.id === prev) ? prev : customers.some((x) => x.id === requestedCustomer) ? requestedCustomer : '');
         } else {
           const suppliers = rows as Supplier[];
           setSuppliers(suppliers);
@@ -157,7 +164,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
     }
 
     return () => { cancelled = true; };
-  }, [effectiveBranchFilter, view, partySide, inventoryItemType, selectorContextKey, selectorRetry]);
+  }, [effectiveBranchFilter, view, partySide, inventoryItemType, selectorContextKey, selectorRetry, requestedCustomer]);
 
   const load = useCallback(async () => {
     const generation = ++readGeneration.current;
@@ -442,17 +449,17 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         sourceNote: ar('ملخص حركة حسابات الخزائن والبنوك من قيود الأستاذ فقط.', 'Summary of treasury and bank movements from ledger postings only.'),
       });
     } else if (view === 'party_statement' && partyStmt) {
-      const rows = partyStmt.rows.map((r) => ({
+      const rows = displayedStatementRows.map((r) => ({
         [ar('التاريخ', 'Date')]: r.entry_date,
-        [ar('رقم القيد', 'Entry')]: r.entry_number,
-        [ar('البيان', 'Description')]: r.description || '',
-        [ar('المرجع', 'Reference')]: r.reference_number || '',
+        [ar('رقم القيد', 'Entry')]: statementMode === 'daily' ? '' : r.entry_number,
+        [ar('البيان', 'Description')]: statementMode === 'daily' ? (isAr ? 'إجمالي اليوم' : 'Daily total') : r.description || '',
+        [ar('المرجع', 'Reference')]: statementMode === 'daily' ? '' : r.reference_number || '',
         [ar('مدين', 'Debit')]: r.debit,
         [ar('دائن', 'Credit')]: r.credit,
         [ar('الرصيد', 'Balance')]: r.balance,
       }));
       void exportToExcelAdvanced({
-        ...base, data: rows, filename: `party_statement_${to}`, sheetName: currentTitle,
+        ...base, subtitle: `${partyList.find(p => p.id === partyId)?.name || ''} · ${from} — ${to}`, data: rows, filename: `party_statement_${to}`, sheetName: currentTitle,
         totalRow: { [ar('مدين','Debit')]:sum(partyStmt.rows,row=>row.debit), [ar('دائن','Credit')]:sum(partyStmt.rows,row=>row.credit), [ar('الرصيد','Balance')]:partyStmt.rows.length ? partyStmt.rows[partyStmt.rows.length-1].balance : partyStmt.opening },
         currencyColumns: [ar('مدين', 'Debit'), ar('دائن', 'Credit'), ar('الرصيد', 'Balance')],
         columns: [ar('التاريخ', 'Date'), ar('رقم القيد', 'Entry'), ar('البيان', 'Description'), ar('المرجع', 'Reference'), ar('مدين', 'Debit'), ar('دائن', 'Credit'), ar('الرصيد', 'Balance')],
@@ -485,6 +492,39 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
   const sum = <T,>(rows: T[], value: (row: T) => number) => rows.every(row=>Number.isFinite(value(row))) ? rows.reduce((total,row)=>total+value(row),0) : null;
 
   const partyList = partySide === 'ar' ? customers : suppliers;
+  const invoiceHref = (extra: Record<string, string> = {}) => APP_ROUTES.sales + '?' + new URLSearchParams({ customer: partyId, from, to, ...extra }).toString();
+  const statementRows = partyStmt?.rows || [];
+  const dailyRows = Array.from(statementRows.reduce((days, row) => {
+    const previous = days.get(row.entry_date);
+    days.set(row.entry_date, { ...row, debit: Math.round((Number(previous?.debit || 0) + Number(row.debit)) * 100) / 100, credit: Math.round((Number(previous?.credit || 0) + Number(row.credit)) * 100) / 100 });
+    return days;
+  }, new Map<string, (typeof statementRows)[number]>()).values());
+  const displayedStatementRows = statementMode === 'daily' ? dailyRows : statementRows;
+  const saleReferencesForDay = (day: string) => Array.from(new Set(statementRows.filter(row => row.entry_date === day && row.reference_type === 'sale' && row.reference_number).map(row => row.reference_number!)));
+  const printPartyStatement = () => {
+    if (!statementPrintRef.current || !partyStmt || !partyId || loadedReportScope !== reportScope || loading || reportError) return;
+    setStatementPrintError('');
+    const popup = window.open('', '_blank', 'width=1000,height=750');
+    if (!popup) { setStatementPrintError(isAr ? 'تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة وحاول مجددًا.' : 'Could not open print window. Allow pop-ups and try again.'); return; }
+    popup.opener = null;
+    const doc = popup.document;
+    doc.documentElement.dir = isAr ? 'rtl' : 'ltr';
+    doc.title = isAr ? 'كشف حساب' : 'Account statement';
+    const style = doc.createElement('style');
+    style.textContent = '@page{size:A4;margin:12mm}body{font:12px Arial,sans-serif;color:#111}table{width:100%;border-collapse:collapse}th,td{border:1px solid #bbb;padding:6px;text-align:start}thead{display:table-header-group}tr{break-inside:avoid}a{color:inherit;text-decoration:none}button,select{display:none}';
+    doc.head.appendChild(style);
+    const header = doc.createElement('h1');
+    header.textContent = doc.title + ' — ' + (partyList.find(p => p.id === partyId)?.name || '') + ' — ' + from + ' / ' + to;
+    doc.body.appendChild(header);
+    if (!history.unlimited) {
+      const notice = doc.createElement('p');
+      notice.textContent = isAr ? 'البيانات مقيدة بصلاحية التاريخ' : 'History access is restricted';
+      doc.body.appendChild(notice);
+    }
+    doc.body.appendChild(doc.importNode(statementPrintRef.current, true));
+    popup.focus();
+    popup.print();
+  };
   const movementLabel = (type: string | null | undefined) => {
     const labels: Record<string, [string, string]> = {
       sale: ['مبيعات', 'Sale'],
@@ -936,6 +976,14 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
         <Card className="p-4">
           {partyStmt && (
             <>
+              <div className="flex flex-wrap gap-2 mb-4">
+                <Button variant="outline" onClick={() => setStatementMode('movements')}>{isAr ? 'الحركات المالية' : 'Movements'}</Button>
+                <Button variant="outline" onClick={() => setStatementMode('daily')}>{isAr ? 'إجمالي اليوم' : 'Daily totals'}</Button>
+                <Button variant="outline" disabled={!partyId} onClick={printPartyStatement}>{isAr ? 'طباعة A4' : 'Print A4'}</Button>
+                {partySide === 'ar' && partyId && can('sales.view') && <a className="underline self-center" href={invoiceHref()}>{isAr ? 'فواتير الفترة' : 'Period invoices'}</a>}
+              </div>
+              {statementPrintError && <p role="alert" className="mb-3 text-ui-danger">{statementPrintError}</p>}
+              <div ref={statementPrintRef}>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 {summaryCard(t('openingBalance'), partyStmt.opening)}
                 {summaryCard(t('runningBalance'), partyStmt.rows.length ? partyStmt.rows[partyStmt.rows.length - 1].balance : partyStmt.opening)}
@@ -958,11 +1006,14 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                   </thead>
                   <tbody>
                     {partyStmt.rows.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-ui-subtle">{t('noData')}</td></tr>}
-                    {partyStmt.rows.map((r) => (
+                    {displayedStatementRows.map((r) => (
                       <tr key={r.line_id} className="border-b border-ui-border hover:bg-ui-page-alt/50">
                         <td className="px-4 py-3 text-ui-muted">{formatDate(r.entry_date, lang)}</td>
-                        <td className="px-4 py-3 font-mono text-ui-text">{r.entry_number}</td>
-                        <td className="px-4 py-3 text-ui-text">{r.description || '-'}</td>
+                        <td className="px-4 py-3 font-mono text-ui-text">{statementMode === 'daily' ? '—' : r.entry_number}</td>
+                        <td className="px-4 py-3 text-ui-text">{statementMode === 'daily' ? (isAr ? 'إجمالي اليوم' : 'Daily total') : r.description || '-'}
+                          {partySide === 'ar' && partyId && can('sales.view') && (statementMode === 'daily'
+                            ? <><a className="ms-2 underline" href={invoiceHref({ day: r.entry_date })}>{isAr ? 'فواتير بتاريخ اليوم (UTC)' : 'Day invoices'}</a>{saleReferencesForDay(r.entry_date).map(reference => <a key={reference} className="ms-2 underline" href={invoiceHref({ invoice: reference })}>{reference}</a>)}</>
+                            : r.reference_type === 'sale' && r.reference_number && <a className="ms-2 underline" href={invoiceHref({ invoice: r.reference_number })}>{isAr ? 'عرض الفاتورة' : 'View invoice'}</a>)}</td>
                         <td className="px-4 py-3 text-end text-ui-text">{r.debit > 0 ? formatCurrency(r.debit, currency, lang) : '-'}</td>
                         <td className="px-4 py-3 text-end text-ui-text">{r.credit > 0 ? formatCurrency(r.credit, currency, lang) : '-'}</td>
                         <td className="px-4 py-3 text-end font-semibold text-ui-text">{formatCurrency(r.balance, currency, lang)}</td>
@@ -971,6 +1022,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                   </tbody>
               {footer([t('total'),'','',sum(partyStmt.rows,row=>row.debit),sum(partyStmt.rows,row=>row.credit),partyStmt.rows.length ? partyStmt.rows[partyStmt.rows.length-1].balance : partyStmt.opening])}
                 </table>
+              </div>
               </div>
             </>
           )}

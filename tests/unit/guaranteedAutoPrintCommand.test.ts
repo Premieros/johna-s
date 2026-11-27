@@ -15,18 +15,27 @@ describe('guaranteed auto print command contract', () => {
     expect(printing).toContain('enqueueCloudReceiptPrint({');
   });
 
-  it('awaits the auto receipt command after both direct sale and order settlement', () => {
-    expect(base).toContain('await enqueueAutomaticReceiptPrint({');
-    expect(base).toContain('saleId,');
-    expect(wrapper).toContain('await enqueueAutomaticReceiptPrint({');
-    expect(wrapper).toContain("const saleId = extended.sale_id || '';");
+  it('does not enqueue or print receipts during either successful checkout path', () => {
+    const direct = base.slice(base.indexOf('const completeSale = useCallback'), base.indexOf('const printReceipt = useCallback'));
+    const settlement = wrapper.slice(wrapper.indexOf('const completeSale = useCallback'), wrapper.indexOf('const printPaidReceiptBusy'));
+    for (const checkout of [direct, settlement]) {
+      expect(checkout).not.toContain('enqueueAutomaticReceiptPrint');
+      expect(checkout).not.toContain('openPrintWindow(');
+      expect(checkout).not.toContain('buildReceiptHtml(');
+    }
+    expect(direct).toContain('setLastReceipt(receiptPayload)');
+    expect(settlement).toContain('setSettlementReceipt(receipt)');
   });
 
-  it('does not route auto receipt through the browser print window', () => {
-    const baseAuto = base.slice(base.indexOf("if (effSettings?.receipt_auto_print)"));
-    expect(baseAuto.slice(0, 1200)).not.toContain('openPrintWindow(');
-    const wrapperAuto = wrapper.slice(wrapper.indexOf("if (input.effSettings?.receipt_auto_print)"));
-    expect(wrapperAuto.slice(0, 1200)).not.toContain('openPrintWindow(');
+  it('prints only on explicit action with existing authorization and supports skipping', () => {
+    const paid = wrapper.slice(wrapper.indexOf('const printPaidReceipt ='), wrapper.indexOf('const printReceipt ='));
+    const workspace = fs.readFileSync('src/features/pos/pages/PosWorkspacePage.tsx', 'utf8');
+    expect(paid).toContain('!perms.canPrint');
+    expect(paid).toContain('settlementReceiptSaleId ? settlementReceipt : base.receiptSaleId ? base.lastReceipt : null');
+    expect(paid).toContain('await buildReceiptHtml(receipt');
+    expect(paid).toContain('openPrintWindow(html');
+    expect(workspace).toContain('onClick={() => void pos.printPaidReceipt()}');
+    expect(workspace).toContain('data-testid="pos-receipt-skip" onClick={pos.closeReceipt}');
   });
 
   it('queues one deterministic Z command per closed shift', () => {
