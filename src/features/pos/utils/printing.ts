@@ -16,6 +16,7 @@ export const APPROVED_FIXED_THERMAL_WIDTH_MM = 80 as const;
 
 export interface ReceiptData {
   invoice: string;
+  saleId?: string;
   branchName: string;
   items: { name: string; qty: number; price: number; total: number }[];
   subtotal: number;
@@ -80,11 +81,8 @@ async function authorizeReceiptPrint(receipt: ReceiptData): Promise<ReceiptPrint
     throw new ReceiptPrintApprovalError('INVALID_INVOICE', 'Receipt invoice number is required');
   }
 
-  const { data: sale, error: saleError } = await supabase
-    .from('sales')
-    .select('id')
-    .eq('invoice_number', invoice)
-    .maybeSingle();
+  const query = supabase.from('sales').select('id').eq('invoice_number', invoice);
+  const { data: sale, error: saleError } = await (receipt.saleId ? query.eq('id', receipt.saleId) : query).maybeSingle();
 
   if (saleError) throw saleError;
   if (!sale?.id) {
