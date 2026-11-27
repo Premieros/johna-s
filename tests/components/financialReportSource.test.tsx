@@ -1,20 +1,49 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ branch: 'A', income: vi.fn(), party: vi.fn(), excel: vi.fn(), options: vi.fn(), aging: vi.fn() }));
+const mocks = vi.hoisted(() => ({ branch: 'A', income: vi.fn(), party: vi.fn(), excel: vi.fn(), options: vi.fn(), aging: vi.fn(), salesView: true }));
 vi.mock('@/api', () => ({ reporting: { getAgingSummary: mocks.aging, getIncomeStatement: mocks.income, getPartyStatement:mocks.party } }));
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'reader' } }) }));
 vi.mock('@/context/LanguageContext', () => ({ useLanguage: () => ({ lang: 'en', t: (key: string) => key }) }));
 vi.mock('@/context/SettingsContext', () => ({ useSettings: () => ({ effectiveSettings: () => ({ currency: 'EGP' }) }) }));
 vi.mock('@/lib/useBranchFilter', () => ({ useBranchFilter: () => mocks.branch }));
 vi.mock('@/lib/useHistoryAccess', () => ({ useHistoryAccess: () => ({ unlimited: true, clampRange: (from: string, to: string) => ({ from, to }) }) }));
+vi.mock('@/lib/permissions', () => ({ useCan: () => (permission: string) => permission === 'sales.view' && mocks.salesView }));
 vi.mock('@/lib/excel', () => ({ exportToExcelAdvanced: mocks.excel }));
 vi.mock('@/features/accounting/services/financialReportSelectors',()=>({loadPartyStatementOptions:mocks.options}));
 import { FinancialReportsPage } from '@/features/accounting/pages/FinancialReportsPage';
 const data = { revenue: 123, discount: 0, net_revenue: 123, cogs: 0, gross_profit: 123, expenses: 0, net_income: 123 };
 const page = () => <MemoryRouter initialEntries={['/?view=income&from=2026-10-01&to=2026-10-07']}><FinancialReportsPage /></MemoryRouter>;
-beforeEach(() => { mocks.options.mockReset().mockResolvedValue([{id:'customer',name:'Customer'}]); mocks.branch = 'A'; mocks.income.mockReset();mocks.party.mockReset();mocks.excel.mockReset(); });
+beforeEach(() => { mocks.options.mockReset().mockResolvedValue([{id:'customer',name:'Customer'}]); mocks.branch = 'A'; mocks.salesView = true; mocks.income.mockReset();mocks.party.mockReset();mocks.excel.mockReset(); });
 describe('financial canonical report reads', () => {
+  it('preselects a customer, groups daily movements without changing totals, and links scoped invoices', async () => {
+    mocks.party.mockResolvedValue({data:{opening:5,rows:[
+      {line_id:'a',entry_date:'2026-10-01',entry_number:'1',reference_type:'sale',reference_number:'INV-1',description:'Sale',debit:10,credit:0,balance:15},
+      {line_id:'b',entry_date:'2026-10-01',entry_number:'2',reference_type:'payment',description:'Payment',debit:0,credit:4,balance:11},
+      {line_id:'c',entry_date:'2026-10-02',entry_number:'3',description:'Adjustment',debit:2,credit:0,balance:13}
+    ]},error:null});
+    render(<MemoryRouter initialEntries={['/?view=party_statement&customer=customer&from=2026-10-01&to=2026-10-07']}><FinancialReportsPage/></MemoryRouter>);
+    await waitFor(() => expect(screen.getByLabelText('selectParty')).toHaveValue('customer'));
+    fireEvent.click(screen.getByTestId('financial-run-report'));
+    await screen.findByText('Adjustment');
+    expect(screen.getByRole('link',{name:'View invoice'})).toHaveAttribute('href','/sales?customer=customer&invoice=INV-1');
+    fireEvent.click(screen.getByRole('button',{name:'Daily totals'}));
+    expect(screen.getByRole('table').querySelectorAll('tbody tr')).toHaveLength(2);
+    expect(screen.getAllByRole('link',{name:'Day invoices'})[0]).toHaveAttribute('href','/sales?customer=customer&day=2026-10-01');
+    fireEvent.click(screen.getByRole('button',{name:'exportExcel'}));
+    expect(mocks.excel.mock.calls[0][0].data[0]).toMatchObject({Debit:10,Credit:4,Balance:11});
+    expect(mocks.excel.mock.calls[0][0].totalRow).toEqual({Debit:12,Credit:4,Balance:13});
+  });
+  it('does not expose invoice links without sales permission', async () => {
+    mocks.salesView = false;
+    mocks.party.mockResolvedValue({data:{opening:0,rows:[{line_id:'a',entry_date:'2026-10-01',entry_number:'1',reference_type:'sale',reference_number:'INV-1',description:'Sale',debit:10,credit:0,balance:10}]},error:null});
+    render(<MemoryRouter initialEntries={['/?view=party_statement&customer=customer']}><FinancialReportsPage/></MemoryRouter>);
+    await waitFor(() => expect(screen.getByLabelText('selectParty')).toHaveValue('customer'));
+    fireEvent.click(screen.getByTestId('financial-run-report'));
+    await screen.findByText('Sale');
+    expect(screen.queryByRole('link',{name:'View invoice'})).toBeNull();
+    expect(screen.queryByRole('link',{name:'All invoices'})).toBeNull();
+  });
   it('allows a party statement period and aligns debit/credit with the closing balance in table and export',async()=>{
     mocks.party.mockResolvedValue({data:{opening:5,rows:[{line_id:'a',entry_date:'2026-10-01',entry_number:'1',description:'First',debit:10,credit:2,balance:13},{line_id:'b',entry_date:'2026-10-02',entry_number:'2',description:'Second',debit:3,credit:1,balance:15}]},error:null});
     render(<MemoryRouter initialEntries={['/?view=party_statement&from=2026-10-01&to=2026-10-07']}><FinancialReportsPage/></MemoryRouter>);
