@@ -25,16 +25,14 @@ describe('printed document branch identity', () => {
     expect(posOrderBase).toContain('showReceiptPrintError(error)');
 
     const saleSuccess = posOrderBase.indexOf("show(t('saleCompleted'), 'success')");
-    const autoPrint = posOrderBase.indexOf('if (effSettings?.receipt_auto_print)');
-    const returnSuccess = posOrderBase.indexOf('return true;', autoPrint);
+    const returnSuccess = posOrderBase.indexOf('return true;', saleSuccess);
     expect(saleSuccess).toBeGreaterThan(-1);
-    expect(autoPrint).toBeGreaterThan(saleSuccess);
-    expect(returnSuccess).toBeGreaterThan(autoPrint);
+    expect(returnSuccess).toBeGreaterThan(saleSuccess);
+    expect(posOrderBase.slice(saleSuccess, returnSuccess)).not.toContain('enqueueAutomaticReceiptPrint');
+    const wrapper = read('src/features/pos/hooks/usePosOrder.ts');
+    expect(wrapper).toContain('const printPaidReceipt = useCallback');
+    expect(wrapper).toContain('await buildReceiptHtml(receipt');
 
-    const autoPrintBlock = posOrderBase.slice(autoPrint, returnSuccess);
-    expect(autoPrintBlock).toContain('try {');
-    expect(autoPrintBlock).toContain('catch (error)');
-    expect(autoPrintBlock).toContain('showReceiptPrintError(error)');
   });
 
   it('keeps shift closing documents branch-labelled', () => {
