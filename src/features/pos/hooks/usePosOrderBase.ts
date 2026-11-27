@@ -974,7 +974,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       void Promise.resolve(logAudit('create', 'sales', saleId, { invoice: confirmedInvoiceNumber, total: attempt.receipt.total })).catch(() => {});
 
       const receiptPayload: ReceiptData = {
-        ...attempt.receipt, invoice:confirmedInvoiceNumber,
+        ...attempt.receipt, invoice:confirmedInvoiceNumber, saleId,
         payments: (result.payments || []).map(payment=>({method:payment.payment_method,amount:Number(payment.amount || 0)})),
       };
       setLastReceipt(receiptPayload);
