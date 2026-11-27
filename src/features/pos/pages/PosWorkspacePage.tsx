@@ -1287,12 +1287,15 @@ export function PosWorkspacePage() {
             {perms.canPrint && (
               <button
                 data-testid="pos-receipt-print"
-                onClick={printCustomerReceipt}
+                onClick={() => void pos.printPaidReceipt()}
                 className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-ui-primary hover:bg-ui-primary-hover text-ui-primary-fg font-bold transition-colors"
               >
                 <Printer className="w-5 h-5" /> {t('printReceipt')}
               </button>
             )}
+            <button type="button" data-testid="pos-receipt-skip" onClick={pos.closeReceipt} className="w-full py-3 rounded-xl border border-ui-border text-ui-text font-semibold">
+              {isAr ? 'متابعة بدون طباعة' : 'Continue without printing'}
+            </button>
           </div>
         )}
       </Modal>
