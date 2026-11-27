@@ -26,10 +26,15 @@ describe('financial canonical report reads', () => {
     await waitFor(() => expect(screen.getByLabelText('selectParty')).toHaveValue('customer'));
     fireEvent.click(screen.getByTestId('financial-run-report'));
     await screen.findByText('Adjustment');
-    expect(screen.getByRole('link',{name:'View invoice'})).toHaveAttribute('href','/sales?customer=customer&invoice=INV-1');
+    expect(screen.getByRole('link',{name:'View invoice'})).toHaveAttribute('href','/sales?customer=customer&from=2026-10-01&to=2026-10-07&invoice=INV-1');
     fireEvent.click(screen.getByRole('button',{name:'Daily totals'}));
     expect(screen.getByRole('table').querySelectorAll('tbody tr')).toHaveLength(2);
-    expect(screen.getAllByRole('link',{name:'Day invoices'})[0]).toHaveAttribute('href','/sales?customer=customer&day=2026-10-01');
+    expect(screen.getAllByRole('link',{name:'Day invoices'})[0]).toHaveAttribute('href','/sales?customer=customer&from=2026-10-01&to=2026-10-07&day=2026-10-01');
+    expect(screen.getByRole('link',{name:'INV-1'})).toHaveAttribute('href','/sales?customer=customer&from=2026-10-01&to=2026-10-07&invoice=INV-1');
+    const popup = vi.spyOn(window, 'open').mockReturnValue(null);
+    fireEvent.click(screen.getByRole('button',{name:'Print A4'}));
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not open print window');
+    popup.mockRestore();
     fireEvent.click(screen.getByRole('button',{name:'exportExcel'}));
     expect(mocks.excel.mock.calls[0][0].data[0]).toMatchObject({Debit:10,Credit:4,Balance:11});
     expect(mocks.excel.mock.calls[0][0].totalRow).toEqual({Debit:12,Credit:4,Balance:13});
@@ -42,7 +47,7 @@ describe('financial canonical report reads', () => {
     fireEvent.click(screen.getByTestId('financial-run-report'));
     await screen.findByText('Sale');
     expect(screen.queryByRole('link',{name:'View invoice'})).toBeNull();
-    expect(screen.queryByRole('link',{name:'All invoices'})).toBeNull();
+    expect(screen.queryByRole('link',{name:'Period invoices'})).toBeNull();
   });
   it('allows a party statement period and aligns debit/credit with the closing balance in table and export',async()=>{
     mocks.party.mockResolvedValue({data:{opening:5,rows:[{line_id:'a',entry_date:'2026-10-01',entry_number:'1',description:'First',debit:10,credit:2,balance:13},{line_id:'b',entry_date:'2026-10-02',entry_number:'2',description:'Second',debit:3,credit:1,balance:15}]},error:null});
