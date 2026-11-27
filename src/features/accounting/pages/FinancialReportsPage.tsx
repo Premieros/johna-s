@@ -4,7 +4,7 @@ import { requireReportData } from '@/features/reporting/services/reportResult';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { useAuth } from '@/context/AuthContext';
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { APP_ROUTES } from '@/core/navigation/routes';
 import { useCan } from '@/lib/permissions';
 import { Scale, BookOpen, TrendingUp, PieChart, Clock, Download, BadgeCheck, BadgeAlert, Landmark, ArrowLeftRight, Receipt, WalletCards, PackageSearch } from 'lucide-react';
@@ -980,7 +980,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                 <Button variant="outline" onClick={() => setStatementMode('movements')}>{isAr ? 'الحركات المالية' : 'Movements'}</Button>
                 <Button variant="outline" onClick={() => setStatementMode('daily')}>{isAr ? 'إجمالي اليوم' : 'Daily totals'}</Button>
                 <Button variant="outline" disabled={!partyId} onClick={printPartyStatement}>{isAr ? 'طباعة A4' : 'Print A4'}</Button>
-                {partySide === 'ar' && partyId && can('sales.view') && <a className="underline self-center" href={invoiceHref()}>{isAr ? 'فواتير الفترة' : 'Period invoices'}</a>}
+                {partySide === 'ar' && partyId && can('sales.view') && <Link className="underline self-center" to={invoiceHref()}>{isAr ? 'فواتير الفترة' : 'Period invoices'}</Link>}
               </div>
               {statementPrintError && <p role="alert" className="mb-3 text-ui-danger">{statementPrintError}</p>}
               <div ref={statementPrintRef}>
@@ -1012,8 +1012,8 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                         <td className="px-4 py-3 font-mono text-ui-text">{statementMode === 'daily' ? '—' : r.entry_number}</td>
                         <td className="px-4 py-3 text-ui-text">{statementMode === 'daily' ? (isAr ? 'إجمالي اليوم' : 'Daily total') : r.description || '-'}
                           {partySide === 'ar' && partyId && can('sales.view') && (statementMode === 'daily'
-                            ? <><a className="ms-2 underline" href={invoiceHref({ day: r.entry_date })}>{isAr ? 'فواتير بتاريخ اليوم (UTC)' : 'Day invoices'}</a>{saleReferencesForDay(r.entry_date).map(reference => <a key={reference} className="ms-2 underline" href={invoiceHref({ invoice: reference })}>{reference}</a>)}</>
-                            : r.reference_type === 'sale' && r.reference_number && <a className="ms-2 underline" href={invoiceHref({ invoice: r.reference_number })}>{isAr ? 'عرض الفاتورة' : 'View invoice'}</a>)}</td>
+                            ? <><Link className="ms-2 underline" to={invoiceHref({ day: r.entry_date })}>{isAr ? 'فواتير بتاريخ اليوم (UTC)' : 'Day invoices'}</Link>{saleReferencesForDay(r.entry_date).map(reference => <Link key={reference} className="ms-2 underline" to={invoiceHref({ invoice: reference })}>{reference}</Link>)}</>
+                            : r.reference_type === 'sale' && r.reference_number && <Link className="ms-2 underline" to={invoiceHref({ invoice: r.reference_number })}>{isAr ? 'عرض الفاتورة' : 'View invoice'}</Link>)}</td>
                         <td className="px-4 py-3 text-end text-ui-text">{r.debit > 0 ? formatCurrency(r.debit, currency, lang) : '-'}</td>
                         <td className="px-4 py-3 text-end text-ui-text">{r.credit > 0 ? formatCurrency(r.credit, currency, lang) : '-'}</td>
                         <td className="px-4 py-3 text-end font-semibold text-ui-text">{formatCurrency(r.balance, currency, lang)}</td>

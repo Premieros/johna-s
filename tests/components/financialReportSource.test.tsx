@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { HashRouter, MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ branch: 'A', income: vi.fn(), party: vi.fn(), excel: vi.fn(), options: vi.fn(), aging: vi.fn(), salesView: true }));
 vi.mock('@/api', () => ({ reporting: { getAgingSummary: mocks.aging, getIncomeStatement: mocks.income, getPartyStatement:mocks.party } }));
@@ -16,6 +16,21 @@ const data = { revenue: 123, discount: 0, net_revenue: 123, cogs: 0, gross_profi
 const page = () => <MemoryRouter initialEntries={['/?view=income&from=2026-10-01&to=2026-10-07']}><FinancialReportsPage /></MemoryRouter>;
 beforeEach(() => { mocks.options.mockReset().mockResolvedValue([{id:'customer',name:'Customer'}]); mocks.branch = 'A'; mocks.salesView = true; mocks.income.mockReset();mocks.party.mockReset();mocks.excel.mockReset(); });
 describe('financial canonical report reads', () => {
+  it('keeps invoice navigation within the deployed hash route', async () => {
+    const previous = window.location.hash;
+    window.location.hash = '/financial-reports?view=party_statement&customer=customer&from=2026-10-01&to=2026-10-07';
+    mocks.party.mockResolvedValue({data:{opening:0,rows:[{line_id:'a',entry_date:'2026-10-01',entry_number:'1',reference_type:'sale',reference_number:'INV-1',description:'Sale',debit:10,credit:0,balance:10}]},error:null});
+    const mounted = render(<HashRouter><FinancialReportsPage/></HashRouter>);
+    try {
+      await waitFor(() => expect(screen.getByLabelText('selectParty')).toHaveValue('customer'));
+      fireEvent.click(screen.getByTestId('financial-run-report'));
+      const link = await screen.findByRole('link',{name:'View invoice'});
+      expect(link).toHaveAttribute('href','#/sales?customer=customer&from=2026-10-01&to=2026-10-07&invoice=INV-1');
+    } finally {
+      mounted.unmount();
+      window.location.hash = previous;
+    }
+  });
   it('preselects a customer, groups daily movements without changing totals, and links scoped invoices', async () => {
     mocks.party.mockResolvedValue({data:{opening:5,rows:[
       {line_id:'a',entry_date:'2026-10-01',entry_number:'1',reference_type:'sale',reference_number:'INV-1',description:'Sale',debit:10,credit:0,balance:15},
