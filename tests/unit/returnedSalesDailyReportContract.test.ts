@@ -10,7 +10,10 @@ describe('returned sales archive and closing-report contract', () => {
     const sales = read('src/features/trade/pages/SalesPage.tsx');
     const trade = read('src/api/domains/trade.ts');
 
-    expect(sales).toContain("filters: [{ column: 'is_archived', value: false }]");
+    expect(sales).toContain("filters: [{ column: 'is_archived', value: false },");
+    expect(sales).toContain("column: 'customer_id', value: scopedCustomer");
+    expect(sales).toContain("column: 'invoice_number', value: requestedInvoice");
+    expect(sales).toContain("!!scopedCustomer && !!branchFilter");
     expect(sales).toContain("api.trade.archiveReturnedSale");
     expect(sales).toContain("canArchiveReturnedSale = can('refunds.approve')");
     expect(sales).toContain("r.status === 'returned'");
