@@ -12,7 +12,7 @@ import type { CartItem, Customer, DiningTable, Order, OrderItem, OrderType, Prod
 import { ORDER_TYPE_KEY } from '../utils/orderTypes';
 import { resolveOrderBindingForSave } from '../utils/orderBinding';
 import { cartLineKey, cartToItems, orderItemLineKey, orderItemsToCart, sameCartConfiguration } from '../utils/cart';
-import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, enqueueAutomaticReceiptPrint, buildKitchenTicketHtml, openPrintWindow, ReceiptPrintApprovalError, type ReceiptData } from '../utils/printing';
+import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, buildKitchenTicketHtml, openPrintWindow, ReceiptPrintApprovalError, type ReceiptData } from '../utils/printing';
 import { fetchOrderForWorkspace } from '../services/posOrders';
 import { sendOrderToKitchen } from '../services/kitchenHandoff';
 import { enqueueCloudOpenOrderPrint, getCloudOpenOrderPrintState } from '../services/cloudPrint';
@@ -996,33 +996,13 @@ export function usePosOrder(input: UsePosOrderInput) {
       saleAttemptRef.current = null;
       show(t('saleCompleted'), 'success');
 
-      if (effSettings?.receipt_auto_print) {
-        try {
-          const queued = await enqueueAutomaticReceiptPrint({
-            saleId,
-            receipt: receiptPayload,
-            settings: effSettings,
-            lang,
-            isAr,
-          });
-          if (!queued.accepted) {
-            show(
-              isAr
-                ? `تم البيع بنجاح ولكن تعذر إنشاء أمر طباعة الإيصال: ${queued.error || 'PRINT_QUEUE_FAILED'}`
-                : `Sale completed, but receipt print job could not be queued: ${queued.error || 'PRINT_QUEUE_FAILED'}`,
-              'error',
-            );
-          }
-        } catch (error) {
-          showReceiptPrintError(error);
-        }
-      }
+      // The saved receipt is offered in the success dialog; printing requires a user action.
       return true;
     } finally {
       saleMutationLockRef.current = false;
       setCompleting(false);
     }
-  }, [setCart, cart, completing, branchId, branchName, activeShift, orderType, tableId, paymentMethod, total, paidAmount, customerId, subtotal, discountValue, discountType, taxAmount, change, activeOrderId, activeOrderNumber, guestCount, customers, activeTable, effSettings, lang, isAr, show, showReceiptPrintError, t, user]);
+  }, [setCart, cart, completing, branchId, branchName, activeShift, orderType, tableId, paymentMethod, total, paidAmount, customerId, subtotal, discountValue, discountType, taxAmount, change, activeOrderId, activeOrderNumber, guestCount, customers, activeTable, isAr, show, t, user]);
 
   const printReceipt = useCallback(async () => {
     if (!effSettings) return;
