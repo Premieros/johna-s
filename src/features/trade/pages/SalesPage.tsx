@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { APP_ROUTES } from '@/core/navigation/routes';
 import { Trash2, FileText, Edit2, RotateCcw, Eye, Printer } from 'lucide-react';
 import * as api from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
@@ -58,12 +59,26 @@ export function SalesPage() {
   const { show } = useToast();
   const branchFilter = useBranchFilter();
   const can = useCan();
+  const params = new URLSearchParams(window.location.search);
+  const requestedCustomer = params.get('customer') || '';
+  const scopedCustomer = /^[0-9a-f-]{36}$/i.test(requestedCustomer) ? requestedCustomer : '';
+  const requestedInvoice = params.get('invoice') || '';
+  const scopedDay = params.get('day') || '';
+  const dayIsValid = /^\d{4}-\d{2}-\d{2}$/.test(scopedDay) && Number.isFinite(Date.parse(scopedDay)) && new Date(scopedDay).toISOString().slice(0, 10) === scopedDay;
+  const cairoBoundary = (day: string) => {
+    const offset = new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Cairo', timeZoneName: 'longOffset' }).formatToParts(new Date(day + 'T00:00:00Z')).find(part => part.type === 'timeZoneName')?.value.replace('GMT', '') || '+02:00';
+    return day + 'T00:00:00' + offset;
+  };
+  const nextDay = dayIsValid ? new Date(Date.parse(scopedDay) + 86400000).toISOString().slice(0, 10) : '';
+
   const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadSales } = usePaginatedRows<SaleRow>({
     table: 'sales',
     select: 'id, invoice_number, source_order_id, table_id, table:dining_tables(id,branch_id,name), subtotal, discount_amount, tax_amount, total, paid_amount, refunded_amount, payment_method, status, notes, created_at, customer_id, branch_id, order_type, guest_count, is_archived, customer:customers(name), source_order:orders!sales_source_order_id_fkey(order_number), sale_items(id, product_id, unit_name, quantity, unit_price, discount_amount, refunded_quantity, refunded_amount, total, product:products(name))',
     order: { column: 'created_at', ascending: false },
     branch_id: branchFilter,
-    filters: [{ column: 'is_archived', value: false }],
+    filters: [{ column: 'is_archived', value: false }, ...(scopedCustomer ? [{ column: 'customer_id', value: scopedCustomer }] : []), ...(scopedCustomer && requestedInvoice ? [{ column: 'invoice_number', value: requestedInvoice }] : [])],
+    or: scopedCustomer && dayIsValid ? `and(created_at.gte.${cairoBoundary(scopedDay)},created_at.lt.${cairoBoundary(nextDay)})` : undefined,
+    enabled: !requestedCustomer || (!!scopedCustomer && !!branchFilter && (!scopedDay || dayIsValid)),
     pageSize: 100,
   });
   const [search, setSearch] = useState('');
@@ -635,6 +650,11 @@ export function SalesPage() {
         </>
       } />
 
+      {requestedCustomer && <div className="flex flex-wrap items-center gap-2">
+        <span>{isAr ? 'فواتير العميل' : 'Customer invoices'} {scopedDay} {requestedInvoice}</span>
+        <a className="underline" href={APP_ROUTES.financialReports + '?' + new URLSearchParams({ view: 'party_statement', customer: scopedCustomer, from: '2000-01-01' }).toString()}>{isAr ? 'العودة لكشف الحساب' : 'Back to statement'}</a>
+        <a className="underline" href={APP_ROUTES.sales}>{isAr ? 'جميع المبيعات' : 'All sales'}</a>
+      </div>}
       <DesignPanel testId="sales-search-panel">
         <DesignSearch value={search} onChange={setSearch} label={t('search')}
           placeholder={isAr ? 'بحث برقم الفاتورة أو رقم الطلب أو اسم العميل...' : 'Search by invoice number, order number or customer...'} testId="sales-search" />
