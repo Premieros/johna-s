@@ -64,12 +64,19 @@ export function SalesPage() {
   const scopedCustomer = /^[0-9a-f-]{36}$/i.test(requestedCustomer) ? requestedCustomer : '';
   const requestedInvoice = params.get('invoice') || '';
   const scopedDay = params.get('day') || '';
-  const dayIsValid = /^\d{4}-\d{2}-\d{2}$/.test(scopedDay) && Number.isFinite(Date.parse(scopedDay)) && new Date(scopedDay).toISOString().slice(0, 10) === scopedDay;
-  const cairoBoundary = (day: string) => {
-    const offset = new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Cairo', timeZoneName: 'longOffset' }).formatToParts(new Date(day + 'T00:00:00Z')).find(part => part.type === 'timeZoneName')?.value.replace('GMT', '') || '+02:00';
-    return day + 'T00:00:00' + offset;
-  };
-  const nextDay = dayIsValid ? new Date(Date.parse(scopedDay) + 86400000).toISOString().slice(0, 10) : '';
+  const from = params.get('from') || '';
+  const to = params.get('to') || '';
+  const validDay = (day: string) => /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(Date.parse(day)) && new Date(day).toISOString().slice(0, 10) === day;
+  const validPeriod = (!from || validDay(from)) && (!to || validDay(to)) && (!from || !to || from <= to);
+  const dayIsValid = validDay(scopedDay);
+  const nextDay = (day: string) => new Date(Date.parse(day) + 86400000).toISOString().slice(0, 10);
+  const rangeFrom = dayIsValid ? scopedDay : from;
+  const rangeTo = dayIsValid ? scopedDay : to;
+  const rangeFilters = [
+    ...(rangeFrom && validDay(rangeFrom) ? [`created_at.gte.${rangeFrom}T00:00:00Z`] : []),
+    ...(rangeTo && validDay(rangeTo) ? [`created_at.lt.${nextDay(rangeTo)}T00:00:00Z`] : []),
+  ];
+
 
   const { rows: items, loading, error, total, hasMore, loadMore, loadingMore, refresh: reloadSales } = usePaginatedRows<SaleRow>({
     table: 'sales',
@@ -77,8 +84,8 @@ export function SalesPage() {
     order: { column: 'created_at', ascending: false },
     branch_id: branchFilter,
     filters: [{ column: 'is_archived', value: false }, ...(scopedCustomer ? [{ column: 'customer_id', value: scopedCustomer }] : []), ...(scopedCustomer && requestedInvoice ? [{ column: 'invoice_number', value: requestedInvoice }] : [])],
-    or: scopedCustomer && dayIsValid ? `and(created_at.gte.${cairoBoundary(scopedDay)},created_at.lt.${cairoBoundary(nextDay)})` : undefined,
-    enabled: !requestedCustomer || (!!scopedCustomer && !!branchFilter && (!scopedDay || dayIsValid)),
+    or: scopedCustomer && !requestedInvoice && rangeFilters.length ? (rangeFilters.length === 1 ? rangeFilters[0] : `and(${rangeFilters.join(',')})`) : undefined,
+    enabled: !requestedCustomer || (!!scopedCustomer && !!branchFilter && validPeriod && (!scopedDay || dayIsValid)),
     pageSize: 100,
   });
   const [search, setSearch] = useState('');
@@ -653,8 +660,8 @@ export function SalesPage() {
       } />
 
       {requestedCustomer && <div className="flex flex-wrap items-center gap-2">
-        <span>{isAr ? 'فواتير العميل' : 'Customer invoices'} {scopedDay} {requestedInvoice}</span>
-        <a className="underline" href={APP_ROUTES.financialReports + '?' + new URLSearchParams({ view: 'party_statement', customer: scopedCustomer, from: '2000-01-01' }).toString()}>{isAr ? 'العودة لكشف الحساب' : 'Back to statement'}</a>
+        <span>{isAr ? 'فواتير العميل' : 'Customer invoices'} {scopedDay || [from, to].filter(Boolean).join(' — ')} {requestedInvoice}</span>
+        <a className="underline" href={APP_ROUTES.financialReports + '?' + new URLSearchParams({ view: 'party_statement', customer: scopedCustomer, from: from || '2000-01-01', ...(to ? { to } : {}) }).toString()}>{isAr ? 'العودة لكشف الحساب' : 'Back to statement'}</a>
         <a className="underline" href={APP_ROUTES.sales}>{isAr ? 'جميع المبيعات' : 'All sales'}</a>
       </div>}
       <DesignPanel testId="sales-search-panel">
