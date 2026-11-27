@@ -8,7 +8,7 @@ import { cartToItems, type ItemPayload } from '../utils/cart';
 import { createSaleOperationKey, nextInvoiceNumber, processSaleForOrder, type ProcessSalePayload } from '../services/payment';
 import type { OrderSettlementPreview } from '../services/settlementPreview';
 import { useScopedSettlementPreview } from './useScopedSettlementPreview';
-import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, enqueueAutomaticReceiptPrint, openPrintWindow, type ReceiptData } from '../utils/printing';
+import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, openPrintWindow, type ReceiptData } from '../utils/printing';
 import { enqueueCloudOpenOrderPrint } from '../services/cloudPrint';
 import { ORDER_TYPE_KEY } from '../utils/orderTypes';
 import { resolveOrderBindingForSave } from '../utils/orderBinding';
@@ -406,7 +406,15 @@ export function usePosOrder(input: UsePosOrderInput) {
       }
     }
 
-    if (!base.activeOrderId) return base.completeSale(payments);
+    if (!base.activeOrderId) {
+      const completed = await base.completeSale(payments);
+      if (completed) {
+        setSettlementReceipt(null);
+        setSettlementReceiptSaleId(null);
+        setSettlementReceiptOrderCompleted(null);
+      }
+      return completed;
+    }
     if (saleMutationLockRef.current) return false;
     if (!input.branchId || !input.activeShift?.id) {
       show(isAr ? 'يجب اختيار فرع وفتح وردية قبل التحصيل' : 'Select a branch and open a shift before settlement', 'error');
@@ -526,25 +534,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       // the next checkout allocate a fresh logical operation identity.
       saleAttemptRef.current = null;
 
-      if (input.effSettings?.receipt_auto_print) {
-        const saleId = extended.sale_id || '';
-        const queued = await enqueueAutomaticReceiptPrint({
-          saleId,
-          receipt,
-          settings: input.effSettings,
-          lang,
-          isAr,
-        });
-        if (!queued.accepted) {
-          show(
-            isAr
-              ? `تم تحصيل الطلب ولكن تعذر إنشاء أمر طباعة الإيصال: ${queued.error || 'PRINT_QUEUE_FAILED'}`
-              : `Order settled, but receipt print job could not be queued: ${queued.error || 'PRINT_QUEUE_FAILED'}`,
-            'error',
-          );
-        }
-      }
-
+      // Payment is complete independently of the user's decision to print.
       if (receiptWorkspaceRef.current !== receiptWorkspace) return true;
       if (extended.order_completed) {
         base.resetWorkspace();
@@ -564,6 +554,24 @@ export function usePosOrder(input: UsePosOrderInput) {
       setOfflineCompleting(false);
     }
   }, [base, buildSettlementReceipt, clearSettlementPreview, input.activeShift?.id, input.branchId, input.effSettings, isAr, isCurrentSettlementPreview, lang, loadPaymentPreview, offlineCompleting, show, t, receiptWorkspace, saleMutationLockRef]);
+
+  const printPaidReceiptBusy = useRef(false);
+  const printPaidReceipt = useCallback(async () => {
+    if (!perms.canPrint || !input.effSettings || printPaidReceiptBusy.current) return;
+    const receipt = settlementReceiptSaleId ? settlementReceipt : base.receiptSaleId ? base.lastReceipt : null;
+    if (!receipt) return;
+    printPaidReceiptBusy.current = true;
+    try {
+      const html = await buildReceiptHtml(receipt, input.effSettings, lang, isAr);
+      if (!openPrintWindow(html, APPROVED_FIXED_THERMAL_WIDTH_MM)) {
+        show(isAr ? 'تعذر فتح مسار الطباعة' : 'Could not open receipt printing', 'error');
+      }
+    } catch (error) {
+      show(error instanceof Error ? error.message : String(error), 'error');
+    } finally {
+      printPaidReceiptBusy.current = false;
+    }
+  }, [perms.canPrint, input.effSettings, settlementReceiptSaleId, settlementReceipt, base.receiptSaleId, base.lastReceipt, lang, isAr, show]);
 
   const printReceipt = useCallback(async () => {
     if (!input.effSettings) return;
@@ -668,6 +676,7 @@ export function usePosOrder(input: UsePosOrderInput) {
     completeSale,
     applyApprovedDiscount,
     printReceipt,
+    printPaidReceipt,
   };
 }
 
