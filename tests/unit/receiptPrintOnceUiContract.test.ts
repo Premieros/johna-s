@@ -27,7 +27,8 @@ describe('open-check print-once UI guard', () => {
     const completeSegment = wrapper.slice(completeStart, printStart);
 
     expect(checkoutSegment).not.toContain('openCheckPrintLockedOrderId');
-    expect(completeSegment).toContain('enqueueAutomaticReceiptPrint');
+    expect(completeSegment).not.toContain('enqueueAutomaticReceiptPrint');
+    expect(wrapper).toContain('const printPaidReceipt = useCallback');
     expect(completeSegment).not.toContain('openCheckPrintLockedOrderId');
     expect(completeSegment).not.toContain('openCheckPrintStateReady');
   });
