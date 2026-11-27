@@ -1,3 +1,4 @@
+import { Link, useSearchParams } from 'react-router-dom';
 import { useState } from 'react';
 import { APP_ROUTES } from '@/core/navigation/routes';
 import { Trash2, FileText, Edit2, RotateCcw, Eye, Printer } from 'lucide-react';
@@ -59,7 +60,7 @@ export function SalesPage() {
   const { show } = useToast();
   const branchFilter = useBranchFilter();
   const can = useCan();
-  const params = new URLSearchParams(window.location.search);
+  const [params] = useSearchParams();
   const requestedCustomer = params.get('customer') || '';
   const scopedCustomer = /^[0-9a-f-]{36}$/i.test(requestedCustomer) ? requestedCustomer : '';
   const requestedInvoice = params.get('invoice') || '';
@@ -661,8 +662,8 @@ export function SalesPage() {
 
       {requestedCustomer && <div className="flex flex-wrap items-center gap-2">
         <span>{isAr ? 'فواتير العميل' : 'Customer invoices'} {scopedDay || [from, to].filter(Boolean).join(' — ')} {requestedInvoice}</span>
-        <a className="underline" href={APP_ROUTES.financialReports + '?' + new URLSearchParams({ view: 'party_statement', customer: scopedCustomer, from: from || '2000-01-01', ...(to ? { to } : {}) }).toString()}>{isAr ? 'العودة لكشف الحساب' : 'Back to statement'}</a>
-        <a className="underline" href={APP_ROUTES.sales}>{isAr ? 'جميع المبيعات' : 'All sales'}</a>
+        <Link className="underline" to={APP_ROUTES.financialReports + '?' + new URLSearchParams({ view: 'party_statement', customer: scopedCustomer, from: from || '2000-01-01', ...(to ? { to } : {}) }).toString()}>{isAr ? 'العودة لكشف الحساب' : 'Back to statement'}</Link>
+        <Link className="underline" to={APP_ROUTES.sales}>{isAr ? 'جميع المبيعات' : 'All sales'}</Link>
       </div>}
       <DesignPanel testId="sales-search-panel">
         <DesignSearch value={search} onChange={setSearch} label={t('search')}
