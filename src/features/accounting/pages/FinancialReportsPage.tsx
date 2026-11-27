@@ -500,6 +500,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
     return days;
   }, new Map<string, (typeof statementRows)[number]>()).values());
   const displayedStatementRows = statementMode === 'daily' ? dailyRows : statementRows;
+  const saleReferencesForDay = (day: string) => Array.from(new Set(statementRows.filter(row => row.entry_date === day && row.reference_type === 'sale' && row.reference_number).map(row => row.reference_number!)));
   const printPartyStatement = () => {
     if (!statementPrintRef.current || !partyStmt || !partyId || loadedReportScope !== reportScope || loading || reportError) return;
     setStatementPrintError('');
@@ -1010,7 +1011,9 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                         <td className="px-4 py-3 text-ui-muted">{formatDate(r.entry_date, lang)}</td>
                         <td className="px-4 py-3 font-mono text-ui-text">{statementMode === 'daily' ? '—' : r.entry_number}</td>
                         <td className="px-4 py-3 text-ui-text">{statementMode === 'daily' ? (isAr ? 'إجمالي اليوم' : 'Daily total') : r.description || '-'}
-                          {partySide === 'ar' && partyId && can('sales.view') && (statementMode === 'daily' || (r.reference_type === 'sale' && r.reference_number)) && <a className="ms-2 underline" href={invoiceHref(statementMode === 'daily' ? { day: r.entry_date } : { invoice: r.reference_number || '' })}>{statementMode === 'daily' ? (isAr ? 'فواتير قيود اليوم' : 'Day invoices') : (isAr ? 'عرض الفاتورة' : 'View invoice')}</a>}</td>
+                          {partySide === 'ar' && partyId && can('sales.view') && (statementMode === 'daily'
+                            ? <><a className="ms-2 underline" href={invoiceHref({ day: r.entry_date })}>{isAr ? 'فواتير بتاريخ اليوم (UTC)' : 'Day invoices'}</a>{saleReferencesForDay(r.entry_date).map(reference => <a key={reference} className="ms-2 underline" href={invoiceHref({ invoice: reference })}>{reference}</a>)}</>
+                            : r.reference_type === 'sale' && r.reference_number && <a className="ms-2 underline" href={invoiceHref({ invoice: r.reference_number })}>{isAr ? 'عرض الفاتورة' : 'View invoice'}</a>)}</td>
                         <td className="px-4 py-3 text-end text-ui-text">{r.debit > 0 ? formatCurrency(r.debit, currency, lang) : '-'}</td>
                         <td className="px-4 py-3 text-end text-ui-text">{r.credit > 0 ? formatCurrency(r.credit, currency, lang) : '-'}</td>
                         <td className="px-4 py-3 text-end font-semibold text-ui-text">{formatCurrency(r.balance, currency, lang)}</td>
