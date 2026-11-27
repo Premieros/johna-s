@@ -8,7 +8,7 @@ import { cartToItems, type ItemPayload } from '../utils/cart';
 import { createSaleOperationKey, nextInvoiceNumber, processSaleForOrder, type ProcessSalePayload } from '../services/payment';
 import type { OrderSettlementPreview } from '../services/settlementPreview';
 import { useScopedSettlementPreview } from './useScopedSettlementPreview';
-import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, openPrintWindow, type ReceiptData } from '../utils/printing';
+import { APPROVED_FIXED_THERMAL_WIDTH_MM, buildReceiptFixedTemplate, buildReceiptHtml, buildReceiptThermalText, openPrintWindow, ReceiptPrintApprovalError, type ReceiptData } from '../utils/printing';
 import { enqueueCloudOpenOrderPrint } from '../services/cloudPrint';
 import { ORDER_TYPE_KEY } from '../utils/orderTypes';
 import { resolveOrderBindingForSave } from '../utils/orderBinding';
@@ -518,7 +518,7 @@ export function usePosOrder(input: UsePosOrderInput) {
       };
       const confirmedInvoiceNumber = extended.invoice_number || invoiceNumber;
       pendingSaleRef.current = null;
-      const receipt: ReceiptData = {...attempt.receipt,invoice:confirmedInvoiceNumber,
+      const receipt: ReceiptData = {...attempt.receipt,invoice:confirmedInvoiceNumber,saleId:extended.sale_id || undefined,
         payments:(extended.payments || []).map(entry=>({method:entry.payment_method,amount:Number(entry.amount || 0)}))};
       if (receiptWorkspaceRef.current !== attempt.scope) {
         show(t('saleCompleted'), 'success');
@@ -559,7 +559,7 @@ export function usePosOrder(input: UsePosOrderInput) {
   const printPaidReceipt = useCallback(async () => {
     if (!perms.canPrint || !input.effSettings || printPaidReceiptBusy.current) return;
     const receipt = settlementReceiptSaleId ? settlementReceipt : base.receiptSaleId ? base.lastReceipt : null;
-    if (!receipt) return;
+    if (!receipt?.saleId) return;
     printPaidReceiptBusy.current = true;
     try {
       const html = await buildReceiptHtml(receipt, input.effSettings, lang, isAr);
@@ -567,7 +567,11 @@ export function usePosOrder(input: UsePosOrderInput) {
         show(isAr ? 'تعذر فتح مسار الطباعة' : 'Could not open receipt printing', 'error');
       }
     } catch (error) {
-      show(error instanceof Error ? error.message : String(error), 'error');
+      if (error instanceof ReceiptPrintApprovalError && error.code === 'REPRINT_APPROVAL_PENDING') {
+        show(isAr ? 'إعادة الطباعة تنتظر موافقة المدير.' : 'Reprint is awaiting manager approval.', 'warning');
+      } else {
+        show(error instanceof Error ? error.message : String(error), 'error');
+      }
     } finally {
       printPaidReceiptBusy.current = false;
     }
