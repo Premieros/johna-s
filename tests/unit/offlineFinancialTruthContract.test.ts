@@ -19,7 +19,18 @@ describe('offline financial truth contract', () => {
 
     expect(hook).toContain("const explicitlyOffline = typeof navigator !== 'undefined' && !navigator.onLine");
     expect(hook).toContain('if (explicitlyOffline) {');
-    expect(hook).toContain('if (!base.activeOrderId) return base.completeSale(payments)');
+    expect(hook).toContain('if (!base.activeOrderId) {');
+    expect(hook).toContain('const completed = await base.completeSale(payments);');
+    const offlineStart = hook.indexOf('if (explicitlyOffline) {');
+    const onlineStart = hook.indexOf('const completed = await base.completeSale(payments);', offlineStart);
+    expect(onlineStart).toBeGreaterThan(offlineStart);
+    const offline = hook.slice(offlineStart, onlineStart);
+    expect(offline).toContain('!result.offline || !result.pending_sync');
+    expect(offline).toContain('base.resetWorkspace()');
+    expect(offline).not.toContain('setSettlementReceipt(');
+    expect(offline).not.toContain('enqueueAutomaticReceiptPrint');
+    expect(offline).not.toContain('buildReceiptHtml(');
+    expect(offline).not.toContain('openPrintWindow(');
     expect(hook).toContain('!result.offline || !result.pending_sync');
     expect(hook).toContain('لم يتم تسجيل البيع أو الدفع نهائيًا بعد');
     expect(hook).toContain('The sale/payment is not final until the server confirms it.');
