@@ -47,6 +47,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
   const requestedCustomer = searchParams.get('customer') || '';
   const [statementMode, setStatementMode] = useState<'movements' | 'daily'>('movements');
   const statementPrintRef = useRef<HTMLDivElement>(null);
+  const [statementPrintError, setStatementPrintError] = useState('');
 
   const requestedView = searchParams.get('view');
   const validViews: View[] = ['trial_balance', 'ledger', 'treasury_statement', 'inventory_movement', 'income', 'balance_sheet', 'ar_aging', 'ap_aging', 'aging_summary', 'cash_flow', 'party_statement'];
@@ -491,7 +492,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
   const sum = <T,>(rows: T[], value: (row: T) => number) => rows.every(row=>Number.isFinite(value(row))) ? rows.reduce((total,row)=>total+value(row),0) : null;
 
   const partyList = partySide === 'ar' ? customers : suppliers;
-  const invoiceHref = (extra: Record<string, string> = {}) => APP_ROUTES.sales + '?' + new URLSearchParams({ customer: partyId, ...extra }).toString();
+  const invoiceHref = (extra: Record<string, string> = {}) => APP_ROUTES.sales + '?' + new URLSearchParams({ customer: partyId, from, to, ...extra }).toString();
   const statementRows = partyStmt?.rows || [];
   const dailyRows = Array.from(statementRows.reduce((days, row) => {
     const previous = days.get(row.entry_date);
@@ -501,8 +502,9 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
   const displayedStatementRows = statementMode === 'daily' ? dailyRows : statementRows;
   const printPartyStatement = () => {
     if (!statementPrintRef.current || !partyStmt || !partyId || loadedReportScope !== reportScope || loading || reportError) return;
+    setStatementPrintError('');
     const popup = window.open('', '_blank', 'width=1000,height=750');
-    if (!popup) return;
+    if (!popup) { setStatementPrintError(isAr ? 'تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة وحاول مجددًا.' : 'Could not open print window. Allow pop-ups and try again.'); return; }
     popup.opener = null;
     const doc = popup.document;
     doc.documentElement.dir = isAr ? 'rtl' : 'ltr';
@@ -977,8 +979,9 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                 <Button variant="outline" onClick={() => setStatementMode('movements')}>{isAr ? 'الحركات المالية' : 'Movements'}</Button>
                 <Button variant="outline" onClick={() => setStatementMode('daily')}>{isAr ? 'إجمالي اليوم' : 'Daily totals'}</Button>
                 <Button variant="outline" disabled={!partyId} onClick={printPartyStatement}>{isAr ? 'طباعة A4' : 'Print A4'}</Button>
-                {partySide === 'ar' && partyId && can('sales.view') && <a className="underline self-center" href={invoiceHref()}>{isAr ? 'عرض كل الفواتير' : 'All invoices'}</a>}
+                {partySide === 'ar' && partyId && can('sales.view') && <a className="underline self-center" href={invoiceHref()}>{isAr ? 'فواتير الفترة' : 'Period invoices'}</a>}
               </div>
+              {statementPrintError && <p role="alert" className="mb-3 text-ui-danger">{statementPrintError}</p>}
               <div ref={statementPrintRef}>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 {summaryCard(t('openingBalance'), partyStmt.opening)}
@@ -1007,7 +1010,7 @@ export function FinancialReportsPage({ hideViewPicker = false }: { hideViewPicke
                         <td className="px-4 py-3 text-ui-muted">{formatDate(r.entry_date, lang)}</td>
                         <td className="px-4 py-3 font-mono text-ui-text">{statementMode === 'daily' ? '—' : r.entry_number}</td>
                         <td className="px-4 py-3 text-ui-text">{statementMode === 'daily' ? (isAr ? 'إجمالي اليوم' : 'Daily total') : r.description || '-'}
-                          {partySide === 'ar' && partyId && can('sales.view') && (statementMode === 'daily' || (r.reference_type === 'sale' && r.reference_number)) && <a className="ms-2 underline" href={invoiceHref(statementMode === 'daily' ? { day: r.entry_date } : { invoice: r.reference_number || '' })}>{statementMode === 'daily' ? (isAr ? 'فواتير اليوم' : 'Day invoices') : (isAr ? 'عرض الفاتورة' : 'View invoice')}</a>}</td>
+                          {partySide === 'ar' && partyId && can('sales.view') && (statementMode === 'daily' || (r.reference_type === 'sale' && r.reference_number)) && <a className="ms-2 underline" href={invoiceHref(statementMode === 'daily' ? { day: r.entry_date } : { invoice: r.reference_number || '' })}>{statementMode === 'daily' ? (isAr ? 'فواتير قيود اليوم' : 'Day invoices') : (isAr ? 'عرض الفاتورة' : 'View invoice')}</a>}</td>
                         <td className="px-4 py-3 text-end text-ui-text">{r.debit > 0 ? formatCurrency(r.debit, currency, lang) : '-'}</td>
                         <td className="px-4 py-3 text-end text-ui-text">{r.credit > 0 ? formatCurrency(r.credit, currency, lang) : '-'}</td>
                         <td className="px-4 py-3 text-end font-semibold text-ui-text">{formatCurrency(r.balance, currency, lang)}</td>
