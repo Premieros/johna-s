@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Plus, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, FileText } from 'lucide-react';
 import * as api from '@/api';
+import { APP_ROUTES } from '@/core/navigation/routes';
 import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/components/Toast';
 import { DesignSurface, DesignPageHeader } from '@/components/design/DesignSurface';
@@ -127,6 +128,9 @@ export function CustomersPage() {
     } },
     { key: 'actions', header: t('actions'), filterable: false, render: (c) => (
       <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+        {can('reports.financial') && branchFilter && c.branch_id === branchFilter && (
+          <a className="ui-icon-action ui-icon-action-info" title={lang === 'ar' ? 'كشف حساب العميل' : 'Customer statement'} href={APP_ROUTES.financialReports + '?' + new URLSearchParams({ view: 'party_statement', customer: c.id, from: '2000-01-01' }).toString()}><FileText className="w-4 h-4" /><span>{lang === 'ar' ? 'كشف حساب' : 'Statement'}</span></a>
+        )}
         {can('customers.manage') && (
           <button onClick={() => openEdit(c)} className="ui-icon-action ui-icon-action-info"><Edit2 className="w-4 h-4" /></button>
         )}
